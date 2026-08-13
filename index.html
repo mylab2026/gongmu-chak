@@ -15,7 +15,6 @@
 @media(max-width:850px){.guide-flow{display:grid}.guide-arrow{justify-content:center;transform:rotate(90deg)}}
 
 
-.info-notice{margin:0 14px 10px 47px;padding:9px 11px;border-radius:8px;background:#fff7df;color:#6f5717;font-size:12px;line-height:1.5}
 </style></head><body><div class="wrap"><div class="head"><h1>공무착착 문서트리 Builder <small style="font-size:12px;color:#778">FINAL · VER.4(2)</small></h1><p>사업유형을 선택한 뒤 실제 사업과 다른 부분만 조정하세요. 위계2~4를 선택·해제할 수 있고, 계약·용역·관급자재 항목은 실제 명칭을 입력할 수 있습니다.</p></div>
 <div class="quick-guide">
   <div class="guide-title">사업 문서트리 구성은 3단계면 충분합니다</div>
@@ -44,19 +43,36 @@ function infoOnly(n){return current==='construction' && plainName(n.label)==='�
 function plainName(label){return String(label).replace(/^\s*\d+(?:-\d+)?\s*/,'').trim()}
 function findNode(id){return allNodes().find(n=>n.id===id)}
 function parentNode(n){const p=n.id.split(' > ');return p.length>1?findNode(p.slice(0,-1).join(' > ')):null}
-function dynamicCode(n){
+function slotCount(n){
+ if(n.level!==2)return 1;
+ const ct=contractType(n.label);
+ if(!ct)return 1;
+ const arr=instances[n.id]||[];
+ return Math.max(1,arr.length);
+}
+function siblingOrdinal(n){
+ const p=parentNode(n);if(!p)return 1;
+ const sib=(p.children||[]).filter(x=>selected.has(x.id));
+ let ord=1;
+ for(const x of sib){
+   if(x.id===n.id)break;
+   ord+=slotCount(x);
+ }
+ return ord;
+}
+function dynamicCode(n,instanceOffset=0){
  if(n.level===1){const m=String(n.label).match(/^\s*(\d+)/);return m?m[1]:''}
  const p=parentNode(n);if(!p)return'';
+ if(n.level===2)return dynamicCode(p)+String(siblingOrdinal(n)+instanceOffset);
  const sib=(p.children||[]).filter(x=>selected.has(x.id));
  const pos=sib.findIndex(x=>x.id===n.id);
  const idx=(pos>=0?pos:0)+1;
- if(n.level===2)return dynamicCode(p)+String(idx);
  if(n.level===3)return dynamicCode(p)+String(idx).padStart(2,'0');
  if(n.level===4)return dynamicCode(p)+'-'+String(idx);
  return'';
 }
-function dynamicLabel(n,custom){if(n.level===1)return n.label;return (dynamicCode(n)+' '+(custom||plainName(n.label))).trim()}
-function displayName(n,name){return dynamicLabel(n,name)}
+function dynamicLabel(n,custom,instanceOffset=0){if(n.level===1)return n.label;return (dynamicCode(n,instanceOffset)+' '+(custom||plainName(n.label))).trim()}
+function displayName(n,name,instanceOffset=0){return dynamicLabel(n,name,instanceOffset)}
 function descendants(n){let a=[];(n.children||[]).forEach(c=>{a.push(c);a.push(...descendants(c))});return a}
 function setNode(id,on){
  const n=findNode(id);if(!n)return;
@@ -96,18 +112,32 @@ function render(){
   const blocks=(l1.children||[]).map((l2,j)=>{
    const on=selected.has(l2.id),ct=contractType(l2.label),arr=instances[l2.id]||[],isInfo=infoOnly(l2),open=expanded.has(l2.id);
    const ph=l2.hint?`실제 ${ct}명 입력 (ex. ${l2.hint})`:`실제 ${ct}명 입력`;
-   const box=ct?`<div class="contractbox"><div class="contractinput"><input data-nodeid="${enc(l2.id)}" id="nm_${i}_${j}" placeholder="${esc(ph)}" onkeydown="if(event.key==='Enter'){addInstance('${enc(l2.id)}','nm_${i}_${j}')}"><button onclick="addInstance('${enc(l2.id)}','nm_${i}_${j}')">+ 여러 건 추가</button></div><div class="hint">입력만 해도 최종 복사 시 자동 반영됩니다.${l2.hint?' 예: '+esc(l2.hint):''}</div>${arr.length?`<div class="chips">${arr.map((v,idx)=>`<span class="chip">${esc(displayName(l2,v))}<button title="삭제" onclick="removeInstance('${enc(l2.id)}',${idx})">×</button></span>`).join('')}</div>`:''}</div>`:'';
-   const info=isInfo?`<div class="info-notice">⚠ <b>설계용역 정보</b>는 새로 관리할 용역명이 아닙니다. ${esc(l2.hint||'이미 완료된 설계용역의 계약서, 용역사 연락처 등 기존 설계용역 정보를 보관합니다.')}</div>`:'';
-   return `<div class="l2"><div class="row ${on?'':'off'}"><button class="check ${on?'on':''}" onclick="toggleNode('${enc(l2.id)}')">${on?'✓':''}</button><button class="exp" onclick="expand('${enc(l2.id)}')">${open?'▼':'▶'}</button><span class="name">${esc(dynamicLabel(l2))}</span>${ct?'<span class="tag">실제 명칭 입력</span>':''}</div>${info}${box}<div class="children ${open?'open':''}">${(l2.children||[]).map(renderNode).join('')||'<span style="font-size:12px;color:#8792a2">하위 폴더 없음</span>'}</div></div>`
+   const box=ct?`<div class="contractbox"><div class="contractinput"><input data-nodeid="${enc(l2.id)}" id="nm_${i}_${j}" placeholder="${esc(ph)}" onkeydown="if(event.key==='Enter'){addInstance('${enc(l2.id)}','nm_${i}_${j}')}"><button onclick="addInstance('${enc(l2.id)}','nm_${i}_${j}')">입력 확정 · 다음 용역 추가</button></div><div class="hint">용역이 1건이면 이름만 입력하면 됩니다. 2건 이상이면 「입력 확정 · 다음 용역 추가」를 눌러 계속 입력하세요. 마지막 입력은 버튼을 누르지 않아도 최종 복사 시 자동 반영됩니다.${l2.hint?' 예: '+esc(l2.hint):''}</div>${arr.length?`<div class="chips">${arr.map((v,idx)=>`<span class="chip">${esc(displayName(l2,v,idx))}<button title="삭제" onclick="removeInstance('${enc(l2.id)}',${idx})">×</button></span>`).join('')}</div>`:''}</div>`:'';
+   const info=isInfo?`<div class="memo">💡 ${esc(l2.hint||'설계용역 계약서, 용역사 연락처 등 기존 설계용역 정보')}</div>`:'';
+   return `<div class="l2"><div class="row ${on?'':'off'}"><button class="check ${on?'on':''}" onclick="toggleNode('${enc(l2.id)}')">${on?'✓':''}</button><button class="exp" onclick="expand('${enc(l2.id)}')">${open?'▼':'▶'}</button><span class="name">${esc(dynamicLabel(l2))}</span>${ct?'<span class="tag">실제 계약명 입력</span>':''}</div>${box}<div class="children ${open?'open':''}">${info}${(l2.children||[]).map(renderNode).join('')||(!info?'<span style="font-size:12px;color:#8792a2">하위 폴더 없음</span>':'')}</div></div>`
   }).join('');
   return `<section class="l1"><div class="l1h">${esc(l1.label)}</div>${blocks}</section>`
  }).join('')
 }
 function choose(k){current=k;resetTemplate()}function expand(x){const id=dec(x);expanded.has(id)?expanded.delete(id):expanded.add(id);render()}
 function show(s){toast.textContent=s;toast.style.display='block';setTimeout(()=>toast.style.display='none',2200)}
-function instanceNames(l2){
+function instanceEntries(l2){
  const arr=instances[l2.id]||[];
- return arr.length?arr.map(v=>dynamicLabel(l2,v)):[dynamicLabel(l2)];
+ return arr.length?arr.map((v,idx)=>({name:dynamicLabel(l2,v,idx),offset:idx})):[{name:dynamicLabel(l2),offset:0}];
+}
+function childLabelForInstance(child,l2,offset){
+ const parentCode=dynamicCode(l2,offset);
+ const siblings=(l2.children||[]).filter(x=>selected.has(x.id));
+ const pos=siblings.findIndex(x=>x.id===child.id);
+ const idx=(pos>=0?pos:0)+1;
+ const code=child.level===3 ? parentCode+String(idx).padStart(2,'0') : dynamicCode(child);
+ return (code+' '+plainName(child.label)).trim();
+}
+function grandchildLabelForInstance(l4,l3,l2,offset){
+ const p3code=(dynamicCode(l2,offset)+String(((l2.children||[]).filter(x=>selected.has(x.id)).findIndex(x=>x.id===l3.id)+1)).padStart(2,'0'));
+ const siblings=(l3.children||[]).filter(x=>selected.has(x.id));
+ const idx=Math.max(0,siblings.findIndex(x=>x.id===l4.id))+1;
+ return (p3code+'-'+idx+' '+plainName(l4.label)).trim();
 }
 function selectedLines(){
  const z=[];
@@ -115,11 +145,11 @@ function selectedLines(){
   const l2s=(l1.children||[]).filter(x=>selected.has(x.id));if(!l2s.length)return;
   z.push(dynamicLabel(l1));
   l2s.forEach(l2=>{
-   instanceNames(l2).forEach(nm=>{
-    z.push('  - '+nm);
+   instanceEntries(l2).forEach(ent=>{
+    z.push('  - '+ent.name);
     (l2.children||[]).filter(x=>selected.has(x.id)).forEach(l3=>{
-     z.push('      · '+dynamicLabel(l3));
-     (l3.children||[]).filter(x=>selected.has(x.id)).forEach(l4=>z.push('          · '+dynamicLabel(l4)))
+     z.push('      · '+childLabelForInstance(l3,l2,ent.offset));
+     (l3.children||[]).filter(x=>selected.has(x.id)).forEach(l4=>z.push('          · '+grandchildLabelForInstance(l4,l3,l2,ent.offset)))
     })
    })
   })
