@@ -451,10 +451,11 @@ async function copyForChatbot(){
   '위 번호는 이미 순연 완료된 최종 번호이므로 다시 원래 번호로 복원하거나 재번호하지 마세요.',
   '숫자로 시작하지 않는 메모성 텍스트는 폴더로 만들지 마세요.',
   '실제 계약명이 입력된 가변 항목은 해당 명칭으로 사용하고 그 하위 표준구조를 유지하세요.',
-  'BAT 파일은 반드시 @echo off, chcp 65001 > nul, cd /d "%~dp0" 순으로 시작하세요.',
+  'BAT 파일은 반드시 한국어 Windows CMD 호환을 위해 CP949(ANSI) 인코딩으로 저장하고, @echo off, chcp 949 > nul, cd /d "%~dp0" 순으로 시작하세요.',
   'BAT 파일이 저장된 위치에 "공사문서트리" 최상위 폴더를 생성하고 그 아래에 선택된 전체 구조를 생성하세요.',
   'Tree Builder가 전달한 폴더명과 번호는 한 글자도 임의로 변경·보정·복원하지 마세요.',
   '모든 md 경로는 큰따옴표로 감싸세요.',
+  'BAT 파일 자체는 UTF-8 또는 UTF-8 BOM으로 저장하지 말고 반드시 CP949(ANSI)로 저장하세요.',
   '마지막에는 실제 생성 위치를 echo로 표시하고 pause를 넣으세요.'
  ].join('\n');
  try{await navigator.clipboard.writeText(text)}
