@@ -68,4 +68,8 @@ class CollectExport(unittest.TestCase):
         self.assertEqual(link.read_bytes(),b'user edited');self.assertIn(first['created'][0],again['userChanged'])
 
 
+    def test_csv_cells_never_start_a_formula(self):
+        self.assertEqual(app.csv_cell('=HYPERLINK("x")'),"'=HYPERLINK(\"x\")");self.assertEqual(app.csv_cell('260401 공문.pdf'),'260401 공문.pdf')
+
+
 if __name__=='__main__':unittest.main()

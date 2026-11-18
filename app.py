@@ -3428,14 +3428,20 @@ def export_guide(project, plan, data):
             rows([o for o in data['officials'] if o['status'] == 'yes'], lambda i: i.get('date') or '') + '</table>')
 
 
+def csv_cell(value):
+    """Spreadsheet apps evaluate cells starting with = + - @; file names are shown as text."""
+    value = str(value or '')
+    return "'" + value if value[:1] in ('=', '+', '-', '@', '\t', '\r') else value
+
+
 def export_csv(plan, data, made):
     buffer = io.StringIO()
     writer = csv.writer(buffer)
     writer.writerow(['구분', '이름', '실제 위치(사업 폴더 기준)', '소속 자료 묶음', '바로가기 위치'])
     for item in data['photos']:
-        writer.writerow(['사진 · ' + PHASES[item['phase']], item['name'], item['relative'], item.get('bundle', ''), made.get(item['relative'], '')])
+        writer.writerow([csv_cell(x) for x in ('사진 · ' + PHASES[item['phase']], item['name'], item['relative'], item.get('bundle', ''), made.get(item['relative'], ''))])
     for item in data['officials']:
-        writer.writerow(['공문' if item['status'] == 'yes' else '공문 확인 필요', item['name'], item['relative'], item.get('bundle', ''), made.get(item['relative'], '')])
+        writer.writerow([csv_cell(x) for x in ('공문' if item['status'] == 'yes' else '공문 확인 필요', item['name'], item['relative'], item.get('bundle', ''), made.get(item['relative'], ''))])
     return '\ufeff' + buffer.getvalue()
 
 
