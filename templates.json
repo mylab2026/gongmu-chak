@@ -1,0 +1,2063 @@
+{
+  "planning": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 예산관리",
+          "children": [
+            {
+              "label": "1 예산 수립 및 변경 이력",
+              "children": []
+            },
+            {
+              "label": "2 연도별 예산 지출 현황",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "2 주요 보고자료",
+          "children": []
+        },
+        {
+          "label": "3 타기관 협의자료",
+          "children": []
+        }
+      ]
+    },
+    {
+      "label": "2 기획 및 기본구상",
+      "children": [
+        {
+          "label": "1 사업계획",
+          "children": [
+            {
+              "label": "1 최초 사업계획서",
+              "children": []
+            },
+            {
+              "label": "2 기획설계 도서",
+              "children": []
+            },
+            {
+              "label": "3 교육시방서 및 과업지시서",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "2 공사 전 건물 정보",
+          "children": [
+            {
+              "label": "1 건축물대장",
+              "children": []
+            },
+            {
+              "label": "2 기존도면",
+              "children": []
+            },
+            {
+              "label": "3 석면조사 보고서",
+              "children": []
+            },
+            {
+              "label": "4 내진성능 평가 보고서",
+              "children": []
+            },
+            {
+              "label": "5 안전 점검 및 진단보고서",
+              "children": []
+            },
+            {
+              "label": "6 지반조사보고서",
+              "children": []
+            },
+            {
+              "label": "7 현황사진 및 실측자료",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "3 각종 위원회 및 회의 자료",
+          "children": [
+            {
+              "label": "1 기획위원회",
+              "children": []
+            },
+            {
+              "label": "2 캠퍼스 위원회",
+              "children": []
+            },
+            {
+              "label": "3 기타회의",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "4 용역1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "3 설계단계",
+      "children": [
+        {
+          "label": "1 설계 용역",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2 용역1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "4 시공단계",
+      "children": [
+        {
+          "label": "1 도급공사",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 시공사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착공계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 하도급 통보",
+              "children": []
+            },
+            {
+              "label": "8 승인요청",
+              "children": []
+            },
+            {
+              "label": "9 안전관리비 사용 현황",
+              "children": []
+            },
+            {
+              "label": "10 사진",
+              "children": [
+                {
+                  "label": "1 공사전",
+                  "children": []
+                },
+                {
+                  "label": "2 공사중",
+                  "children": []
+                },
+                {
+                  "label": "3 공사후",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "11 준공계",
+              "children": []
+            },
+            {
+              "label": "12 준공정산",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "13 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "14 작업일보",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "2 용역1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "3 관급자재 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 납품사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": []
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "5 인수인계",
+      "children": [
+        {
+          "label": "1 인수인계 도서",
+          "children": [
+            {
+              "label": "1 인수인계 확인서",
+              "children": []
+            },
+            {
+              "label": "2 도서",
+              "children": [
+                {
+                  "label": "1 공사 도서",
+                  "children": []
+                },
+                {
+                  "label": "2 인허가도서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "3 사진",
+              "children": [
+                {
+                  "label": "1 공사 완료 사진",
+                  "children": []
+                },
+                {
+                  "label": "2 유지보수 자재 사진",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2 사업 최종 결산 자료",
+          "children": [
+            {
+              "label": "1 결산자료",
+              "children": []
+            },
+            {
+              "label": "2 과세 표준 점검표",
+              "children": []
+            },
+            {
+              "label": "3 증빙 자료",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "design": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 사업계획서",
+          "children": []
+        },
+        {
+          "label": "2 예산관리",
+          "children": [
+            {
+              "label": "1 예산 수립 및 변경 이력",
+              "children": []
+            },
+            {
+              "label": "2 연도별 예산 지출 현황",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "3 주요 보고자료(내부보고 자료)",
+          "children": []
+        },
+        {
+          "label": "4 타기관 협의자료(공문, 공지, 민원 등)",
+          "children": [
+            {
+              "label": "1 공문 및 협의기록",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 학내 안내",
+              "children": []
+            },
+            {
+              "label": "3 민원",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "2 설계단계",
+      "children": [
+        {
+          "label": "1 설계 용역",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "3 시공단계",
+      "children": [
+        {
+          "label": "1 도급공사 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 시공사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착공계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 하도급 통보",
+              "children": []
+            },
+            {
+              "label": "8 승인요청",
+              "children": []
+            },
+            {
+              "label": "9 안전관리비 사용 현황",
+              "children": []
+            },
+            {
+              "label": "10 사진",
+              "children": [
+                {
+                  "label": "1 공사전",
+                  "children": []
+                },
+                {
+                  "label": "2 공사중",
+                  "children": []
+                },
+                {
+                  "label": "3 공사후",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "11 준공계",
+              "children": []
+            },
+            {
+              "label": "12 준공정산",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "13 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "14 작업일보",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "2 용역1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "3 관급자재 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 납품사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": []
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "4 인수인계",
+      "children": [
+        {
+          "label": "1 인수인계 도서",
+          "children": [
+            {
+              "label": "1 인수인계 확인서",
+              "children": []
+            },
+            {
+              "label": "2 도서",
+              "children": [
+                {
+                  "label": "1 공사 도서",
+                  "children": []
+                },
+                {
+                  "label": "2 인허가도서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "3 사진",
+              "children": [
+                {
+                  "label": "1 공사 완료 사진",
+                  "children": []
+                },
+                {
+                  "label": "2 유지보수 자재 사진",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2 사업 최종 결산 자료",
+          "children": [
+            {
+              "label": "1 결산자료",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "construction": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 사업계획서",
+          "children": []
+        },
+        {
+          "label": "2 예산관리",
+          "children": [
+            {
+              "label": "1 예산 수립 및 변경 이력",
+              "children": []
+            },
+            {
+              "label": "2 연도별 예산 지출 현황",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "3 주요 보고자료(내부보고 자료)",
+          "children": []
+        },
+        {
+          "label": "4 타기관 협의자료(공문, 공지, 민원 등)",
+          "children": [
+            {
+              "label": "1 공문 및 협의기록",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 학내 안내",
+              "children": []
+            },
+            {
+              "label": "3 민원",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "2 설계단계",
+      "children": [
+        {
+          "label": "1 성과품",
+          "children": []
+        },
+        {
+          "label": "2 기술검토 자료",
+          "children": []
+        },
+        {
+          "label": "3 설계용역 정보",
+          "children": []
+        }
+      ]
+    },
+    {
+      "label": "3 시공단계",
+      "children": [
+        {
+          "label": "1 도급공사 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 시공사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착공계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 하도급 통보",
+              "children": []
+            },
+            {
+              "label": "8 승인요청",
+              "children": []
+            },
+            {
+              "label": "9 안전관리비 사용 현황",
+              "children": []
+            },
+            {
+              "label": "10 사진",
+              "children": [
+                {
+                  "label": "1 공사전",
+                  "children": []
+                },
+                {
+                  "label": "2 공사중",
+                  "children": []
+                },
+                {
+                  "label": "3 공사후",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "11 준공계",
+              "children": []
+            },
+            {
+              "label": "12 준공정산",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "13 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "14 작업일보",
+              "children": []
+            }
+          ]
+        },
+        {
+          "label": "2 용역1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사 조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "3 관급자재 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 납품사에 제공 한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 완수계",
+              "children": []
+            },
+            {
+              "label": "8 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "4 인수인계",
+      "children": [
+        {
+          "label": "1 인수인계 도서",
+          "children": [
+            {
+              "label": "1 인수인계 확인서",
+              "children": []
+            },
+            {
+              "label": "2 도서",
+              "children": [
+                {
+                  "label": "1 공사 도서",
+                  "children": []
+                },
+                {
+                  "label": "2 인허가도서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "3 사진",
+              "children": [
+                {
+                  "label": "1 공사 완료 사진",
+                  "children": []
+                },
+                {
+                  "label": "2 유지보수 자재 사진",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "label": "2 사업 최종 결산 자료",
+          "children": [
+            {
+              "label": "1 결산자료",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "annual-construction-direct": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 주요 보고자료(내부보고 자료)",
+          "children": []
+        },
+        {
+          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
+          "children": [
+            {
+              "label": "1 공문 및 협의기록",
+              "note": "별도 계약이 체결된 용역 및 공사는 제외",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 학내 안내",
+              "note": "공고문, 홈페이지 게시글 등",
+              "children": []
+            },
+            {
+              "label": "3 민원",
+              "note": "국민신문고, 유선·방문 민원 대응 이력",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "2 시공단계",
+      "children": [
+        {
+          "label": "1 도급공사 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 시공사에 제공한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착공계",
+              "note": "현장 조직도, 선임계, 종합가설계획, 예정공정표, 계약내역서, 직접시공계획서, 신고필증 등",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 작업지시서",
+              "children": [
+                {
+                  "label": "1 현장1",
+                  "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
+                  "children": []
+                },
+                {
+                  "label": "2 현장2",
+                  "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 안전관리비 사용 현황",
+              "note": "산업안전보건관리비 사용 내역",
+              "children": []
+            },
+            {
+              "label": "9 준공계",
+              "note": "준공계 공문 및 검사조서, 준공도서, 보험료·폐기물 증빙자료, 합의서, 하자보증서, 사진대지 등",
+              "children": []
+            },
+            {
+              "label": "10 준공정산",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "11 기타공문",
+              "note": "착공계, 준공계, 기성, 설계변경, 안전관리비, 하도급 통보 관련 공문 제외",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "12 작업일보",
+              "children": []
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "annual-construction-workOnly": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 주요 보고자료(내부보고 자료)",
+          "children": []
+        },
+        {
+          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
+          "children": [
+            {
+              "label": "1 공문 및 협의기록",
+              "note": "별도 계약이 체결된 용역 및 공사는 제외",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 학내 안내",
+              "note": "공고문, 홈페이지 게시글 등",
+              "children": []
+            },
+            {
+              "label": "3 민원",
+              "note": "국민신문고, 유선·방문 민원 대응 이력",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "2 시공단계",
+      "children": [
+        {
+          "label": "1 도급공사 1",
+          "children": [
+            {
+              "label": "1 회의 및 협의기록",
+              "children": [
+                {
+                  "label": "1 현장1",
+                  "children": []
+                },
+                {
+                  "label": "2 현장2",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 작업지시서",
+              "children": [
+                {
+                  "label": "1 현장1",
+                  "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
+                  "children": []
+                },
+                {
+                  "label": "2 현장2",
+                  "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "annual-service-direct": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 주요 보고자료(내부보고 자료)",
+          "children": []
+        },
+        {
+          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
+          "children": [
+            {
+              "label": "1 공문 및 협의기록",
+              "note": "별도 계약이 체결된 용역 및 공사는 제외",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 학내 안내",
+              "note": "공고문, 홈페이지 게시글 등",
+              "children": []
+            },
+            {
+              "label": "3 민원",
+              "note": "국민신문고, 유선·방문 민원 대응 이력",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "2 시공단계",
+      "children": [
+        {
+          "label": "1 용역 1",
+          "children": [
+            {
+              "label": "1 최초 품의 및 최초 계약서",
+              "children": [
+                {
+                  "label": "1 품의서",
+                  "children": []
+                },
+                {
+                  "label": "2 계약서",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 용역사에 제공한 자료",
+              "children": []
+            },
+            {
+              "label": "3 착수계",
+              "note": "착수계 공문 및 첨부 서류",
+              "children": []
+            },
+            {
+              "label": "4 지출서류",
+              "children": [
+                {
+                  "label": "1 선금",
+                  "children": []
+                },
+                {
+                  "label": "2 노무비",
+                  "children": []
+                },
+                {
+                  "label": "3 기성",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "5 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "6 작업지시서",
+              "children": [
+                {
+                  "label": "1 현장1",
+                  "note": "작업지시서, 내역서, 도면, 용역 완료 확인서, 완료 보고서 등",
+                  "children": []
+                },
+                {
+                  "label": "2 현장2",
+                  "note": "작업지시서, 내역서, 도면, 용역 완료 확인서, 완료 보고서 등",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "7 설계변경",
+              "children": [
+                {
+                  "label": "1 1차 설계변경",
+                  "children": []
+                },
+                {
+                  "label": "2 2차 설계변경",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "8 완수계",
+              "children": [
+                {
+                  "label": "1 완수계 공문 및 검사조서",
+                  "children": []
+                },
+                {
+                  "label": "2 최종 성과품",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "9 기타공문",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "annual-service-workOnly": [
+    {
+      "label": "1 공통",
+      "children": [
+        {
+          "label": "1 주요 보고자료(내부보고 자료)",
+          "children": []
+        },
+        {
+          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
+          "children": [
+            {
+              "label": "1 공문 및 협의기록",
+              "note": "별도 계약이 체결된 용역 및 공사는 제외",
+              "children": [
+                {
+                  "label": "1 수신",
+                  "children": []
+                },
+                {
+                  "label": "2 발신",
+                  "children": []
+                }
+              ]
+            },
+            {
+              "label": "2 학내 안내",
+              "note": "공고문, 홈페이지 게시글 등",
+              "children": []
+            },
+            {
+              "label": "3 민원",
+              "note": "국민신문고, 유선·방문 민원 대응 이력",
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "2 시공단계",
+      "children": [
+        {
+          "label": "1 용역 1",
+          "children": [
+            {
+              "label": "1 회의 및 협의기록",
+              "children": []
+            },
+            {
+              "label": "2 작업지시서",
+              "children": [
+                {
+                  "label": "1 작업지시서 1차 및 계약서",
+                  "children": []
+                },
+                {
+                  "label": "2 작업지시서 2차 및 계약서",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
