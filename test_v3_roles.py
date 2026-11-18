@@ -72,6 +72,8 @@ class RolesBeforeLetters(unittest.TestCase):
 
     def test_recheck_repairs_old_result_from_history_and_undo_restores(self):
         entries=[]  # A 0.10.0-style result: round folders were wrapped as lettered bundles.
+        contract=D+'설계용역 계약서.pdf';moved=FIRST+'/설계용역 계약서.pdf';(self.root/moved).parent.mkdir(parents=True,exist_ok=True);(self.root/contract).rename(self.root/moved)
+        entries.append({'id':'c','source':contract,'destination':moved,'fingerprint':app.fingerprint(self.root/moved),'status':'moved','kind':'file'})
         for f in FILES:
             if '3109-1' not in f and '3109-2' not in f:continue
             old=f.split('/')[3];new=('b ' if '3109-1' in f else 'c ')+old.split(' ',1)[1]
@@ -84,6 +86,7 @@ class RolesBeforeLetters(unittest.TestCase):
         user=self.root/'1 공통/사용자 빈 폴더';user.mkdir()
         before=self.files();check=app.recheck(self.project['id']);self.assertEqual(before,self.files())
         rows={r['recheck']['original']:r for r in check['rows']}
+        self.assertEqual(rows[D+'설계용역 계약서.pdf']['recheck']['proposed'],FIRST+'/2 계약서/설계용역 계약서.pdf')
         row=rows[C+'3109-1 설계변경1차(설계변경 검토의견서)/사진/현장 사진.jpg']
         self.assertEqual(row['recheck']['proposed'],CHANGE+'/1 1차 설계변경/사진/현장 사진.jpg')
         self.assertEqual(row['relative'],row['recheck']['current'])

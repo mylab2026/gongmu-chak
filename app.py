@@ -1150,7 +1150,7 @@ def apply_contract_routes(project,rows,paths):
         if row.get('done') or Path(row['name']).suffix.lower() not in CONTRACT_FORMATS:
             continue
         probable=probable_contract_file(row)
-        source=safe_path(project['root'],row['relative'])
+        source=safe_path(project['root'],row.get('current',row['relative']))
         candidates=[]
         registered_name=any(r.get('name')==row['name'] or r.get('sourceRelative')==row['relative'] for values in ledger.values() for r in values)
         if probable or registered_name:
