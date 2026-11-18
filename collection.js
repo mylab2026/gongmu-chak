@@ -142,7 +142,7 @@ function collectRender(){$$('[data-ctab]').forEach(b=>b.setAttribute('aria-press
 $$('[data-ctab]').forEach(b=>b.onclick=()=>{Collect.tab=b.dataset.ctab;collectRender();});
 collectButton.onclick=()=>task('등록된 사업 확인 중…',async()=>{await refresh();clearError();$('#home').hidden=true;$('#wizard').hidden=true;if(typeof finder!=='undefined')finder.hidden=true;collection.hidden=false;const list=S.status.projects;
  $('#collectProject').innerHTML=list.length?list.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join(''):'<option value="">등록된 사업이 없습니다</option>';$('#collectProject').value=list[0]?.id||'';Collect.data=null;Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;Collect.tab='photo';if(list.length)await collectLoad();else collectRender();});
-$('#collectProject').onchange=()=>task('사진·공문 모으는 중…',collectLoad);
+$('#collectProject').onchange=()=>task('사진·공문 모으는 중…',()=>{Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;return collectLoad();});
 $('#collectRefresh').onclick=()=>task('사진·공문 모으는 중…',collectLoad);
 $('#collectHome').onclick=()=>goHome();
 // 정리 완료 화면: 고정 안내문 + 4~5초 무음 애니메이션 한 번(동작 줄이기 설정에서는 정지 화면).
