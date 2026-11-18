@@ -1579,6 +1579,9 @@ def round_target(paths,parts):
         if not key:
             continue
         candidates=[p for p in paths if round_key(PurePosixPath(p).name,PurePosixPath(p).parts[:-1])==key]
+        word=next((service_word(a) for a in parts[:i] if service_word(a)),'')
+        if word:
+            candidates=[p for p in candidates if any(service_word(a)==word for a in PurePosixPath(p).parts[:-1])]
         if not candidates:
             return i,''
         def score(path):

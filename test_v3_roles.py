@@ -98,4 +98,11 @@ class RolesBeforeLetters(unittest.TestCase):
         app.undo(journal['id']);self.assertEqual(self.files(),before);self.assertTrue(wrong[0].is_dir())
 
 
+    def test_round_never_crosses_into_another_service(self):
+        paths=['3 시공단계/2 감리용역/2 작업지시서/1 작업지시서 1차 및 계약서']
+        self.assertEqual(app.round_target(paths,['3 시공단계','32 기술지도 용역','작업지시서 1차']),(2,''))
+        paths.append('3 시공단계/3 재해예방 기술지도 용역/2 작업지시서/1 작업지시서 1차 및 계약서')
+        self.assertEqual(app.round_target(paths,['3 시공단계','32 기술지도 용역','작업지시서 1차'])[1],paths[1])
+
+
 if __name__=='__main__':unittest.main()
