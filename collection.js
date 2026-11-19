@@ -1,7 +1,10 @@
-// 사진·공문 모아보기와 준공·인수인계 내보내기: 원본은 옮기지 않고 PC 색인으로만 보여줍니다(AI 호출 없음).
-const Collect={data:null,tab:'photo',phase:'all',limit:120,thumbs:new Map(),plan:null,cid:'',run:null,draft:null,recheck:null,repair:null};
+// 사진은 원래 위치에서 모아 보고, 문장 검색은 문서 발췌를 AI로 확인합니다.
+const Collect={data:null,tab:'photo',phase:'all',limit:120,thumbs:new Map(),plan:null,cid:'',run:null,draft:null,recheck:null,repair:null,generation:0,job:null};
 const collectStyle=document.createElement('style');collectStyle.textContent=`
 #home .choices{grid-template-columns:repeat(2,1fr)}
+#collection .ctabs{align-items:flex-start}#collection .export-tab{max-width:32rem}#collection #exportUsageHint{font-size:14px;line-height:1.5;margin:6px 0 0}
+#collection textarea{box-sizing:border-box;width:100%;min-height:100px;font:inherit;padding:12px;border:1px solid #bdcbe3;border-radius:8px}
+#collection .assist-question{padding:14px;border-left:4px solid #345fe2;background:#eef4ff;margin:12px 0}
 #collection .ctabs button[aria-pressed=true],#collection .chips button[aria-pressed=true]{background:#1f4fd1;color:#fff}
 #collection .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
 #collection .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
@@ -33,11 +36,11 @@ const collectStyle=document.createElement('style');collectStyle.textContent=`
 @keyframes daMove{to{transform:translate(130px,72px) scale(.45);opacity:.9}}
 @keyframes daHit{to{background:#c8f7c5;border-color:#56b866}}
 @media (prefers-reduced-motion:reduce){.done-anim *{animation:none!important}.da-doc{opacity:1;transform:translate(130px,72px) scale(.45)}.da-old{opacity:0}.da-new,.da-tag,.da-final,.da-check{opacity:1}.da-build{background:#c8f7c5}}`;document.body.appendChild(collectStyle);
-const collectButton=document.createElement('button');collectButton.id='collectButton';collectButton.innerHTML='<b>사진·자료 모아보기</b><br><small>원래 위치는 그대로 두고 사진과 원하는 문서를 모아 봅니다. 정리 결과 점검, 준공·인수인계 자료도 여기서 합니다.</small>';$('#findButton').after(collectButton);
+const collectButton=document.createElement('button');collectButton.id='collectButton';collectButton.innerHTML='<b>모아보기</b><br><small>파일의 원래 위치는 두고 공무착착이 원하는 파일들을 모아서 보여줍니다.</small>';$('#findButton').after(collectButton);
 const collection=document.createElement('section');collection.id='collection';collection.hidden=true;
-collection.innerHTML='<h1>사진·자료 모아보기</h1>'
-+'<div class="card"><label for="collectProject">사업</label><div class="row"><select id="collectProject"></select><button id="collectRefresh">새로 고침</button><button id="collectHome">처음 화면</button></div><p class="muted">모아보기는 파일을 옮기거나 복사하지 않습니다. PC에서 먼저 후보를 찾고, AI 확인은 직접 누를 때만 합니다.</p></div>'
-+'<div class="row ctabs"><button data-ctab="photo" aria-pressed="true">사진</button><button data-ctab="saved" aria-pressed="false">내 모아보기</button><button data-ctab="recheck" aria-pressed="false">정리 결과 점검</button><button data-ctab="export" aria-pressed="false">준공·인수인계 내보내기</button></div>'
+collection.innerHTML='<h1>모아보기</h1>'
++'<div class="card"><label for="collectProject">사업</label><div class="row"><select id="collectProject"></select><button id="collectRefresh">새로 고침</button><button id="collectHome">처음 화면</button><button id="downloadHistory">스누챗용 정리 이력 받기</button></div><p class="muted">파일의 원래 위치는 그대로 둡니다. 내 모아보기에 문장을 입력하면 AI가 문서 본문 발췌·이미지와 폴더 맥락을 확인합니다.</p></div>'
++'<div class="row ctabs"><button data-ctab="photo" aria-pressed="true">사진</button><button data-ctab="saved" aria-pressed="false">내 모아보기</button><button data-ctab="recheck" aria-pressed="false">정리 결과 점검</button><div class="export-tab"><button data-ctab="export" aria-pressed="false" aria-describedby="exportUsageHint">준공·인수인계 내보내기</button><p class="muted" id="exportUsageHint">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요.</p></div></div>'
 +'<div id="collectNotice"></div><div id="collectBody"></div>';
 $('#home').after(collection);
 const collectBaseShow=show;show=function(step){collection.hidden=true;return collectBaseShow(step);};
@@ -79,35 +82,71 @@ function condForm(c){const v=x=>esc(Array.isArray(x)?x.join(', '):(x||''));
  +'<p class="muted">서로 다른 칸은 모두 만족(그리고), 같은 뜻 칸은 하나만 맞아도 됩니다(또는). “시공사 공문”은 시공사가 보낸 공문만 뜻합니다.</p>';}
 function readCond(){const c={...Collect.draft.conditions,types:$$('[data-ctype]').filter(x=>x.checked).map(x=>x.dataset.ctype)};
  $$('[data-cf]').forEach(i=>{const k=i.dataset.cf;c[k]=/Aliases|keywordsAll|exclude/.test(k)?i.value.split(',').map(x=>x.trim()).filter(Boolean):i.value.trim();});return c;}
-function docCard(o,label){return '<article class="doc-card"><div class="noimg" data-thumb="'+esc(o.relative)+'">'+esc(o.name.split('.').pop().toUpperCase())+'</div><strong>'+esc(o.title||o.name)+'</strong>'
- +'<p><span class="badge '+(o.status==='match'?'ok':o.status==='mismatch'?'no':'')+'">'+esc(label)+'</span></p><dl>'
+function docCard(o,label){return '<article class="doc-card"><div class="noimg" data-thumb="'+esc(o.relative)+'">'+esc(o.name.split('.').pop().toUpperCase())+'</div><strong>'+esc(o.contractFamilyTitle||o.contractTitle||o.title||o.name)+'</strong>'
+ +(o.versions?'<p class="muted">같은 계약건 · 계약 문서 '+o.versions.length+'개</p>':'')+'<p><span class="badge '+(o.status==='match'?'ok':o.status==='mismatch'?'no':'')+'">'+esc(label)+'</span></p><dl>'
  +[['문서번호',o.docNumber],['발신',o.sender],['수신',o.recipient],['날짜',o.docDate||o.date],['파일',o.name]].map(([k,x])=>'<dt>'+k+'</dt><dd>'+esc(x||'확인 안 됨')+'</dd>').join('')+'</dl>'
- +'<details><summary>근거</summary>'+Object.entries({...(o.evidence||{}),...(o.aiEvidence||{})}).map(([k,x])=>'<p class="muted">'+esc(k)+': '+esc(x)+'</p>').join('')+'</details><p class="path">'+esc(o.folder)+'</p><div class="row">'+collectOpenButtons(o.relative)+'</div></article>';}
-function collectSaved(){const list=Collect.data.collections||[];const r=Collect.run;
- let out='<div class="card"><strong>내 모아보기</strong><p class="muted">공문·계약서·공정표처럼 자주 찾는 문서를 조건으로 저장해 두고 다시 봅니다. 원본은 그대로 둡니다.</p><div class="chips">'
-  +list.map(c=>'<button data-cid="'+esc(c.id)+'" aria-pressed="'+(c.id===Collect.cid)+'">'+esc(c.name)+'</button>').join('')+'<button id="newCollection">+ 새 모아보기</button></div></div>';
- if(Collect.draft){out+='<div class="card"><label>찾고 싶은 문서를 문장으로 적어주세요</label><div class="row"><input id="draftText" value="'+esc(Collect.draft.text||'')+'" placeholder="예: 2026년 3월 시공사 공문"><button id="draftParse">조건 만들기</button></div>'
-  +(Collect.draft.conditions?condForm(Collect.draft.conditions)+'<label>이름</label><div class="row"><input id="draftName" value="'+esc(Collect.draft.name||'')+'"><button class="primary" id="draftSave">저장</button>'+(Collect.draft.id?'<button id="draftDelete">삭제</button>':'')+'</div>':'')+'</div>';}
- if(r){if(r.unindexed)out+='<p class="warn">아직 내용을 읽지 못한 문서 '+r.unindexed+'건이 있습니다. 문서 검색의 색인을 갱신하면 더 찾을 수 있습니다.</p>';const e=r.estimate;out+='<div class="card"><p><b>'+esc(r.collection.name)+'</b> · PC에서 찾은 후보 '+e.candidates+'건 · 이미 확인 '+e.cached+'건</p>'
-  +(e.candidates?'<p class="muted">후보를 AI로 확인하면 약 '+e.aiCalls+'번 호출합니다(한 번 확인한 결과는 저장해 다시 부르지 않습니다).</p><button id="verifyRun">AI로 후보 확인</button>':'')+' <button id="editCollection">조건 고치기</button>'
-  +(r.failed&&r.failed.length?'<p class="warn">'+r.failed.length+'건은 AI 확인에 실패해 확인되지 않은 상태로 남겼습니다.</p>':'')+'</div>';
+ +(o.versions?'<details><summary>최초·변경 계약 이력 보기</summary>'+o.versions.map((v,i)=>'<div class="path"><b>'+esc(v.signed_date||'체결일 확인 필요')+'</b> · '+esc(v.name)+'<br>'+collectOpenButtons(v.relative)+'</div>').join('')+'</details>':'')+'<details><summary>근거</summary>'+Object.entries({...(o.evidence||{}),...(o.aiEvidence||{})}).map(([k,x])=>'<p class="muted">'+esc(k)+': '+esc(x)+'</p>').join('')+'</details><p class="path">'+esc(o.folder)+'</p><div class="row">'+collectOpenButtons(o.relative)+'</div></article>';}
+function collectSaved(){const list=Collect.data.collections||[],r=Collect.run;
+ let out='<div class="card"><strong>내 모아보기</strong><p class="muted">찾고 싶은 자료를 편하게 문장으로 적어주세요. AI가 조건을 이해하고, 모호한 내용만 최대 두 번 질문한 뒤 문서를 찾아줍니다.</p><div class="chips">'
+ +list.map(c=>'<button data-cid="'+esc(c.id)+'" aria-pressed="'+(c.id===Collect.cid)+'">'+esc(c.name)+'</button>').join('')+'<button id="newCollection">+ 새 모아보기</button></div></div>';
+ if(Collect.draft){const d=Collect.draft;out+='<div class="card"><label for="draftText">어떤 자료를 찾으시나요?</label><textarea id="draftText" maxlength="4000" placeholder="예: 지난해 시공사가 보낸 창호 설계변경 공문과 공정표를 찾아줘. 내부 검토자료는 빼줘.">'+esc(d.text||'')+'</textarea>';
+  if(d.question)out+='<div class="assist-question"><b>확인할게요 · '+d.round+'/2</b><p>'+esc(d.question.text)+'</p><div class="chips">'+(d.question.options||[]).map(x=>'<button data-assist-answer="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div><label for="draftAnswer">답변</label><div class="row"><input id="draftAnswer" placeholder="직접 답을 적어도 됩니다"><button class="primary" id="draftReply">답하고 계속 찾기</button></div></div>';
+  else out+='<p class="muted">이 사업의 문서 발췌와 필요한 이미지가 연결된 AI에 전송됩니다. 한 번 확인한 문서는 변경되기 전까지 다시 읽지 않습니다.</p><button class="primary" id="draftParse">AI로 찾아보기</button>';
+  if(d.id)out+=' <button id="draftDelete">이 모아보기 삭제</button>';
+  out+='</div>';
+ }
+ if(r){const e=r.estimate;if(r.excludedEmployment)out+='<p class="muted">근로계약서 '+r.excludedEmployment+'건은 제외했습니다.</p>';let summary=r.collection.conditions.text||r.collection.name;
+  try{summary=JSON.parse(r.collection.conditions.semanticQuery).summary||summary;}catch{}
+  out+='<div class="card"><b>'+esc(r.collection.name)+'</b><p>'+esc(summary)+'</p><p class="muted">확인한 문서 '+e.cached+'건 · 아직 확인하지 않은 문서 '+e.candidates+'건</p>'
+   +(r.collection.conditions.unresolved?'<p class="warn">아직 모호한 조건: '+esc(r.collection.conditions.unresolved)+' · 단정하지 않고 확인 필요로 표시합니다.</p>':'')
+   +(e.candidates?'<button id="verifyRun">'+(r.collection.conditions.semanticQuery?'남은 문서 계속 찾기':'AI로 후보 확인')+'</button>':'')+' <button id="editCollection">문장으로 조건 바꾸기</button>'
+   +(r.failed?.length?'<p class="warn">'+r.failed.length+'건은 본문을 읽지 못했거나 AI 확인에 실패했습니다. 누락된 일치 자료가 있을 수 있으니 원본을 확인해주세요.</p>':'')+'</div>';
   const block=(title,items,label)=>items.length?'<div class="card"><strong>'+title+' '+items.length+'</strong><div class="doc-grid">'+items.slice(0,120).map(o=>docCard(o,label)).join('')+'</div></div>':'';
-  out+=block('조건에 맞음',r.verified,'확인됨')+block('PC 후보(아직 확인 안 됨)',r.candidates,'미확인')+block('확인 필요',r.unclear,'판단 보류')
-   +(r.mismatch.length?'<details class="card"><summary>조건에 맞지 않음 '+r.mismatch.length+'</summary><div class="doc-grid">'+r.mismatch.slice(0,60).map(o=>docCard(o,'맞지 않음')).join('')+'</div></details>':'');}
- return out;}
-async function runSaved(){Collect.run=await api('/collection-run',{id:collectId(),cid:Collect.cid});collectRender();}
+  out+=block('찾은 자료',r.verified,'조건에 맞음')+block('아직 확인하지 않은 자료',r.candidates,'미확인')+block('사용자 확인이 필요한 자료',r.unclear,'판단 보류')
+   +(r.mismatch.length?'<details class="card"><summary>조건에 맞지 않는 자료 '+r.mismatch.length+'</summary><div class="doc-grid">'+r.mismatch.slice(0,60).map(o=>docCard(o,'맞지 않음')).join('')+'</div></details>':'');
+ }
+ return out;
+}
+const collectionStop=document.createElement('button');collectionStop.id='stopCollectionSearch';collectionStop.hidden=true;collectionStop.textContent='찾기 중단';$('#busy').appendChild(collectionStop);
+collectionStop.onclick=async()=>{if(Collect.job){collectionStop.disabled=true;await api('/collection-search-cancel',{id:collectId(),job:Collect.job});}};
+async function runAssistedSearch(){
+ const id=collectId(),cid=Collect.cid,generation=Collect.generation;
+ const job=await api('/collection-search-start',{id,cid});Collect.job=job.id;collectionStop.hidden=false;collectionStop.disabled=false;
+ try{while(generation===Collect.generation){const status=await api('/collection-search-status',{id,job:job.id});$('#busyText').textContent='문서 내용을 확인하는 중 · '+status.processed+' / '+status.count+'건';
+  if(status.status==='failed')throw Error(status.error||'문서 확인을 마치지 못했습니다.');
+  if(['done','cancelled'].includes(status.status)){Collect.run=status.run;collectRender();return;}
+  await new Promise(resolve=>setTimeout(resolve,500));
+ }}finally{if(Collect.job===job.id)Collect.job=null;collectionStop.hidden=true;}
+}
+async function runSaved(){Collect.run=await api('/collection-run',{id:collectId(),cid:Collect.cid});collectRender();
+ if(Collect.run.collection.conditions.semanticQuery&&Collect.run.candidates.length)await runAssistedSearch();
+}
+async function findAssisted(answer){
+ const d=Collect.draft;if(!d)return;
+ d.text=$('#draftText').value.trim();if(!d.text)return error('찾고 싶은 자료를 문장으로 적어주세요.');
+ await task(answer?'답변을 반영하는 중…':'AI가 검색 문장을 이해하는 중…',async()=>{
+  const request={id:collectId(),text:d.text,cid:d.id};if(d.session){request.session=d.session;request.answer=answer;}
+  const result=await api('/collection-assist',request);
+  if(result.status==='question'){Collect.draft={...d,...result};collectRender();return;}
+  Collect.cid=result.collection.id;Collect.data.collections=[...(Collect.data.collections||[]).filter(c=>c.id!==Collect.cid),result.collection];Collect.draft=null;await runSaved();
+ });
+}
 function wireSaved(){
- $$('[data-cid]').forEach(b=>b.onclick=()=>task('모아보는 중…',async()=>{Collect.cid=b.dataset.cid;Collect.draft=null;await runSaved();}));
- const n=$('#newCollection');if(n)n.onclick=()=>{Collect.draft={text:'',conditions:null};Collect.run=null;Collect.cid='';collectRender();};
- const parse=$('#draftParse');if(parse)parse.onclick=()=>task('조건 만드는 중…',async()=>{const text=$('#draftText').value;Collect.draft={...Collect.draft,text,conditions:await api('/collection-parse',{text}),name:Collect.draft.name||text.slice(0,20)};collectRender();});
- const save=$('#draftSave');if(save)save.onclick=()=>task('모아보기 저장 중…',async()=>{const c=readCond();c.text=Collect.draft.text;const saved=await api('/collection-save',{id:collectId(),collection:{id:Collect.draft.id,name:$('#draftName').value,conditions:c}});
-  Collect.data.collections=[...(Collect.data.collections||[]).filter(x=>x.id!==saved.id),saved];Collect.cid=saved.id;Collect.draft=null;await runSaved();});
- const del=$('#draftDelete');if(del)del.onclick=async()=>{if(!await ask('모아보기를 지울까요?','저장된 조건만 지웁니다. 파일은 그대로입니다.'))return;await task('지우는 중…',async()=>{await api('/collection-delete',{id:collectId(),cid:Collect.draft.id});Collect.data.collections=Collect.data.collections.filter(x=>x.id!==Collect.draft.id);Collect.draft=null;Collect.run=null;Collect.cid='';collectRender();});};
- const edit=$('#editCollection');if(edit)edit.onclick=()=>{const c=Collect.run.collection;Collect.draft={id:c.id,name:c.name,text:c.conditions.text||'',conditions:c.conditions};collectRender();};
- const verify=$('#verifyRun');if(verify)verify.onclick=async()=>{const items=Collect.run.candidates.slice(0,50);if(!await ask('AI로 후보를 확인할까요?','후보 '+items.length+'건을 확인하며 AI를 약 '+items.length+'번 호출합니다. 결과는 저장해 다음에는 다시 호출하지 않습니다.'))return;
-  await task('AI가 후보를 확인하는 중…',async()=>{const result=await api('/collection-verify',{id:collectId(),cid:Collect.cid,relatives:items.map(x=>x.relative)});await runSaved();Collect.run.failed=result.failed;collectRender();});};}
+ $$('[data-cid]').forEach(b=>b.onclick=()=>task('모아보는 중…',async()=>{Collect.generation++;Collect.cid=b.dataset.cid;Collect.draft=null;await runSaved();}));
+ const n=$('#newCollection');if(n)n.onclick=()=>{Collect.generation++;Collect.draft={text:''};Collect.run=null;Collect.cid='';collectRender();};
+ const parse=$('#draftParse');if(parse)parse.onclick=()=>{Collect.generation++;return findAssisted();};
+ const reply=$('#draftReply');if(reply)reply.onclick=()=>findAssisted($('#draftAnswer').value.trim());
+ $$('[data-assist-answer]').forEach(button=>button.onclick=()=>findAssisted(button.dataset.assistAnswer));
+ const edit=$('#editCollection');if(edit)edit.onclick=()=>{const c=Collect.run.collection;Collect.draft={id:c.id,text:c.conditions.text||''};collectRender();};
+ const del=$('#draftDelete');if(del)del.onclick=async()=>{if(!await ask('모아보기를 지울까요?','저장된 요청만 지웁니다. 원본 파일은 그대로입니다.'))return;await task('지우는 중…',async()=>{await api('/collection-delete',{id:collectId(),cid:Collect.draft.id});Collect.data.collections=Collect.data.collections.filter(x=>x.id!==Collect.draft.id);Collect.draft=null;Collect.run=null;Collect.cid='';collectRender();});};
+ const verify=$('#verifyRun');if(verify)verify.onclick=async()=>{
+  if(Collect.run.collection.conditions.semanticQuery)return task('남은 문서 확인 중…',runAssistedSearch);
+  const items=Collect.run.candidates.slice(0,50);if(!await ask('AI로 후보를 확인할까요?','문서 '+items.length+'건의 발췌를 확인합니다.'))return;
+  await task('AI가 후보를 확인하는 중…',async()=>{const result=await api('/collection-verify',{id:collectId(),cid:Collect.cid,relatives:items.map(x=>x.relative)});await runSaved();Collect.run.failed=result.failed;collectRender();});
+ };
+}
 function collectRecheck(){const p=Collect.recheck,r=Collect.repair;
- let out='<div class="card"><strong>정리 결과 점검</strong><p class="muted">이 사업에서 공무착착이 옮긴 기록을 바탕으로, 지금 규칙이면 어디에 있어야 하는지 다시 계산합니다. 점검만으로는 아무것도 옮기지 않습니다.</p><button class="primary" id="recheckRun">정리 결과 다시 점검</button></div>';
+ let out='<div class="card"><strong>정리 결과 점검</strong><p class="muted">이 사업에서 공무착착이 옮긴 기록을 바탕으로, 이전 정리에서 잘못 놓인 파일이 있는지 현재 규칙으로 다시 확인합니다. 예를 들어 설계변경 자료가 계약서 아래에 들어갔는지 점검합니다. 점검만으로는 파일이 이동하지 않으며, 결과를 보고 선택한 항목만 바로잡을 수 있습니다.</p><button class="primary" id="recheckRun">정리 결과 다시 점검</button></div>';
  if(p){const m=p.recheckSummary;out+='<div class="card"><p>기록 '+m.checked+'개 중 바른 위치 '+m.correct+'개 · 바로잡을 파일 '+m.move+'개 · 확인 필요 '+m.hold+'개</p>'
   +(m.changed.length?'<p class="warn">옮긴 뒤 수정된 파일 '+m.changed.length+'개는 자동으로 옮기지 않습니다.</p>':'')+(m.manual.length?'<p class="muted">직접 지정한 위치 '+m.manual.length+'개는 그대로 둡니다.</p>':'')+(m.missing.length?'<p class="warn">기록 뒤 위치가 바뀌거나 없어진 파일 '+m.missing.length+'개는 건드리지 않습니다.</p>':'')
   +(p.rows.length?'<table><tr><th></th><th>원래 위치</th><th>현재 위치</th><th>바로잡을 위치</th><th>이유</th></tr>'+p.rows.map(x=>'<tr><td>'+(x.destination?'<input type="checkbox" checked data-fix="'+esc(x.id)+'">':'')+'</td><td class="path">'+esc(x.recheck.original)+'</td><td class="path">'+esc(x.recheck.current)+'</td><td class="path">'+(x.destination?esc(x.recheck.proposed):'<span class="warn">확인 필요 · 그대로 둠</span>')+(x.folderGroup?'<br><small>폴더 묶음 이동</small>':'')+'</td><td><small>'+esc(x.reason||'')+'</small></td></tr>').join('')+'</table>'
@@ -120,7 +159,7 @@ function wireRecheck(){const run=$('#recheckRun');if(run)run.onclick=()=>task('�
   await task('바로잡는 중…',async()=>{Collect.repair=await api('/execute-all',{plan:Collect.recheck.id,choices:rows.map(x=>({id:x.id,destination:x.destination}))});Collect.recheck=null;collectRender();});};
  const undo=$('#repairUndo');if(undo)undo.onclick=()=>task('되돌리는 중…',async()=>{await api('/undo',{id:Collect.repair.id});Collect.repair=null;collectRender();});}
 function collectExport(){const p=Collect.plan,r=Collect.report;
- let out='<div class="card"><strong>준공·인수인계 내보내기</strong><p class="muted">평소 정리에서는 바로가기를 만들지 않습니다. 이 버튼을 누르고 승인할 때만 사진·공문 바로가기, 사업 안내문, 자료 목록(엑셀에서 열리는 CSV)을 사업 폴더 안 ‘인계 안내(공무착착)’에 만듭니다. 원본은 옮기지 않습니다.</p><button class="primary" id="exportCheck">내보낼 내용 확인</button></div>';
+ let out='<div class="card"><strong>준공·인수인계 내보내기</strong><p class="muted">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요. 원본 파일은 옮기지 않습니다.</p><button class="primary" id="exportCheck">내보낼 내용 확인</button></div>';
  if(p){const c=p.checks;out+='<div class="card"><strong>내보내기 전 확인</strong>'
   +(c.photoCheck||c.officialCheck||c.missing.length||c.inboxLeft?'<ul>'+(c.photoCheck?'<li class="warn">전·중·후가 정해지지 않은 사진 '+c.photoCheck+'장 · 바로가기를 만들지 않습니다</li>':'')+(c.officialCheck?'<li class="warn">공문인지 확인할 문서 '+c.officialCheck+'건</li>':'')+(c.missing.length?'<li class="warn">이전 위치에서 사라진 자료 '+c.missing.length+'개</li>':'')+(c.inboxLeft?'<li class="warn">‘0 정리할 문서 모음’에 남은 파일 '+c.inboxLeft+'개</li>':'')+'</ul>':'<p>확인할 항목이 없습니다.</p>')
   +'<p>만들 바로가기 '+p.links.length+'개 · 안내문·자료 목록 2개</p><details><summary>바로가기 목록</summary>'+p.links.slice(0,300).map(l=>'<p class="path">'+esc(l.kind)+' · '+esc(l.target)+'<br>→ '+esc(l.folder)+'</p>').join('')+'</details>'
@@ -142,7 +181,7 @@ function collectRender(){$$('[data-ctab]').forEach(b=>b.setAttribute('aria-press
 $$('[data-ctab]').forEach(b=>b.onclick=()=>{Collect.tab=b.dataset.ctab;collectRender();});
 collectButton.onclick=()=>task('등록된 사업 확인 중…',async()=>{await refresh();clearError();$('#home').hidden=true;$('#wizard').hidden=true;if(typeof finder!=='undefined')finder.hidden=true;collection.hidden=false;const list=S.status.projects;
  $('#collectProject').innerHTML=list.length?list.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join(''):'<option value="">등록된 사업이 없습니다</option>';$('#collectProject').value=list[0]?.id||'';Collect.data=null;Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;Collect.tab='photo';if(list.length)await collectLoad();else collectRender();});
-$('#collectProject').onchange=()=>task('사진·공문 모으는 중…',()=>{Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;return collectLoad();});
+$('#collectProject').onchange=()=>task('자료 모으는 중…',()=>{Collect.generation++;Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;return collectLoad();});
 $('#collectRefresh').onclick=()=>task('사진·공문 모으는 중…',collectLoad);
 $('#collectHome').onclick=()=>goHome();
 // 정리 완료 화면: 고정 안내문 + 4~5초 무음 애니메이션 한 번(동작 줄이기 설정에서는 정지 화면).
@@ -152,3 +191,5 @@ function completionGuide(){const old=document.querySelector('#doneGuide');if(old
  +'<div class="da-doc"><span class="da-old">스캔_0012(최종).pdf</span><span class="da-new">260813 설계변경 검토서.pdf</span></div><span class="da-tag">시공 중 발생한 문서</span><p class="da-final">단계만 나누고, 이름만 간단하게.</p></div>';
  $('#moveDoneText').after(box);}
 const doneBaseShow=moveDone.showModal.bind(moveDone);moveDone.showModal=function(){completionGuide();return doneBaseShow();};
+
+$('#downloadHistory').onclick=()=>task('정리 이력 파일 준비 중…',async()=>{const result=await api('/history-summary',{id:collectId()});const url=URL.createObjectURL(new Blob(['\ufeff'+result.text],{type:'text/plain;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=result.name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);});

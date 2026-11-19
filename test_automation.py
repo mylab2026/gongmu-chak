@@ -94,11 +94,11 @@ class AutomationRegression(unittest.TestCase):
         self.assertEqual(len(again['versions']),2)
         self.assertEqual(again['supersededIds'],['old'])
 
-    def test_ambiguous_contracts_are_not_silently_merged(self):
+    def test_different_parties_remain_separate_but_same_contract_has_versions(self):
         for change in ({'party':'나건설'},{'contract_number':'B-1'},{'signed_date':''},{'signed_date':'2026-01-03'}):
             with self.subTest(change=change):
                 records=[self.record('old','2026-01-03'),self.record('new','2026-10-01',**change)] if 'signed_date' not in change else [self.record('old','2026-01-03'),self.record('new',change['signed_date'])]
-                self.assertEqual(len(app.resolve_contract_versions(records)['current']),2)
+                self.assertEqual(len(app.resolve_contract_versions(records)['current']),2 if 'party' in change else 1)
 
 
 

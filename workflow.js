@@ -72,11 +72,11 @@ $('#autoClassify').onchange=()=>task('설정 저장 중…',async()=>{S.status.p
 const DEFAULT_MODEL='gemini-3.1-flash-lite';
 function pickDefaultModel(ids){const leaf=id=>String(id).split('/').pop().toLowerCase();return ids.find(id=>leaf(id)==='gemini-3.1-flash')||ids.find(id=>leaf(id)===DEFAULT_MODEL)||ids.find(id=>leaf(id).startsWith('gemini-3.1-flash'))||ids.find(id=>/flash/i.test(id))||'';}
 function modelTier(id){const s=String(id).split('/').pop().toLowerCase();if(/(^|[-_. ])(lite|mini|nano|flash|haiku|small|tiny)([-_. ]|$)/.test(s))return 'light';if(/(^|[-_. ])(pro|opus|ultra|max|sonnet|large)([-_. ]|$)|think|reason|(^|[-_. ])o[1-4]([-_. ]|$)/.test(s))return 'heavy';return 'unknown';}
-function showModelWarning(){const id=chosenModel(),tier=id?modelTier(id):'light';$('#modelWarning').hidden=tier==='light';$('#modelWarning').textContent=tier==='heavy'?'⚠ 상위 모델입니다. 같은 작업에도 토큰(크레딧)을 훨씬 많이 사용합니다. 문서 분류·계약서 추출은 Gemini 3.1 Flash 같은 가벼운 모델로 충분합니다.':'이 모델의 등급을 확인하지 못했습니다. 상위 모델이라면 토큰을 많이 사용할 수 있으니 학내 API 단가를 확인해주세요.';}
+function showModelWarning(){const id=chosenModel(),tier=id?modelTier(id):'light';$('#modelWarning').hidden=tier==='light';$('#modelWarning').textContent=tier==='heavy'?'⚠ 상위 모델입니다. 복잡한 조건 해석과 문서 판독에 도움이 될 수 있지만 토큰(크레딧) 단가와 응답 시간이 늘 수 있습니다.':'이 모델의 등급을 확인하지 못했습니다. 상위 모델이라면 토큰을 많이 사용할 수 있으니 학내 API 단가를 확인해주세요.';}
 function ensureModelOption(id,label){if(id&&!$('#aiModel').innerHTML.includes('value="'+esc(id)+'"'))$('#aiModel').innerHTML=$('#aiModel').innerHTML.replace('<option value="__manual__">','<option value="'+esc(id)+'">'+esc(label||id)+'</option><option value="__manual__">');}
 function updateUsageBadge(){const u=S.status?.usage;$('#usageBadge').textContent=S.status?.configured?(S.status.model||'모델 미선택')+' · 이번 달 AI '+(u?u.calls:0)+'회':'AI 미연결 · 설정 필요';}
 function prepareSettings(){const configured=Boolean(S.status?.configured);$('#apiKey').value='';$('#currentAI').hidden=!configured;$('#keyArea').hidden=configured;$('#changeKey').hidden=!configured;$('#changeKey').textContent='API 키 변경';$('#forgetKey').hidden=!configured;$('#modelHeading').textContent=configured?'모델 변경 (바꾸려면 선택 후 연결 확인·저장)':'사용할 모델';
- if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;$('#settingsStatus').textContent='학내 API 키를 입력하고 연결 확인·저장을 눌러주세요. 모델은 Gemini 3.1 Flash가 기본으로 선택돼 있습니다.';}
+ if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash-Lite ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;$('#settingsStatus').textContent='학내 API 키를 입력하고 연결 확인·저장을 눌러주세요. 모델은 Gemini 3.1 Flash-Lite가 기본으로 선택돼 있습니다.';}
  $('#manualModelArea').hidden=true;showModelWarning();$('#autoClassify').checked=S.status?.prefs?.autoClassify!==false;
  $('#monthCalls').textContent='확인 중…';api('/usage').then(u=>{$('#monthCalls').textContent=u.calls+'회 · 토큰 '+Number(u.tokens).toLocaleString()+'개 ('+u.month+')';if(S.status){S.status.usage=u;updateUsageBadge();}}).catch(()=>{$('#monthCalls').textContent='확인하지 못했습니다';});}
 const settingsDialog=$('#settings'),baseShowSettings=settingsDialog.showModal.bind(settingsDialog);settingsDialog.showModal=()=>{prepareSettings();baseShowSettings();};
@@ -85,7 +85,7 @@ $('#changeKey').onclick=()=>{$('#keyArea').hidden=!$('#keyArea').hidden;$('#chan
 const baseModelChange=$('#aiModel').onchange;$('#aiModel').onchange=()=>{baseModelChange();showModelWarning();};$('#manualModel').oninput=showModelWarning;
 $('#loadModels').onclick=()=>task('학내 API 모델 목록 확인 중…',async()=>{if(!$('#apiKey').value.trim()&&!S.status.configured)throw Error('학내 API 키를 먼저 입력해주세요.');const result=await api('/models',{key:$('#apiKey').value});if(!result.models.length)throw Error('모델 목록을 읽지 못했습니다. 모델 ID 직접 입력을 이용해주세요.');const previous=chosenModel();$('#aiModel').innerHTML='<option value="">모델을 선택해주세요</option>'+result.models.map(id=>'<option value="'+esc(id)+'">'+esc(id)+(modelTier(id)==='heavy'?' · 토큰 많이 사용':'')+'</option>').join('')+'<option value="__manual__">모델 ID 직접 입력</option>';$('#aiModel').value=result.models.includes(previous)?previous:pickDefaultModel(result.models);$('#manualModelArea').hidden=true;showModelWarning();$('#settingsStatus').textContent=result.models.length+'개 모델 확인 · '+($('#aiModel').value?'선택: '+$('#aiModel').value:'사용할 모델을 선택해주세요')+' · 연결 확인·저장을 눌러주세요.';});
 const baseSaveSettings=$('#saveKey').onclick;
-$('#saveKey').onclick=async()=>{const model=chosenModel();if(model&&model!==S.status?.model&&modelTier(model)==='heavy'&&!await ask('상위 모델로 바꿀까요?',model+' · 같은 작업에도 토큰(크레딧)을 훨씬 많이 사용합니다. 문서 분류·계약서 추출은 가벼운 모델로 충분합니다.'))return;await baseSaveSettings();if(S.status?.configured){const message=$('#settingsStatus').textContent;prepareSettings();$('#settingsStatus').textContent=message;}updateUsageBadge();};
+$('#saveKey').onclick=async()=>{const model=chosenModel();if(model&&model!==S.status?.model&&modelTier(model)==='heavy'&&!await ask('상위 모델로 바꿀까요?',model+' · 복잡한 조건 해석과 문서 판독에 도움이 될 수 있습니다. 토큰(크레딧) 단가와 응답 시간은 모델별로 다릅니다.'))return;await baseSaveSettings();if(S.status?.configured){const message=$('#settingsStatus').textContent;prepareSettings();$('#settingsStatus').textContent=message;}updateUsageBadge();};
 const baseRefreshStatus=refresh;refresh=async function(){await baseRefreshStatus();updateUsageBadge();};
 refresh().catch(()=>{});
 
@@ -192,11 +192,11 @@ function renderCheckPanel(){if(!S.plan)return;const items=S.plan.rows.map(r=>[r,
  undoBar.hidden=!S.lastJournal;
  let html='';
  if(sugg.length)html+='<h3>첨부 문서로 보이는 파일이 있어요</h3><p class="muted">첨부로 묶으면 원본은 표준 분류 위치에 보관하고, 보고자료 쪽에는 해당 폴더로 가는 바로가기를 만듭니다.</p>'+sugg.map((g,i)=>'<div class="path"><b>'+esc(g.main.name)+'</b> → '+esc(g.main.destination)+'<br><span class="muted">첨부 후보: '+g.atts.map(a=>esc(a.name)+(a.destination?' (원래 분류: '+esc(a.destination.split('/').pop())+')':'')).join(', ')+'</span><div class="row" style="margin-top:8px"><button class="primary" data-attach-group="'+i+'">첨부 관계 연결</button><button data-dismiss-group="'+i+'">아니요, 따로 정리</button></div></div>').join('');
- if(items.length)html+='<p class="warn" style="margin:0;padding:14px;border-radius:9px;background:#fff1f0;color:#a4262c"><b>'+items.length+'개 파일</b>은 계약 정보 또는 보관 위치를 확인해야 합니다. 아래 ‘파일별 이동 연결’에 <b style="color:#d93025">붉은색 화살표</b>로 표시해 두었으니 확인해주세요. 맞으면 그대로 두고, 틀리면 화살표 끝을 올바른 폴더로 옮기면 됩니다.</p>';
+ if(items.length)html+='<p class="warn" style="margin:0;padding:14px;border-radius:9px;background:#fff1f0;color:#a4262c"><b>'+items.length+'개 파일</b>은 계약 정보 또는 보관 위치를 확인해야 합니다. 아래 ‘파일별 이동 연결’에 <b style="color:#d93025">붉은색 화살표</b>로 표시해 두었으니 확인해주세요. 맞으면 붉은 선 옆의 ‘맞아요’를 누르고, 틀리면 화살표 끝을 올바른 폴더로 옮겨주세요.</p>';
  if(!sugg.length&&!items.length)html+='<p class="success" style="margin:0">모든 파일이 확실하게 분류됐어요. 연결도는 필요할 때만 확인하고 파일 이동 실행을 누르세요.</p>';
  if(attached.length)html+='<details><summary class="muted">폴더 바로가기로 연결할 첨부 '+attached.length+'개</summary>'+attached.map(r=>'<div class="row"><span>'+esc(r.name)+' → '+esc(r.destination)+(r.shortcutTo?' · 바로가기: '+esc(r.shortcutTo):'')+'</span><button data-detach="'+r.id+'">묶음 풀기</button></div>').join('')+'</details>';
  checkPanel.innerHTML=html;
- $$('[data-check-ok]').forEach(b=>b.onclick=()=>{S.plan.rows.find(r=>r.id===b.dataset.checkOk).reviewed=true;renderReview();});
+ $$('[data-check-ok]').forEach(b=>b.onclick=()=>{confirmMapRoute(b.dataset.checkOk);});
  $$('[data-check-map]').forEach(b=>b.onclick=()=>mapFocusFile(b.dataset.checkMap));
  $$('[data-check-all]').forEach(b=>b.onclick=()=>{items.forEach(([r])=>{if(r.destination)r.reviewed=true;});renderReview();});
  $$('[data-attach-group]').forEach(b=>b.onclick=()=>task('첨부 관계 연결 중…',async()=>{const g=sugg[Number(b.dataset.attachGroup)];const result=await api('/attach',{plan:S.plan.id,main:g.main.id,rows:g.atts.map(a=>a.id),attach:true});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id),u));renderReview();}));
@@ -285,7 +285,7 @@ const baseCheck09=renderCheckPanel;renderCheckPanel=function(){baseCheck09();if(
  checkPanel.appendChild(box);
  $('#doubtToggle').onclick=()=>{S.doubtOpen=!S.doubtOpen;renderReview();};
  $$('[data-doubt-focus]').forEach(b=>b.onclick=()=>mapFocusFile(b.dataset.doubtFocus));
- $$('[data-doubt-ok]').forEach(b=>b.onclick=()=>{const r=S.plan.rows.find(r=>r.id===b.dataset.doubtOk);if(r.folderGroup&&r.destination){changeRoute(r.id,r.destination);return;}r.reviewed=true;renderReview();});
+ $$('[data-doubt-ok]').forEach(b=>b.onclick=()=>{confirmMapRoute(b.dataset.doubtOk);});
  $$('[data-doubt-dest]').forEach(sel=>sel.onchange=()=>{const id=sel.dataset.doubtDest;if(!sel.value){renderReview();return;}changeRoute(id,sel.value).then?.(()=>{const r=S.plan.rows.find(x=>x.id===id);if(r)r.reviewed=true;renderReview();});});};
 const baseRenderReview09=renderReview;renderReview=function(...a){const r=baseRenderReview09(...a);if(S.plan)wireMulti();return r;};
 
