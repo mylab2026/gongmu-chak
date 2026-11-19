@@ -43,6 +43,9 @@ def main():
         move_root=base/'파일 이동 검증용 가상 사업';move_root.mkdir()
         for relative,content in originals.items():
             path=move_root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(content)
+        held_relative='분류대기1/원문.dat';retarget_relative='분류대기2/미정.bin'
+        for relative in (held_relative,retarget_relative):
+            path=move_root/relative;path.parent.mkdir(parents=True);path.write_bytes(b'SYNTHETIC UNCLASSIFIED DOCUMENT')
         (move_root/M/'빈 폴더').mkdir(exist_ok=True);app.SELECTIONS['move']=str(move_root)
         move_project=app.save_project({'selection':'move','name':'이동·되돌리기 검증용 가상 사업','type':'design','tree':move_tree},False)
         app.atomic_json(app.DATA/'prefs.json',{'autoClassify':False})
@@ -68,11 +71,16 @@ def main():
                     page.on('pageerror',lambda error:errors.append(str(error)))
                     page.goto(url);page.locator('#closeSettings').click()
                     page.screenshot(path=str(output/'01-home.png'),full_page=True)
-                    page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
-                    result['photos']=page.locator('.photo-card').count();assert result['photos']==3
+                    expect(page.locator('#downloadHistory')).to_be_visible()
+                    assert '챗봇의 도움이 필요할 때' in page.locator('#historyDownloadHint').inner_text()
+                    page.locator('#historyProject').select_option(move_project['id'])
                     with page.expect_download() as downloaded:page.locator('#downloadHistory').click()
-                    history=downloaded.value;history.save_as(str(output/'sample-history.txt'));assert '[현재 파일 위치]' in (output/'sample-history.txt').read_text(encoding='utf-8-sig')
-                    result['history_download_verified']=True
+                    history=downloaded.value;history.save_as(str(output/'sample-history.txt'));history_text=(output/'sample-history.txt').read_text(encoding='utf-8-sig');assert '[현재 파일 위치]' in history_text and move_project['name'] in history_text
+                    result['home_history_download_selected_project_verified']=True
+                    page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
+                    expect(page.locator('#downloadHistory')).to_be_hidden()
+                    assert page.locator('#collection #downloadHistory').count()==0
+                    result['photos']=page.locator('.photo-card').count();assert result['photos']==3
                     result['october7']=page.locator('.photo-card').filter(has_text='IMG_1007.jpg').inner_text();assert '확인 필요' in result['october7']
                     page.screenshot(path=str(output/'02-photos.png'),full_page=True)
                     page.locator('[data-ctab="saved"]').click();page.locator('[data-cid]').first.click();page.locator('#verifyRun').wait_for(state='visible')
@@ -84,10 +92,38 @@ def main():
                     page.screenshot(path=str(output/'04-conditions.png'),full_page=True)
                     assert page.evaluate(confirmed,move_project['id'])=={'marks':[[marked,'during']],'missing':[]}
                     page.evaluate("async pid=>{S.project=S.status.projects.find(p=>p.id===pid);S.mode='initial';S.status.prefs.autoClassify=false;await openPlan();}",move_project['id'])
-                    page.locator('#bulkMove').wait_for(state='visible');page.locator('.map-route-ok').wait_for(state='visible')
+                    page.locator('#bulkMove').wait_for(state='visible')
+                    assert page.locator('#doubtToggle').count()==0
+                    assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
+                    assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
+                    assert page.locator('#checkPanel').inner_text().find('아래 화살표와 !를 보고 경로를 확정해주세요')>=0
+                    assert page.locator('.map-route-ok').count()==0
+                    page.locator('#mapSources [data-map-review]').first.click()
+                    page.locator('.map-route-ok').wait_for(state='visible')
+                    page.screenshot(path=str(output/'05a-inline-route-confirm.png'),full_page=True)
                     page.locator('.map-route-ok').scroll_into_view_if_needed();before_y=page.evaluate('window.scrollY');page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
                     page.wait_for_function('y=>Math.abs(window.scrollY-y)<5',arg=before_y,timeout=5000)
                     result['route_confirm_scroll_preserved']=True
+                    # A held row uses the same marker/line confirmation, without moving it.
+                    held_id=page.evaluate('rel=>S.plan.rows.find(r=>r.relative===rel).id',held_relative)
+                    page.locator('#mapSources [data-map-review="'+held_id+'"]').first.click()
+                    page.locator('[data-map-file="'+held_id+'"]').wait_for(state='visible')
+                    assert page.locator('.map-route-ok').get_attribute('aria-label').find('보류')>=0
+                    assert '원래 위치에 둘 파일이면' in page.locator('#mapCaption').inner_text()
+                    page.screenshot(path=str(output/'05b-inline-hold-confirm.png'),full_page=True)
+                    page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
+                    assert page.evaluate('id=>{const r=S.plan.rows.find(r=>r.id===id);return r.holdConfirmed&&!r.destination&&!needsCheck(r)}',held_id)
+                    assert page.locator('[data-map-review="'+held_id+'"]').count()==0
+                    assert (move_root/held_relative).read_bytes()==before[held_relative]
+                    # For another held file, select a real target directly in the right pane.
+                    retarget_id=page.evaluate('rel=>S.plan.rows.find(r=>r.relative===rel).id',retarget_relative)
+                    page.locator('#mapSources [data-map-review="'+retarget_id+'"]').first.click()
+                    assert page.evaluate('MapReview.retargeting')
+                    target=page.evaluate('S.plan.paths[0]')
+                    page.locator('[data-map-target="'+target+'"]').click()
+                    page.wait_for_function('id=>Boolean(S.plan.rows.find(r=>r.id===id).destination)',arg=retarget_id)
+                    assert page.locator('[data-map-review="'+retarget_id+'"]').count()==0
+                    result['hold_marker_confirm_and_retarget_verified']=True
                     page.screenshot(path=str(output/'05-move-plan.png'),full_page=True)
                     page.locator('#bulkMove').click();page.locator('#confirmYes').wait_for(state='visible');assert not page.locator('#confirmText').is_visible();page.locator('#confirmYes').click();page.locator('#moveDoneText').wait_for(state='visible')
                     page.wait_for_timeout(1800);page.screenshot(path=str(output/'06-animation-middle.png'),full_page=True)

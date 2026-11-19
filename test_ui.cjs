@@ -38,6 +38,7 @@ context.fetch=async(action,options)=>{const data=JSON.parse(options.body);let va
  else if(action==='/retarget-many'){calls.push([action,data]);value={rows:vm.runInContext('S.plan.rows',context).filter(r=>data.rows.includes(r.id)).map(r=>({...r,destination:data.destination,method:'manual',reason:'묶음 변경'}))};}
  else if(action==='/bulk-info'){calls.push([action,data]);value=simulateAutoAI?{count:1,batches:1,folderCount:1}:{count:0};}
  else if(action==='/move-check'){calls.push([action,data]);value={renamed:[],contractRenames:contractRenameMock,count:data.choices.length,hold:0};}
+ else if(action==='/confirm-route'){calls.push([action,data]);const row=vm.runInContext('S.plan.rows',context).find(r=>r.id===data.row);value={rows:[{...row,reviewed:true,reviewRequired:false,holdConfirmed:!row.destination}]};}
  else if(action==='/index-start'){calls.push([action,data]);value={id:'ix'};}
  else if(action==='/index-status'){calls.push([action,data]);value={status:'done',processed:2,count:2,read:2};}
  else if(action==='/index-info'){calls.push([action,data]);value={builtAt:'2026-11-05 10:00:00',count:2,withText:1};}
@@ -61,6 +62,11 @@ const evaluate=code=>vm.runInContext(code,context);
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{
  await tick();assert.equal($('#error').hidden,true);
+ assert.equal($('#downloadHistory').disabled,false);assert.equal($('#historyProject').value,'p1');
+ evaluate('S.homeProjectsBefore=S.status.projects;S.status.projects=[...S.homeProjectsBefore,{id:"p2",name:"두번째 사업"}];renderHistoryProjects();');
+ $('#historyProject').value='p2';evaluate('renderHistoryProjects()');assert.equal($('#historyProject').value,'p2');
+ evaluate('S.status.projects=[];renderHistoryProjects()');assert.equal($('#downloadHistory').disabled,true);assert.equal($('#historyProject').disabled,true);
+ evaluate('S.status.projects=S.homeProjectsBefore;delete S.homeProjectsBefore;renderHistoryProjects()');
  $('#initialButton').click();assert.equal($('#heading').textContent,'정리할 폴더 선택');
  $('#folderNext').click();assert.equal($('#error').hidden,false);
  evaluate('S.selection={selection:"pick1"}');$('#folderNext').click();assert.equal($('#heading').textContent,'계약서 등록');
@@ -116,9 +122,18 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  registry.filter(e=>e.dataset.mmNode==='1.0'&&!e.removed).at(-1).onclick({target:{tagName:'DIV'}});assert(!registry.some(e=>e.dataset.mmRename==='1.0'&&!e.removed));
  registry.filter(e=>e.dataset.mmDelete==='1.0'&&!e.removed).at(-1).onclick({});assert.deepEqual(evaluate('S.tree[1].children.map(n=>n.label)'),['1 예산관리']);
  evaluate('S.project={id:"p1",tree:[{label:"0 정리할 문서 모음"},{label:"1 공통",children:[{label:"1 보고자료"},{label:"2 공문"}]}]};S.lastJournal=null;S.plan={id:"chk",paths:["1 공통/1 보고자료","1 공통/2 공문"],ongoing:false,rows:[{id:"m",name:"260410 현황 보고자료.docx",relative:"260410 현황 보고/260410 현황 보고자료.docx",destination:"1 공통/1 보고자료",method:"rule",done:false},{id:"a",name:"붙임 공문.pdf",relative:"260410 현황 보고/붙임 공문.pdf",destination:"1 공통/2 공문",method:"rule",done:false},{id:"h",name:"메모.txt",relative:"기타/메모.txt",destination:"",method:"hold",done:false}]};renderReview();');
- assert($('#checkPanel').innerHTML.includes('첨부 문서로 보이는 파일'));assert($('#checkPanel').innerHTML.includes('<b>1개 파일</b>'));assert.equal($('#undoBar').hidden,true);
- const attachCall=registry.filter(e=>e.dataset.attachGroup==='0'&&!e.removed).at(-1).onclick();await attachCall;
- assert(calls.some(c=>c[0]==='/attach'&&c[1].main==='m'&&c[1].rows[0]==='a'));
+ assert($('#checkPanel').innerHTML.includes('<b>1개 파일</b>'));assert($('#checkPanel').innerHTML.includes('아래 화살표와'));assert(!$('#checkPanel').innerHTML.includes('메모.txt'));assert.equal($('#doubtToggle'),null);assert.equal($('#undoBar').hidden,true);
+ // A collapsed source group and the hold destination both expose the pending file.
+ $('#reviewStep').hidden=false;
+ assert(!registry.some(e=>!e.removed&&e.dataset.mapFile==='h'));
+ const heldMarker=registry.filter(e=>!e.removed&&e.dataset.mapReview==='h').at(-1);assert(heldMarker);heldMarker.click();evaluate('drawMapEdges()');
+ assert.equal(evaluate('MapReview.file'),'h');assert.equal(evaluate('MapReview.retargeting'),true);
+ assert($('#mapCaption').innerHTML.includes('원래 위치에 둘 파일'));
+ assert($('#mapApprovals').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
+ const heldConfirm=registry.filter(e=>!e.removed&&e.dataset.routeConfirm==='h').at(-1);await heldConfirm.click();
+ assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');assert.equal(evaluate('needsCheck(S.plan.rows.find(r=>r.id==="h"))'),false);
+ assert(!registry.some(e=>!e.removed&&e.dataset.mapReview==='h'));assert.equal(evaluate('MapReview.retargeting'),false);
+ assert.equal(calls.filter(c=>c[0]==='/attach').length,0);
 
  // A valid stored path does not prompt or open the picker. A missing path does.
  await $('#ongoingButton').click();$('#projectSelect').value='p1';
@@ -178,5 +193,5 @@ assert($('#collectBody').innerHTML.includes('공사전.jpg'));assert($('#collect
  console.log('PASS: contract rename preview and cancellation, work-only contract storage and round folders.');
  console.log('PASS: automatic contract prefill, latest confirmation fields, Next locked during discovery, ambiguous folder links drawn red.');
  console.log('PASS: auto reconnect only for missing paths, picker cancellation, editable construction/material names, finish button activation.');
- console.log('PASS: check panel and attachment grouping, mind map edit, short folder numbering, structure diagram, AI settings view/default/heavy-model warning, partial move with holds, document finder, contracts, auto template and auto AI on Next, cancelled structure change, multi-file route update and pointer drop targeting.');
+ console.log('PASS: concise count instead of a file list, collapsed-group/hold warning markers, inline hold confirmation, mind map edit, AI settings, partial move with holds, finder, auto contracts/classification, multi-file routing and pointer drop targeting.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

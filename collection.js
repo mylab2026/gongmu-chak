@@ -39,7 +39,7 @@ const collectStyle=document.createElement('style');collectStyle.textContent=`
 const collectButton=document.createElement('button');collectButton.id='collectButton';collectButton.innerHTML='<b>모아보기</b><br><small>파일의 원래 위치는 두고 공무착착이 원하는 파일들을 모아서 보여줍니다.</small>';$('#findButton').after(collectButton);
 const collection=document.createElement('section');collection.id='collection';collection.hidden=true;
 collection.innerHTML='<h1>모아보기</h1>'
-+'<div class="card"><label for="collectProject">사업</label><div class="row"><select id="collectProject"></select><button id="collectRefresh">새로 고침</button><button id="collectHome">처음 화면</button><button id="downloadHistory">스누챗용 정리 이력 받기</button></div><p class="muted">파일의 원래 위치는 그대로 둡니다. 내 모아보기에 문장을 입력하면 AI가 문서 본문 발췌·이미지와 폴더 맥락을 확인합니다.</p></div>'
++'<div class="card"><label for="collectProject">사업</label><div class="row"><select id="collectProject"></select><button id="collectRefresh">새로 고침</button><button id="collectHome">처음 화면</button></div><p class="muted">파일의 원래 위치는 그대로 둡니다. 내 모아보기에 문장을 입력하면 AI가 문서 본문 발췌·이미지와 폴더 맥락을 확인합니다.</p></div>'
 +'<div class="row ctabs"><button data-ctab="photo" aria-pressed="true">사진</button><button data-ctab="saved" aria-pressed="false">내 모아보기</button><button data-ctab="recheck" aria-pressed="false">정리 결과 점검</button><div class="export-tab"><button data-ctab="export" aria-pressed="false" aria-describedby="exportUsageHint">준공·인수인계 내보내기</button><p class="muted" id="exportUsageHint">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요.</p></div></div>'
 +'<div id="collectNotice"></div><div id="collectBody"></div>';
 $('#home').after(collection);
@@ -191,5 +191,3 @@ function completionGuide(){const old=document.querySelector('#doneGuide');if(old
  +'<div class="da-doc"><span class="da-old">스캔_0012(최종).pdf</span><span class="da-new">260813 설계변경 검토서.pdf</span></div><span class="da-tag">시공 중 발생한 문서</span><p class="da-final">단계만 나누고, 이름만 간단하게.</p></div>';
  $('#moveDoneText').after(box);}
 const doneBaseShow=moveDone.showModal.bind(moveDone);moveDone.showModal=function(){completionGuide();return doneBaseShow();};
-
-$('#downloadHistory').onclick=()=>task('정리 이력 파일 준비 중…',async()=>{const result=await api('/history-summary',{id:collectId()});const url=URL.createObjectURL(new Blob(['\ufeff'+result.text],{type:'text/plain;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download=result.name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);});

@@ -140,6 +140,37 @@ class PlainLanguageCollections(unittest.TestCase):
         self.assertTrue(result['rows'][0]['reviewed']);self.assertEqual(row['destination'],'1 공문')
         self.assertEqual(row['proposedName'],'원래 제안.txt');self.assertEqual(p.read_bytes(),before)
 
+    def test_confirming_hold_leaves_the_file_and_history_route_unchanged(self):
+        p=self.file('미분류/원본.txt','변경된 협의자료')
+        plan=app.make_plan(self.pid,False);row=plan['rows'][0]
+        row.update(destination='',historyReview=True,coverageOrigin='1 공문',reviewRequired=True)
+        before=p.read_bytes()
+        result=app.confirm_route(plan['id'],row['id'])
+        self.assertTrue(result['rows'][0]['holdConfirmed'])
+        self.assertEqual(row['destination'],'')
+        self.assertNotIn(row, [r for batch in app.bulk_batches(plan,True) for r in batch])
+        self.assertEqual(p.read_bytes(),before)
+        self.assertFalse((self.root/'1 공문'/p.name).exists())
+        self.assertFalse(list((self.data/'journals').glob('*.json')))
+
+    def test_confirming_bundle_hold_does_not_confirm_an_unrelated_file(self):
+        for name in ('묶음/첫째.txt','묶음/둘째.txt','기타/셋째.txt'):self.file(name,'합성자료')
+        plan=app.make_plan(self.pid,False)
+        for row in plan['rows']:
+            row.update(destination='',reviewRequired=True,folderGroup='bundle' if row['relative'].startswith('묶음/') else 'other')
+        target=next(r for r in plan['rows'] if r['folderGroup']=='bundle')
+        result=app.confirm_route(plan['id'],target['id'])
+        self.assertEqual(len(result['rows']),2)
+        self.assertTrue(all(r['holdConfirmed'] for r in result['rows']))
+        self.assertFalse(next(r for r in plan['rows'] if r['folderGroup']=='other').get('holdConfirmed'))
+
+    def test_confirm_route_rejects_invalid_or_completed_rows(self):
+        self.file('자료.txt','합성자료');plan=app.make_plan(self.pid,False);row=plan['rows'][0]
+        row['destination']='구조에 없는 폴더'
+        with self.assertRaises(Exception):app.confirm_route(plan['id'],row['id'])
+        row.update(destination='',done=True)
+        with self.assertRaises(Exception):app.confirm_route(plan['id'],row['id'])
+
     def test_history_download_has_paths_but_no_bodies_keys_or_absolute_root(self):
         self.file('자료.txt','PRIVATE_DOCUMENT_BODY')
         app.atomic_json(self.data/'ai.json',{'model':'test-model','key':'PRIVATE_API_KEY'})

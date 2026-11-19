@@ -184,24 +184,14 @@ function attachSuggestions(){const groups=new Map();S.plan.rows.filter(r=>!r.don
   const atts=rows.filter(r=>r!==main&&!r.attachTo&&!(S.attachDismissed||new Set()).has(r.id)&&(/^(붙임|첨부)/.test(r.name)||(eventFolder&&r.destination!==main.destination)));
   if(atts.length)out.push({main,atts,folder});}
  return out;}
-function needsCheck(r){if(r.done)return false;if(r.historyReview)return 'history';if(r.folderDateReview)return 'folderDate';if(r.reviewed)return false;if(r.contractReview)return 'contract';if(r.nameReviewRequired)return 'date';if(r.reviewRequired)return 'folder';if(r.attachTo&&!r.canonicalAttachment)return false;if(!r.destination)return 'hold';if(r.method==='ai'&&(r.confidence??1)<.85)return 'ai';
+function needsCheck(r){if(r.done||(!r.destination&&r.holdConfirmed))return false;if(!r.destination)return r.historyReview?'history':r.contractReview?'contract':'hold';if(r.historyReview)return 'history';if(r.folderDateReview)return 'folderDate';if(r.reviewed)return false;if(r.contractReview)return 'contract';if(r.nameReviewRequired)return 'date';if(r.reviewRequired)return 'folder';if(r.attachTo&&!r.canonicalAttachment)return false;if(r.method==='ai'&&(r.confidence??1)<.85)return 'ai';
  const same=S.plan.rows.filter(o=>!o.done&&folderOf(o)===folderOf(r)&&o.destination);if(same.length>=3){const count=new Map();same.forEach(o=>count.set(o.destination,(count.get(o.destination)||0)+1));const top=[...count.entries()].sort((a,b)=>b[1]-a[1])[0];if(top[0]!==r.destination&&top[1]/same.length>=.6)return 'split';}
  return false;}
 const checkLabel={history:'이전 협의기록의 이동 이력이 있습니다. 내용을 확인해주세요',folderDate:'자료 폴더의 날짜를 선택해주세요',contract:'계약서의 소속과 계약 종류를 확인해주세요',date:'계약 체결일 확인이 필요합니다. 현재 파일명은 유지합니다.',folder:'폴더 묶음의 보관 위치를 확인해주세요',hold:'목적지를 정하지 못했어요',ai:'AI가 확신하지 못했어요',split:'같은 폴더의 다른 파일들과 다른 곳으로 가요'};
-function renderCheckPanel(){if(!S.plan)return;const items=S.plan.rows.map(r=>[r,needsCheck(r)]).filter(([,why])=>why),sugg=attachSuggestions(),attached=S.plan.rows.filter(r=>r.attachTo&&!r.done);
+function renderCheckPanel(){if(!S.plan)return;const count=S.plan.rows.filter(r=>needsCheck(r)).length;
  undoBar.hidden=!S.lastJournal;
- let html='';
- if(sugg.length)html+='<h3>첨부 문서로 보이는 파일이 있어요</h3><p class="muted">첨부로 묶으면 원본은 표준 분류 위치에 보관하고, 보고자료 쪽에는 해당 폴더로 가는 바로가기를 만듭니다.</p>'+sugg.map((g,i)=>'<div class="path"><b>'+esc(g.main.name)+'</b> → '+esc(g.main.destination)+'<br><span class="muted">첨부 후보: '+g.atts.map(a=>esc(a.name)+(a.destination?' (원래 분류: '+esc(a.destination.split('/').pop())+')':'')).join(', ')+'</span><div class="row" style="margin-top:8px"><button class="primary" data-attach-group="'+i+'">첨부 관계 연결</button><button data-dismiss-group="'+i+'">아니요, 따로 정리</button></div></div>').join('');
- if(items.length)html+='<p class="warn" style="margin:0;padding:14px;border-radius:9px;background:#fff1f0;color:#a4262c"><b>'+items.length+'개 파일</b>은 계약 정보 또는 보관 위치를 확인해야 합니다. 아래 ‘파일별 이동 연결’에 <b style="color:#d93025">붉은색 화살표</b>로 표시해 두었으니 확인해주세요. 맞으면 붉은 선 옆의 ‘맞아요’를 누르고, 틀리면 화살표 끝을 올바른 폴더로 옮겨주세요.</p>';
- if(!sugg.length&&!items.length)html+='<p class="success" style="margin:0">모든 파일이 확실하게 분류됐어요. 연결도는 필요할 때만 확인하고 파일 이동 실행을 누르세요.</p>';
- if(attached.length)html+='<details><summary class="muted">폴더 바로가기로 연결할 첨부 '+attached.length+'개</summary>'+attached.map(r=>'<div class="row"><span>'+esc(r.name)+' → '+esc(r.destination)+(r.shortcutTo?' · 바로가기: '+esc(r.shortcutTo):'')+'</span><button data-detach="'+r.id+'">묶음 풀기</button></div>').join('')+'</details>';
- checkPanel.innerHTML=html;
- $$('[data-check-ok]').forEach(b=>b.onclick=()=>{confirmMapRoute(b.dataset.checkOk);});
- $$('[data-check-map]').forEach(b=>b.onclick=()=>mapFocusFile(b.dataset.checkMap));
- $$('[data-check-all]').forEach(b=>b.onclick=()=>{items.forEach(([r])=>{if(r.destination)r.reviewed=true;});renderReview();});
- $$('[data-attach-group]').forEach(b=>b.onclick=()=>task('첨부 관계 연결 중…',async()=>{const g=sugg[Number(b.dataset.attachGroup)];const result=await api('/attach',{plan:S.plan.id,main:g.main.id,rows:g.atts.map(a=>a.id),attach:true});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id),u));renderReview();}));
- $$('[data-dismiss-group]').forEach(b=>b.onclick=()=>{S.attachDismissed=S.attachDismissed||new Set();sugg[Number(b.dataset.dismissGroup)].atts.forEach(a=>S.attachDismissed.add(a.id));renderReview();});
- $$('[data-detach]').forEach(b=>b.onclick=()=>task('첨부 묶음 푸는 중…',async()=>{const row=S.plan.rows.find(r=>r.id===b.dataset.detach);const result=await api('/attach',{plan:S.plan.id,main:row.attachTo,rows:[row.id],attach:false});result.rows.forEach(u=>{const target=S.plan.rows.find(r=>r.id===u.id);delete target.attachTo;Object.assign(target,u);});renderReview();}));}
+ checkPanel.innerHTML=count?'<p class="warn" style="margin:0;background:#fff1f0;color:#a4262c"><b>'+count+'개 파일</b>의 경로를 확신하지 못했습니다. 아래 화살표와 <b>!</b>를 보고 경로를 확정해주세요.</p>':'<p class="success" style="margin:0">확인이 필요한 경로가 없습니다. 연결도를 확인한 뒤 파일 이동 실행을 누르세요.</p>';
+}
 const baseRenderReviewTidy=renderReview;
 renderReview=function(...args){const result=baseRenderReviewTidy(...args);if(!S.plan)return result;const info=S.plan.scanInfo,unassigned=S.plan.rows.some(r=>!r.done&&!r.destination),failed=S.plan.rows.some(r=>r.executionError);
  scanPanel.hidden=S.plan.rows.length>0&&(!info||info.sourceExists!==false);
@@ -262,7 +252,6 @@ const style09=document.createElement('style');style09.textContent=`
 #busyText::before{content:"";display:inline-block;width:16px;height:16px;border:3px solid #c9d6f5;border-top-color:#345fe2;border-radius:50%;animation:gmspin 1s linear infinite;margin-right:10px;vertical-align:middle}
 @keyframes gmspin{to{transform:rotate(360deg)}}
 .map-file input{display:inline-block!important;width:18px;height:18px;margin-right:6px}
-.doubt-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}.doubt-table td{border-top:1px solid #eee;padding:6px 4px;vertical-align:middle}.doubt-table select{max-width:320px}
 #selBar{position:sticky;top:0;z-index:5;background:#edf3ff;border:1px solid #b9cbf7;border-radius:9px;padding:8px 12px;margin:8px 0}`;document.body.appendChild(style09);
 const baseRenderAncillary09=renderAncillary;renderAncillary=function(...a){normalizeKinds();return baseRenderAncillary09(...a);};
 const baseAutoTemplate09=autoTemplate;autoTemplate=function(...a){normalizeKinds();return baseAutoTemplate09(...a);};
@@ -279,14 +268,6 @@ function wireMulti(){const files=$$('[data-map-file]');files.forEach((b,idx)=>{c
  $$('[data-map-target]').forEach(t=>{const orig=t.ondrop;t.ondrop=e=>{const id=MapReview.dragging;if(id&&S.selected.has(id)&&S.selected.size>1){e.preventDefault();t.classList.remove('drop-target');MapReview.dragging=null;const ids=[...S.selected].filter(x=>{const r=S.plan.rows.find(y=>y.id===x);return r&&!r.done;});
    task(ids.length+'개 파일 목적지 저장 중…',async()=>{const result=await api('/retarget-many',{plan:S.plan.id,rows:ids,destination:t.dataset.mapTarget});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id),u));S.selected.clear();renderReview();});}else orig?.call(t,e);};});
  renderSelBar();}
-// 확인할 파일만 모아보기
-const baseCheck09=renderCheckPanel;renderCheckPanel=function(){baseCheck09();if(!S.plan)return;const items=S.plan.rows.filter(r=>needsCheck(r));if(!items.length)return;
- const box=document.createElement('div');box.innerHTML='<button class="primary" id="doubtToggle" style="margin-top:10px">'+(S.doubtOpen?'확인할 파일 목록 닫기':'확인할 파일만 모아보기 ('+items.length+'개)')+'</button>'+(S.doubtOpen?'<table class="doubt-table">'+items.slice(0,150).map(r=>'<tr><td><button class="link" data-doubt-focus="'+r.id+'">'+esc(r.name)+'</button><br><small class="muted">'+esc(r.relative.includes('/')?r.relative.slice(0,r.relative.lastIndexOf('/')):'최상위')+'</small>'+((r.contractReview||r.nameReviewRequired)?'<br><small class="warn">'+esc(checkLabel[needsCheck(r)]||r.reason)+'</small>':'')+'</td><td><select data-doubt-dest="'+r.id+'"><option value="">보류 · 원래 위치 유지</option>'+S.plan.paths.map(p=>'<option value="'+esc(p)+'" '+(p===r.destination?'selected':'')+'>'+esc(p)+'</option>').join('')+'</select></td><td>'+(r.destination?'<button data-doubt-ok="'+r.id+'">맞아요</button>':'')+'</td></tr>').join('')+'</table>'+(items.length>150?'<p class="muted">외 '+(items.length-150)+'개</p>':''):'');
- checkPanel.appendChild(box);
- $('#doubtToggle').onclick=()=>{S.doubtOpen=!S.doubtOpen;renderReview();};
- $$('[data-doubt-focus]').forEach(b=>b.onclick=()=>mapFocusFile(b.dataset.doubtFocus));
- $$('[data-doubt-ok]').forEach(b=>b.onclick=()=>{confirmMapRoute(b.dataset.doubtOk);});
- $$('[data-doubt-dest]').forEach(sel=>sel.onchange=()=>{const id=sel.dataset.doubtDest;if(!sel.value){renderReview();return;}changeRoute(id,sel.value).then?.(()=>{const r=S.plan.rows.find(x=>x.id===id);if(r)r.reviewed=true;renderReview();});});};
 const baseRenderReview09=renderReview;renderReview=function(...a){const r=baseRenderReview09(...a);if(S.plan)wireMulti();return r;};
 
 // Session undo for folder structure edits. Text fields retain their native undo.
