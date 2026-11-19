@@ -31,6 +31,7 @@ APP = Path(__file__).resolve().parent
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))  # Embedded Python does not add the script folder.
 import doctext  # noqa: E402
+import history_archive as run_history
 DATA = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'GongmuChakData'
 GATEWAY = 'https://api.baze.co/v1/gateway'
 INBOX = '0 정리할 문서 모음'
@@ -2544,9 +2545,10 @@ def execute(plan_id, choices):
         selected.append((row, choice['destination']))
     if not selected:
         fail('이동할 문서를 선택해주세요.')
-    journal = {'id': secrets.token_hex(16), 'projectId': project['id'], 'at': now(),
+    journal = {'id': secrets.token_hex(16), 'projectId': project['id'], 'planId':plan['id'], 'at': now(), 'atKst':run_history.stamp(),
                'root': str(root), 'entries': [], 'contextSummary':plan.get('contextSummary',[]),'folderRenames':plan.get('folderRenames',[]), 'holdCount': sum(not r['done'] for r in plan['rows']) - len(selected)}
     journal_path = DATA / 'history' / (journal['id'] + '.json')
+    record_run_event('파일 이동 시작',plan=plan,journal=journal)
     for row, destination_folder in selected:
         name = names.get(row['id'], row.get('proposedName') or row['name'])
         eff = effective_folder(row, destination_folder)
@@ -2601,6 +2603,7 @@ def execute(plan_id, choices):
         latest = get_project(project['id'])
         latest['learned'] = project['learned']
         store_project(latest)
+    record_run_event('파일 이동 결과',plan=plan,journal=journal)
     return journal
 
 
@@ -2722,6 +2725,7 @@ def execute_all(plan_id, choices, auto_rename=False):
         fail(str(len(checked['renamed'])) + '개 파일이 목적지에 같은 이름으로 겹칩니다. 번호를 붙여 이동하거나 연결을 조정해주세요.')
     project, plan = checked['project'], checked['plan']
     root = root_available(project)
+    record_run_event('정리 실행 시작',plan=plan)
     created = []
     for relative in tree_paths(project['tree']):  # The new folder structure appears only now, after confirmation.
         folder = safe_path(root, relative)
@@ -2737,6 +2741,7 @@ def execute_all(plan_id, choices, auto_rename=False):
     else:
         journal['cleanupSkipped'] = '이동 실패가 있어 기존 폴더 정리를 건너뛰었습니다.'
     atomic_json(DATA / 'history' / (journal['id'] + '.json'), journal)
+    record_run_event('폴더 정리 결과',plan=plan,journal=journal)
     return journal
 
 
@@ -2846,7 +2851,7 @@ def recheck(pid):
 
 def finish_plan(plan_id):
     plan = get_plan(plan_id)
-    result = {'id': secrets.token_hex(16), 'projectId': plan['projectId'], 'at': now(),
+    result = {'id': secrets.token_hex(16), 'projectId': plan['projectId'], 'planId':plan['id'], 'at': now(), 'atKst':run_history.stamp(),
               'movedCount': sum(bool(r['done']) for r in plan['rows']),
               'remaining': [{'name': r['name'], 'relative': r['relative'],
                              'reason': r.get('executionError') or r['reason']}
@@ -2856,6 +2861,7 @@ def finish_plan(plan_id):
     result['remainingCount'] = len(result['remaining'])
     atomic_json(DATA / 'finishes' / (result['id'] + '.json'), result)
     plan['finished'] = True
+    record_run_event('정리 마침',plan=plan,finish=result)
     return result
 
 
@@ -2866,6 +2872,8 @@ def undo(journal_id):
         fail('실행 기록을 찾을 수 없습니다.')
     project = get_project(journal['projectId'])
     root = root_available(project)
+    journal['undoAtKst']=run_history.stamp()
+    record_run_event('되돌리기 시작',journal=journal)
     journal['folderRestoreErrors'] = []
     restored = []
     for relative in sorted(set(journal.get('cleanupCandidates', [])) | set(journal.get('removedFolders', [])), key=lambda p: p.count('/')):
@@ -2937,6 +2945,7 @@ def undo(journal_id):
         except (OSError, ValueError):
             pass
     atomic_json(path, journal)
+    record_run_event('되돌리기 결과',journal=journal)
     return journal
 
 
@@ -3489,7 +3498,22 @@ def group_contract_results(result):
     return result
 
 
-def history_summary(pid):
+def record_run_event(kind, *, plan=None, journal=None, finish=None):
+    pid=(plan or journal or finish)['projectId']
+    return run_history.record(DATA,get_project(pid),kind,atomic_json,plan=plan,journal=journal,finish=finish,folder=effective_folder)
+
+
+def history_archive(pid):
+    project=get_project(pid)
+    try:current=history_summary(pid,full=True)['text']
+    except (OSError,ValueError):current='사업: '+project['name']+'\n현재 사업 폴더에 연결할 수 없어 현재 파일 위치는 확인하지 못했습니다. 날짜별로 저장된 과거 정리 이력은 포함합니다.\n'
+    result=run_history.build(DATA,project,current,read_json)
+    downloaded_at=run_history.stamp()[:19].replace('-','').replace(':','').replace('T','-')
+    result['name']=valid_name(project['name']+'-공무착착-누적정리이력-'+downloaded_at+'.zip')
+    return result
+
+
+def history_summary(pid, full=False):
     """A user-downloaded support handoff; no document bodies, credentials or network requests."""
     project=get_project(pid);root=root_available(project)
     files=scan(root,False,inbox_of(project))
@@ -3509,7 +3533,7 @@ def history_summary(pid):
            '사용자가 확인하고 싶은 점: [여기에 질문을 적어주세요]','',
            '[이 기록의 범위]',
            '문서 본문·API 키·절대 경로는 포함하지 않습니다. 아래 경로는 사업 폴더 기준 상대 경로입니다.',
-           '정리 이력은 최근 50회, 경로 목록은 최대 2,000개, 작업별 상세는 최대 300개입니다. 생략 수를 표시합니다.','',
+           '현재 상태는 다운로드 시점의 정보입니다. 날짜별 회차 폴더에서 당시 정리안과 누적 작업 기록을 확인하세요.' if full else '정리 이력은 최근 50회, 경로 목록은 최대 2,000개, 작업별 상세는 최대 300개입니다. 생략 수를 표시합니다.','',
            '[현재 계약건 · 최초/변경 이력은 같은 계약건]',]
     for record in project.get('contracts',[]):
         analysis=record.get('analysis') or {}
@@ -3517,18 +3541,18 @@ def history_summary(pid):
         lines.append('- '+str(analysis.get('title') or record.get('name') or '건명 미확인')+' / '+str(analysis.get('party') or '계약상대자 미확인')+' / 체결일 '+signed_date(record))
         for version in record.get('versions',[]):lines.append('  · '+str(version.get('signed_date') or '체결일 미확인')+' / '+str(version.get('name') or ''))
     lines.extend(['','[현재 폴더 구조]']+['- '+p for p in tree_paths(project['tree'])])
-    lines.extend(['','[현재 파일 위치]']+['- '+f['relative'] for f in sorted(files,key=lambda f:f['relative'])[:2000]])
-    if len(files)>2000:lines.append('※ 경로 '+str(len(files)-2000)+'개 생략. 전체 사업이 모두 기록된 것은 아닙니다.')
+    lines.extend(['','[현재 파일 위치]']+['- '+f['relative'] for f in sorted(files,key=lambda f:f['relative'])[:None if full else 2000]])
+    if not full and len(files)>2000:lines.append('※ 경로 '+str(len(files)-2000)+'개 생략. 전체 사업이 모두 기록된 것은 아닙니다.')
     lines.extend(['','[최근 정리·되돌리기 이력]'])
-    for journal in journals[:50]:
+    for journal in journals[:None if full else 50]:
         entries=journal.get('entries',[]);counts={}
         for e in entries:counts[e.get('status','unknown')]=counts.get(e.get('status','unknown'),0)+1
         lines.append('- '+str(journal.get('at') or '')+' / '+', '.join(k+' '+str(v)+'개' for k,v in counts.items()))
-        for entry in entries[:300]:
+        for entry in entries[:None if full else 300]:
             lines.append('  ['+str(entry.get('status') or '')+'] '+str(entry.get('source') or '')+' → '+str(entry.get('destination') or '보류'))
             if entry.get('error'):lines.append('    사유: '+str(entry['error']).replace(str(root),'[사업 폴더]').replace(str(Path.home()),'[개인 폴더]')[:250])
-        if len(entries)>300:lines.append('  ※ 상세 '+str(len(entries)-300)+'개 생략')
-    if len(journals)>50:lines.append('※ 이전 작업 '+str(len(journals)-50)+'회 생략')
+        if not full and len(entries)>300:lines.append('  ※ 상세 '+str(len(entries)-300)+'개 생략')
+    if not full and len(journals)>50:lines.append('※ 이전 작업 '+str(len(journals)-50)+'회 생략')
     lines.extend(['','[사용자가 확인한 사진 구분]'])
     for relative,mark in project.get('photoPhases',{}).items():
         phase=mark.get('phase','') if isinstance(mark,dict) else str(mark)
@@ -3539,7 +3563,7 @@ def history_summary(pid):
     pending=[p for p in PLANS.values() if p.get('projectId')==pid and not p.get('finished')]
     if pending:
         latest=max(pending,key=lambda p:p.get('at',''))
-        for row in latest.get('rows',[])[:2000]:
+        for row in latest.get('rows',[])[:None if full else 2000]:
             if not row.get('done') and (not row.get('destination') or row.get('reviewRequired') or row.get('executionError')):
                 lines.append('- '+row['relative']+' / 제안: '+str(row.get('destination') or '미지정')+' / '+str(row.get('reason') or '확인 필요')[:300])
     return {'name':valid_name(project['name']+'-공무착착-정리이력.txt'),'text':'\n'.join(lines)+'\n'}
@@ -3868,6 +3892,8 @@ def confirm_route(plan_id,row_id):
 
 
 def dispatch(action, payload):
+    if action == '/history-archive':
+        return history_archive(payload['id'])
     if action == '/history-summary':
         return history_summary(payload['id'])
     if action == '/confirm-route':

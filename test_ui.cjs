@@ -73,7 +73,20 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  await evaluate('discoverContracts()');$('#noContracts').checked=true;await $('#contractNext').click();assert.equal($('#heading').textContent,'폴더 구조 만들기');
  const type=registry.find(e=>e.dataset.type==='construction'&&!e.removed);type.click();assert(evaluate('S.tree.length>0'));assert.equal($('#applyTemplate').hidden,true);$('#projectName').value='시험 공사';simulateAutoAI=true;await $('#treeNext').click();assert.equal(calls.filter(c=>c[0]==='/bulk-start').length,1);
  assert.equal($('#heading').textContent,'파일 이동');assert($('#progress').textContent.startsWith('4 / 4'));
+ // Every initial step can go back; an unchanged return reuses the confirmed plan.
+ const planBeforeBack=evaluate('S.plan.id'),savesBeforeBack=calls.filter(c=>c[0]==='/save-project').length;
+ evaluate('S.plan.rows[0].reviewed=true');$('#wizardBack').click();assert.equal($('#heading').textContent,'폴더 구조 만들기');
+ await $('#treeNext').click();assert.equal(evaluate('S.plan.id'),planBeforeBack);assert.equal(evaluate('S.plan.rows[0].reviewed'),true);
+ assert.equal(calls.filter(c=>c[0]==='/save-project').length,savesBeforeBack);
+ $('#reviewBack').click();$('#treeBack').click();assert.equal($('#heading').textContent,'계약서 등록');
+ $('#contractBack').click();assert.equal($('#heading').textContent,'정리할 폴더 선택');assert(evaluate('S.selection'));
+ $('#folderBack').click();assert.equal($('#home').hidden,false);
  await $('#ongoingButton').click();$('#projectSelect').value='p1';$('#projectSelect').onchange();await $('#projectNext').click();assert.equal($('#heading').textContent,'파일 이동');assert($('#progress').textContent.startsWith('2 / 2'));
+ $('#wizardBack').click();assert.equal($('#heading').textContent,'대상 사업을 선택해 주세요');assert.equal($('#projectSelect').value,'p1');
+ await $('#projectNext').click();
+ // Editing an existing project's structure has its own Back target (the same plan).
+ const ongoingPlan=evaluate('S.plan.id');evaluate('editStructure.onclick()');assert.equal($('#treeStep').hidden,false);
+ $('#treeBack').click();assert.equal($('#reviewStep').hidden,false);assert.equal(evaluate('S.plan.id'),ongoingPlan);
  assert.equal($('#finishReview').disabled,true);
  evaluate('drawMapEdges()');assert($('#mapEdges').innerHTML.includes('data-file-edge="f1"'));assert($('#mapCaption').textContent.includes('a.pdf'));assert.equal($('#reviewTabs').hidden,true);
  await $('#ongoingButton').click();$('#projectSelect').value='p1';$('#projectSelect').onchange();$('#newContracts').checked=true;await $('#projectNext').click();assert.equal($('#heading').textContent,'계약서 등록');assert($('#progress').textContent.startsWith('2 / 3'));

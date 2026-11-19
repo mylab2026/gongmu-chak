@@ -8,14 +8,14 @@ const finderStyle=document.createElement('style');finderStyle.textContent=`
 @media(max-width:720px){#home .choices{grid-template-columns:1fr}}`;document.body.appendChild(finderStyle);
 const findButton=document.createElement('button');findButton.id='findButton';findButton.innerHTML='<b>문서 어디 있지?</b><br><small>정리해 둔 사업에서 파일명·폴더·문서 내용으로 찾습니다.</small>';$('#ongoingButton').after(findButton);
 const finder=document.createElement('section');finder.id='finder';finder.hidden=true;
-finder.innerHTML='<h1>문서 어디 있지?</h1>'
+finder.innerHTML='<button id="finderBack">뒤로가기</button><h1>문서 어디 있지?</h1>'
 +'<div class="card"><label for="finderProject">사업</label><select id="finderProject"></select><p class="muted" id="finderIndexInfo"></p><button id="finderReindex">문서 색인 새로 고침</button><p class="muted">색인은 PC에만 저장합니다. 이미 읽은 문서는 다시 읽지 않아 두 번째부터 빠릅니다.</p></div>'
 +'<div class="card"><strong>이 사업의 폴더 구조</strong><p class="muted">폴더 이름을 누르면 그 안의 문서가 아래에 나옵니다.</p><div id="finderDiagram"></div></div>'
 +'<div class="card"><label for="finderQuery">찾는 문서</label><div class="row"><input id="finderQuery" placeholder="예: 한빛건설 계약서, 11월 공정회의, 배수로 균열" style="flex:1"><button class="primary" id="finderSearch">찾기</button></div>'
 +'<p class="muted">파일명·폴더 이름·문서 앞부분(PDF·HWP·HWPX·DOCX·XLSX·PPTX·TXT)을 PC에서 검색합니다. AI는 사용하지 않습니다.</p>'
 +'<div class="row"><button id="finderAI">AI로 더 정확히 찾기</button><span class="muted">최대 2회 호출 · 후보의 파일명·폴더·본문 일부만 전송</span></div></div>'
 +'<div id="finderAIResults"></div><div id="finderResults"></div>';
-$('#home').after(finder);
+$('#home').after(finder);$('#finderBack').onclick=()=>goHome();
 const finderBaseShow=show;show=function(step){finder.hidden=true;return finderBaseShow(step);};
 const finderBaseHome=goHome;goHome=function(){finder.hidden=true;return finderBaseHome();};
 function finderMark(text,terms){let out=esc(text);for(const term of terms){if(!term)continue;const pattern=esc(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');out=out.replace(new RegExp(pattern,'gi'),m=>'<mark>'+m+'</mark>');}return out;}
