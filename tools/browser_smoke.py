@@ -46,6 +46,9 @@ def main():
         (move_root/M/'빈 폴더').mkdir(exist_ok=True);app.SELECTIONS['move']=str(move_root)
         move_project=app.save_project({'selection':'move','name':'이동·되돌리기 검증용 가상 사업','type':'design','tree':move_tree},False)
         app.atomic_json(app.DATA/'prefs.json',{'autoClassify':False})
+        marked=M+'현장 사진1.jpg';moved_mark='1 공통/4 타기관 협의자료(공문, 공지, 민원 등)/1 공문 및 협의기록/A 260327 캠퍼스 관리과 메일/현장 사진1.jpg'
+        app.set_photo_phase(move_project['id'],marked,'during')
+        confirmed="async pid=>{const d=await api('/collect',{id:pid});return {marks:d.photos.filter(p=>p.confirmed).map(p=>[p.relative,p.phase]),missing:d.missing}}"
         def snapshot():return {p.relative_to(move_root).as_posix():p.read_bytes() for p in move_root.rglob('*') if p.is_file() and '.gongmu-chak' not in p.parts}
         before=snapshot();result={};errors=[]
         with (output/'server-log.txt').open('w',encoding='utf-8') as log:
@@ -75,6 +78,7 @@ def main():
                     page.locator('#newCollection').click();page.locator('#draftText').fill('시공사 공문 모아보기');page.locator('#draftParse').click();page.locator('#draftSave').wait_for(state='visible')
                     assert page.locator('[data-cf="keywordsAll"]').input_value()==''
                     page.screenshot(path=str(output/'04-conditions.png'),full_page=True)
+                    assert page.evaluate(confirmed,move_project['id'])=={'marks':[[marked,'during']],'missing':[]}
                     page.evaluate("async pid=>{S.project=S.status.projects.find(p=>p.id===pid);S.mode='initial';S.status.prefs.autoClassify=false;await openPlan();}",move_project['id'])
                     page.locator('#bulkMove').wait_for(state='visible');page.screenshot(path=str(output/'05-move-plan.png'),full_page=True)
                     page.locator('#bulkMove').click();page.locator('#confirmYes').click();page.locator('#moveDoneText').wait_for(state='visible')
@@ -84,15 +88,23 @@ def main():
                     assert sorted(before.values())==sorted(snapshot().values())
                     assert (move_root/CHANGE/'1 1차 설계변경/사진/현장 사진.jpg').is_file()
                     assert not list(move_root.rglob('*.lnk'))
+                    result['confirmed_photo_after_move']=page.evaluate(confirmed,move_project['id'])
+                    assert result['confirmed_photo_after_move']=={'marks':[[moved_mark,'during']],'missing':[]}
                     page.locator('#undoMoveDone').click();page.locator('#confirmYes').click();expect(page.locator('#moveResult')).to_contain_text('복원')
                     assert snapshot()==before
+                    result['confirmed_photo_after_undo']=page.evaluate(confirmed,move_project['id'])
+                    assert result['confirmed_photo_after_undo']=={'marks':[[marked,'during']],'missing':[]}
                     page.screenshot(path=str(output/'08-undo-complete.png'),full_page=True)
                     result.update(original_files=len(before),move_content_preserved=True,undo_restored_paths_and_bytes=True,page_errors=errors)
                     assert not errors
                     browser.close()
                 (output/'browser-results.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
                 print(json.dumps(result,ensure_ascii=False))
-            finally:server.terminate();server.wait(timeout=10)
+            finally:
+                # A Windows venv python.exe is a launcher; end the whole tree so the real server releases app.lock.
+                if os.name=='nt':subprocess.run(['taskkill','/T','/F','/PID',str(server.pid)],capture_output=True)
+                else:server.terminate()
+                server.wait(timeout=10)
 
 
 if __name__=='__main__':main()

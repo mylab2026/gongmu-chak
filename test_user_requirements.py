@@ -141,5 +141,60 @@ class UserRequirements(unittest.TestCase):
             row['method']='manual';self.assertNotIn(row,[item for chunk in app.bulk_batches(plan,True) for item in chunk])
         finally:fixture.tearDown()
 
+    def test_18_parenthesized_round_keeps_its_folder_and_inner_names(self):
+        from test_v3_roles import RolesBeforeLetters,C,CHANGE
+        fixture=RolesBeforeLetters();fixture.setUp()
+        try:
+            old=C+'설계변경(1차)/'
+            for relative,data in ((old+'검토 의견.hwp',b'r1 opinion'),(old+'사진/IMG_0001.jpg',b'r1 photo')):
+                p=fixture.root/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
+            before=fixture.files();plan=app.make_plan(fixture.project['id'],False)
+            rows={r['relative']:r for r in plan['rows']}
+            self.assertEqual(fixture.target(rows[old+'검토 의견.hwp']),CHANGE+'/1 1차 설계변경/검토 의견.hwp')
+            self.assertEqual(fixture.target(rows[old+'사진/IMG_0001.jpg']),CHANGE+'/1 1차 설계변경/사진/IMG_0001.jpg')
+            journal=app.execute_all(plan['id'],[{'id':r['id'],'destination':r['destination']} for r in plan['rows'] if r['destination']])
+            self.assertEqual((fixture.root/CHANGE/'1 1차 설계변경/사진/IMG_0001.jpg').read_bytes(),b'r1 photo')
+            self.assertEqual(sorted(fixture.files().values()),sorted(before.values()))
+            app.undo(journal['id']);self.assertEqual(fixture.files(),before)
+        finally:fixture.tearDown()
+
+    def test_19_confirmed_marks_follow_the_apps_own_move_and_undo(self):
+        from test_v3_roles import RolesBeforeLetters,M,MAIL
+        fixture=RolesBeforeLetters();fixture.setUp()
+        try:
+            pid=fixture.project['id'];photo=M+'현장 사진1.jpg';letter=M+'회신 메일.pdf'
+            image=Image.new('RGB',(30,30),'green');exif=image.getexif();exif[36867]='2026:08:20 09:00:00'
+            image.save(fixture.root/photo,'JPEG',exif=exif)
+            app.set_photo_phase(pid,photo,'during');app.set_official(pid,letter,True);app.collect(pid)
+            plan=app.make_plan(pid,False)
+            journal=app.execute_all(plan['id'],[{'id':r['id'],'destination':r['destination']} for r in plan['rows'] if r['destination']])
+            bundle=MAIL+'/A 260327 캠퍼스 관리과 메일/'
+            moved=app.collect(pid)
+            photos={p['relative']:p for p in moved['photos']};officials={o['relative']:o for o in moved['officials']}
+            self.assertEqual((photos[bundle+'현장 사진1.jpg']['phase'],photos[bundle+'현장 사진1.jpg']['confirmed']),('during',True))
+            self.assertEqual((officials[bundle+'회신 메일.pdf']['status'],officials[bundle+'회신 메일.pdf']['confirmed']),('yes',True))
+            self.assertEqual((moved['missing'],moved['stale']),([],[]))
+            app.undo(journal['id']);back=app.collect(pid)
+            self.assertEqual({p['relative']:p['phase'] for p in back['photos'] if p['confirmed']},{photo:'during'})
+            self.assertEqual({o['relative'] for o in back['officials'] if o['confirmed']},{letter})
+            self.assertEqual((back['missing'],back['stale']),([],[]))
+        finally:fixture.tearDown()
+
+    def test_20_bundle_keeps_nested_same_names_and_relative_paths(self):
+        from test_v3_roles import RolesBeforeLetters,M,MAIL
+        fixture=RolesBeforeLetters();fixture.setUp()
+        try:
+            for relative,data in ((M+'첨부/1차/도면.pdf',b'first drawing'),(M+'첨부/2차/도면.pdf',b'second drawing'),(M+'첨부/2차/세부/깊은 자료.xlsx',b'deep')):
+                (fixture.root/relative).parent.mkdir(parents=True,exist_ok=True);(fixture.root/relative).write_bytes(data)
+            before=fixture.files();plan=app.make_plan(fixture.project['id'],False)
+            journal=app.execute_all(plan['id'],[{'id':r['id'],'destination':r['destination']} for r in plan['rows'] if r['destination']])
+            bundle=fixture.root/MAIL/'A 260327 캠퍼스 관리과 메일'
+            moved={p.relative_to(bundle).as_posix():p.read_bytes() for p in bundle.rglob('*') if p.is_file()}
+            original={k[len(M):]:v for k,v in before.items() if k.startswith(M)}
+            self.assertEqual(moved,original)
+            self.assertTrue((bundle/'빈 폴더').is_dir())
+            app.undo(journal['id']);self.assertEqual(fixture.files(),before)
+        finally:fixture.tearDown()
+
 
 if __name__=='__main__':unittest.main()
