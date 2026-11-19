@@ -52,7 +52,7 @@ def main():
         def snapshot():return {p.relative_to(move_root).as_posix():p.read_bytes() for p in move_root.rglob('*') if p.is_file() and '.gongmu-chak' not in p.parts}
         before=snapshot();result={};errors=[]
         with (output/'server-log.txt').open('w',encoding='utf-8') as log:
-            server=subprocess.Popen([os.environ.get('GONGMU_SERVER_PYTHON',sys.executable),'-B','app.py','--no-browser'],cwd=SOURCE,env=dict(os.environ,LOCALAPPDATA=str(base/'local')),stdout=log,stderr=log)
+            server=subprocess.Popen([os.environ.get('GONGMU_SERVER_PYTHON',sys.executable),'-B','-c','from tools.browser_smoke_gateway import install; import app; install(app); app.main()','--no-browser'],cwd=SOURCE,env=dict(os.environ,LOCALAPPDATA=str(base/'local')),stdout=log,stderr=log)
             try:
                 session=app.DATA/'session.json'
                 for _ in range(100):
@@ -70,18 +70,26 @@ def main():
                     page.screenshot(path=str(output/'01-home.png'),full_page=True)
                     page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
                     result['photos']=page.locator('.photo-card').count();assert result['photos']==3
+                    with page.expect_download() as downloaded:page.locator('#downloadHistory').click()
+                    history=downloaded.value;history.save_as(str(output/'sample-history.txt'));assert '[현재 파일 위치]' in (output/'sample-history.txt').read_text(encoding='utf-8-sig')
+                    result['history_download_verified']=True
                     result['october7']=page.locator('.photo-card').filter(has_text='IMG_1007.jpg').inner_text();assert '확인 필요' in result['october7']
                     page.screenshot(path=str(output/'02-photos.png'),full_page=True)
                     page.locator('[data-ctab="saved"]').click();page.locator('[data-cid]').first.click();page.locator('#verifyRun').wait_for(state='visible')
                     assert page.locator('.doc-card').count()==2
                     page.screenshot(path=str(output/'03-document-cards.png'),full_page=True)
-                    page.locator('#newCollection').click();page.locator('#draftText').fill('시공사 공문 모아보기');page.locator('#draftParse').click();page.locator('#draftSave').wait_for(state='visible')
-                    assert page.locator('[data-cf="keywordsAll"]').input_value()==''
+                    page.locator('#newCollection').click();page.locator('#draftText').fill('최근 시공사 공문 모아보기');page.locator('#draftParse').click();page.locator('#draftReply').wait_for(state='visible');page.locator('[data-assist-answer="전체 기간"]').click();page.locator('#editCollection').wait_for(state='visible')
+                    assert page.locator('[data-ctype]').count()==0
+                    assert page.locator('#collectBody').inner_text().find('시공사 공문')>=0
                     page.screenshot(path=str(output/'04-conditions.png'),full_page=True)
                     assert page.evaluate(confirmed,move_project['id'])=={'marks':[[marked,'during']],'missing':[]}
                     page.evaluate("async pid=>{S.project=S.status.projects.find(p=>p.id===pid);S.mode='initial';S.status.prefs.autoClassify=false;await openPlan();}",move_project['id'])
-                    page.locator('#bulkMove').wait_for(state='visible');page.screenshot(path=str(output/'05-move-plan.png'),full_page=True)
-                    page.locator('#bulkMove').click();page.locator('#confirmYes').click();page.locator('#moveDoneText').wait_for(state='visible')
+                    page.locator('#bulkMove').wait_for(state='visible');page.locator('.map-route-ok').wait_for(state='visible')
+                    page.locator('.map-route-ok').scroll_into_view_if_needed();before_y=page.evaluate('window.scrollY');page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
+                    page.wait_for_function('y=>Math.abs(window.scrollY-y)<5',arg=before_y,timeout=5000)
+                    result['route_confirm_scroll_preserved']=True
+                    page.screenshot(path=str(output/'05-move-plan.png'),full_page=True)
+                    page.locator('#bulkMove').click();page.locator('#confirmYes').wait_for(state='visible');assert not page.locator('#confirmText').is_visible();page.locator('#confirmYes').click();page.locator('#moveDoneText').wait_for(state='visible')
                     page.wait_for_timeout(1800);page.screenshot(path=str(output/'06-animation-middle.png'),full_page=True)
                     page.wait_for_timeout(2800);page.screenshot(path=str(output/'07-move-complete.png'),full_page=True)
                     result['move_message']=page.locator('#moveDoneText').inner_text()
