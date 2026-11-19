@@ -150,5 +150,5 @@ async function discoverContracts(){
  })();AutoContract.promise=run;return run;
 }
 const showWithAutoContracts=show;
-show=function(step){showWithAutoContracts(step);if(!$('#contractStep').hidden)discoverContracts();};
+show=function(step){showWithAutoContracts(step);if(!Navigation.restoring&&!$('#contractStep').hidden)discoverContracts();};
 renderAutoContractNotice();

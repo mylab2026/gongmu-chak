@@ -6,6 +6,7 @@
 
 - `app.py`: 로컬 서버와 모든 규칙. 분류(`make_plan` → `apply_contract_routes` → `map_roles` → `organize_context` → `detect_bundles` → `keep_subfolders` → `apply_folder_names`), 이동(`prepare_moves`/`execute`/`undo`), 점검(`recheck`), 모아보기(`collect`, `run_collection`, `verify_collection`), 내보내기.
 - `collection_assistant.py`: 문장 검색의 최대 두 차례 질문, 백그라운드 본문 발췌 판독, 캐시. 근로계약서는 제외하며 같은 계약건은 최초·변경 이력으로 묶는다. `history_summary`는 스누챗에 사용자가 직접 첨부하는 이력 TXT를 만들고 자동 전송하지 않는다.
+- `history_archive.py`: 실행 회차별 이벤트를 디스크에 누적 저장하고 날짜/회차별 TXT·JSON을 ZIP으로 내보낸다. 과거 이벤트를 수정/삭제하지 않는다. `history_summary`는 현재 상태 요약으로 ZIP에도 포함된다. 챗봇으로 자동 전송하지 않는다.
 - `ui.html` + `*.js`: 화면. `collection.js`는 모아보기, `review-map.js`는 이동 연결도.
 - `templates.json`: 사업유형별 표준 폴더 구조.
 - 기록 문서: `REVISION.md`(버전별 변경), `QA-*.md`(검증 범위와 한계).

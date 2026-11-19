@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 
 SOURCE=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(SOURCE))
@@ -75,8 +76,14 @@ def main():
                     assert '챗봇의 도움이 필요할 때' in page.locator('#historyDownloadHint').inner_text()
                     page.locator('#historyProject').select_option(move_project['id'])
                     with page.expect_download() as downloaded:page.locator('#downloadHistory').click()
-                    history=downloaded.value;history.save_as(str(output/'sample-history.txt'));history_text=(output/'sample-history.txt').read_text(encoding='utf-8-sig');assert '[현재 파일 위치]' in history_text and move_project['name'] in history_text
-                    result['home_history_download_selected_project_verified']=True
+                    history=downloaded.value;history.save_as(str(output/'sample-history-before.zip'))
+                    with zipfile.ZipFile(output/'sample-history-before.zip') as archive:
+                        history_text=archive.read('현재 상태.txt').decode('utf-8-sig')
+                        assert '[현재 파일 위치]' in history_text and move_project['name'] in history_text
+                    result['home_history_zip_selected_project_verified']=True
+                    # First step's Back returns home; later Back/Next preserves the same plan.
+                    page.locator('#initialButton').click();expect(page.locator('#folderBack')).to_be_visible()
+                    page.locator('#wizardBack').click();expect(page.locator('#home')).to_be_visible()
                     page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
                     expect(page.locator('#downloadHistory')).to_be_hidden()
                     assert page.locator('#collection #downloadHistory').count()==0
@@ -91,8 +98,11 @@ def main():
                     assert page.locator('#collectBody').inner_text().find('시공사 공문')>=0
                     page.screenshot(path=str(output/'04-conditions.png'),full_page=True)
                     assert page.evaluate(confirmed,move_project['id'])=={'marks':[[marked,'during']],'missing':[]}
-                    page.evaluate("async pid=>{S.project=S.status.projects.find(p=>p.id===pid);S.mode='initial';S.status.prefs.autoClassify=false;await openPlan();}",move_project['id'])
+                    page.evaluate("async pid=>{S.project=S.status.projects.find(p=>p.id===pid);S.mode='initial';S.tree=structuredClone(S.project.tree);S.type=S.project.type;S.typeConfirmed=true;$('#projectName').value=S.project.name;$('#noContracts').checked=true;S.status.prefs.autoClassify=false;Navigation.current={step:3,mode:'initial'};Navigation.trail=[{step:1,mode:'initial'},{step:2,mode:'initial'}];await openPlan();}",move_project['id'])
                     page.locator('#bulkMove').wait_for(state='visible')
+                    plan_id=page.evaluate('S.plan.id');page.locator('#wizardBack').click();expect(page.locator('#treeStep')).to_be_visible()
+                    page.locator('#treeNext').click();expect(page.locator('#reviewStep')).to_be_visible();assert page.evaluate('S.plan.id')==plan_id
+                    result['back_and_unchanged_return_preserve_plan']=True
                     assert page.locator('#doubtToggle').count()==0
                     assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
@@ -139,6 +149,15 @@ def main():
                     result['confirmed_photo_after_undo']=page.evaluate(confirmed,move_project['id'])
                     assert result['confirmed_photo_after_undo']=={'marks':[[marked,'during']],'missing':[]}
                     page.screenshot(path=str(output/'08-undo-complete.png'),full_page=True)
+                    page.locator('#homeButton').click();page.locator('#historyProject').select_option(move_project['id'])
+                    with page.expect_download() as downloaded:page.locator('#downloadHistory').click()
+                    downloaded.value.save_as(str(output/'sample-history-after.zip'))
+                    with zipfile.ZipFile(output/'sample-history-after.zip') as archive:
+                        snapshots=[json.loads(archive.read(n)) for n in archive.namelist() if n.endswith('/상세 기록.json')]
+                        assert len(snapshots)==1
+                        statuses=[item['status'] for e in snapshots[0]['events'] for item in e.get('journal',{}).get('entries',[])]
+                        assert 'moved' in statuses and 'restored' in statuses
+                    result['cumulative_zip_preserves_move_and_undo']=True
                     result.update(original_files=len(before),move_content_preserved=True,undo_restored_paths_and_bytes=True,page_errors=errors)
                     assert not errors
                     browser.close()

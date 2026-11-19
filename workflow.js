@@ -20,6 +20,7 @@ $$('input[name=annualKind]').forEach(input=>input.addEventListener('change',()=>
 $$('input[name=annualManagement]').forEach(input=>input.addEventListener('change',()=>{rememberStructure();S[input.name]=input.value;autoTemplate();markRequired();}));
 const beforeTreeNext=$('#treeNext').onclick;
 $('#treeNext').onclick=async()=>{
+ if(resumeReview())return;
  const changed=Boolean(S.project&&JSON.stringify(S.tree)!==JSON.stringify(S.project.tree));
  if(changed&&!await ask('수정한 폴더 구조로 다시 분류할까요?','현재 목적지 제안과 수동 수정이 초기화되고 AI가 다시 일괄 분류합니다. 실제 파일·이동 이력·계약 정보는 삭제하지 않습니다.'))return;
  S.resetClassification=changed;Workflow.autoRecheck=changed;

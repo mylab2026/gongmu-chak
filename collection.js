@@ -38,7 +38,7 @@ const collectStyle=document.createElement('style');collectStyle.textContent=`
 @media (prefers-reduced-motion:reduce){.done-anim *{animation:none!important}.da-doc{opacity:1;transform:translate(130px,72px) scale(.45)}.da-old{opacity:0}.da-new,.da-tag,.da-final,.da-check{opacity:1}.da-build{background:#c8f7c5}}`;document.body.appendChild(collectStyle);
 const collectButton=document.createElement('button');collectButton.id='collectButton';collectButton.innerHTML='<b>모아보기</b><br><small>파일의 원래 위치는 두고 공무착착이 원하는 파일들을 모아서 보여줍니다.</small>';$('#findButton').after(collectButton);
 const collection=document.createElement('section');collection.id='collection';collection.hidden=true;
-collection.innerHTML='<h1>모아보기</h1>'
+collection.innerHTML='<button id="collectBack">뒤로가기</button><h1>모아보기</h1>'
 +'<div class="card"><label for="collectProject">사업</label><div class="row"><select id="collectProject"></select><button id="collectRefresh">새로 고침</button><button id="collectHome">처음 화면</button></div><p class="muted">파일의 원래 위치는 그대로 둡니다. 내 모아보기에 문장을 입력하면 AI가 문서 본문 발췌·이미지와 폴더 맥락을 확인합니다.</p></div>'
 +'<div class="row ctabs"><button data-ctab="photo" aria-pressed="true">사진</button><button data-ctab="saved" aria-pressed="false">내 모아보기</button><button data-ctab="recheck" aria-pressed="false">정리 결과 점검</button><div class="export-tab"><button data-ctab="export" aria-pressed="false" aria-describedby="exportUsageHint">준공·인수인계 내보내기</button><p class="muted" id="exportUsageHint">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요.</p></div></div>'
 +'<div id="collectNotice"></div><div id="collectBody"></div>';
@@ -183,7 +183,7 @@ collectButton.onclick=()=>task('등록된 사업 확인 중…',async()=>{await 
  $('#collectProject').innerHTML=list.length?list.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join(''):'<option value="">등록된 사업이 없습니다</option>';$('#collectProject').value=list[0]?.id||'';Collect.data=null;Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;Collect.tab='photo';if(list.length)await collectLoad();else collectRender();});
 $('#collectProject').onchange=()=>task('자료 모으는 중…',()=>{Collect.generation++;Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;return collectLoad();});
 $('#collectRefresh').onclick=()=>task('사진·공문 모으는 중…',collectLoad);
-$('#collectHome').onclick=()=>goHome();
+$('#collectHome').onclick=()=>goHome();$('#collectBack').onclick=()=>{if(Collect.draft){Collect.draft=null;Collect.assist=null;collectRender();}else if(Collect.cid){Collect.cid='';Collect.run=null;collectRender();}else goHome();};
 // 정리 완료 화면: 고정 안내문 + 4~5초 무음 애니메이션 한 번(동작 줄이기 설정에서는 정지 화면).
 function completionGuide(){const old=document.querySelector('#doneGuide');if(old)old.remove?.();const box=document.createElement('div');box.id='doneGuide';box.className='done-guide';
  box.innerHTML='<p><b>모든 파일을 꼼꼼히 정리하지 않아도 괜찮아요.</b></p><p>기획·설계·시공 단계별로 모아두고, 파일명에 <b>날짜와 내용</b>만 남겨주세요.<br>예: <code>260813 설계변경 검토서.pdf</code></p><p>다음 정리에 드는 <b>시간과 AI 크레딧을 줄일 수 있어요.</b></p>'
