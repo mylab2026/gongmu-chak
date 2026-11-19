@@ -2328,9 +2328,11 @@ def make_shortcut(target, link):
     encode = lambda value: base64.b64encode(str(value).encode('utf-8')).decode()
     script = ("$t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(target) + "'));"
               "$l=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(link) + "'));"
-              "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l);$s.TargetPath=$t;"
-              "$s.WorkingDirectory=[IO.Path]::GetDirectoryName($t);$s.Save()")
-    script="$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.Encoding]::UTF8;try{"+script+"}catch{[Console]::Error.WriteLine($_.Exception.Message);exit 1}"
+              "$stage='CreateShortcut';$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l);"
+              "$stage='TargetPath';$s.TargetPath=$t;"
+              "$stage='WorkingDirectory';$s.WorkingDirectory=[IO.Path]::GetDirectoryName($t);"
+              "$stage='Save';$s.Save()")
+    script="$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;try{"+script+"}catch{[Console]::Error.WriteLine($stage+': '+$_.Exception.Message+' '+$_.ScriptStackTrace);exit 1}"
     result=subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()],
                           capture_output=True, timeout=60, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     if result.returncode:
