@@ -15,7 +15,7 @@ import app
 class FileOperations(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.base = Path(self.temp.name)
+        self.base = Path(self.temp.name).resolve()  # Windows TEMP can use an 8.3 alias.
         self.data_patch = patch.object(app, 'DATA', self.base / 'settings')
         self.data_patch.start()
         app.DATA.mkdir()
