@@ -19,9 +19,7 @@ class NativeWindowsRuntime(unittest.TestCase):
             root=Path(folder);target=root/'실제 원본.txt';target.write_text('synthetic',encoding='utf-8')
             link=root/'안내'/'원본 바로가기.lnk';app.make_shortcut(target,link)
             self.assertEqual(link.read_bytes()[:4],b'\x4c\x00\x00\x00')
-            value=base64.b64encode(str(link).encode('utf-8')).decode()
-            script="[Console]::OutputEncoding=[Text.Encoding]::UTF8;$p=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"+value+"'));(New-Object -ComObject WScript.Shell).CreateShortcut($p).TargetPath"
-            self.assertEqual(Path(self.powershell(script)).resolve(),target.resolve())
+            self.assertEqual(Path(app._windows_shell_link(link.resolve())).resolve(),target.resolve())
 
     def test_dpapi_roundtrip(self):
         value=b'not-a-real-api-key';encrypted=app.protect(value)

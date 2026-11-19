@@ -2318,27 +2318,59 @@ def save_rules(pid, paths, rules, answer):
     return {'count': len(project['rules']), 'criteria': project['criteria']}
 
 
-def make_shortcut(target, link):
-    """Windows .lnk pointing at the attachment kept beside its main document."""
-    link.parent.mkdir(parents=True, exist_ok=True)
-    if os.name != 'nt':
-        link.write_text('바로가기 → ' + str(target), encoding='utf-8')  # Demo/tests on other systems.
+def _windows_shell_link(link,target=None):
+    """Use the Unicode ShellLink interface; WScript may reject non-ANSI paths."""
+    from uuid import UUID
+    class GUID(ctypes.Structure):
+        _fields_=[('data1',ctypes.c_uint32),('data2',ctypes.c_uint16),('data3',ctypes.c_uint16),('data4',ctypes.c_ubyte*8)]
+    def guid(value):return GUID.from_buffer_copy(UUID(value).bytes_le)
+    ole=ctypes.WinDLL('ole32')
+    ole.CoInitializeEx.argtypes=[ctypes.c_void_p,ctypes.c_uint32];ole.CoInitializeEx.restype=ctypes.c_long
+    ole.CoCreateInstance.argtypes=[ctypes.POINTER(GUID),ctypes.c_void_p,ctypes.c_uint32,ctypes.POINTER(GUID),ctypes.POINTER(ctypes.c_void_p)]
+    ole.CoCreateInstance.restype=ctypes.c_long
+    ole.CoUninitialize.argtypes=[];ole.CoUninitialize.restype=None
+    def check(hr,operation):
+        if hr<0:raise OSError(hr,'Windows ShellLink '+operation)
+    def call(pointer,index,types,*args):
+        address=ctypes.cast(pointer,ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents[index]
+        result=ctypes.WINFUNCTYPE(ctypes.c_long,ctypes.c_void_p,*types)(address)(pointer,*args)
+        check(result,str(index))
+    def release(pointer):
+        if pointer.value:
+            address=ctypes.cast(pointer,ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents[2]
+            ctypes.WINFUNCTYPE(ctypes.c_ulong,ctypes.c_void_p)(address)(pointer)
+    initialized=ole.CoInitializeEx(None,2)
+    # A host that already initialized this thread as MTA owns that apartment.
+    if initialized!=-2147417850:check(initialized,'CoInitializeEx')
+    shell=ctypes.c_void_p();persist=ctypes.c_void_p()
+    try:
+        clsid=guid('00021401-0000-0000-c000-000000000046')
+        iid=guid('000214f9-0000-0000-c000-000000000046')
+        check(ole.CoCreateInstance(ctypes.byref(clsid),None,1,ctypes.byref(iid),ctypes.byref(shell)),'CoCreateInstance')
+        persist_iid=guid('0000010b-0000-0000-c000-000000000046')
+        call(shell,0,[ctypes.POINTER(GUID),ctypes.POINTER(ctypes.c_void_p)],ctypes.byref(persist_iid),ctypes.byref(persist))
+        if target is not None:
+            call(shell,20,[ctypes.c_wchar_p],str(target))  # IShellLinkW.SetPath
+            call(shell,9,[ctypes.c_wchar_p],str(target.parent))
+            call(persist,6,[ctypes.c_wchar_p,wintypes.BOOL],str(link),True)  # IPersistFile.Save
+            return ''
+        call(persist,5,[ctypes.c_wchar_p,ctypes.c_uint32],str(link),0)  # IPersistFile.Load
+        buffer=ctypes.create_unicode_buffer(32768)
+        call(shell,3,[ctypes.c_wchar_p,ctypes.c_int,ctypes.c_void_p,ctypes.c_uint32],buffer,len(buffer),None,4)
+        return buffer.value
+    finally:
+        release(persist);release(shell)
+        if initialized>=0:ole.CoUninitialize()
+
+
+def make_shortcut(target,link):
+    """Create the approved link without relying on Windows ANSI script paths."""
+    link.parent.mkdir(parents=True,exist_ok=True)
+    if os.name!='nt':
+        link.write_text('바로가기 → '+str(target),encoding='utf-8')
         return
-    target=Path(target).resolve();link=Path(link).resolve()
-    encode = lambda value: base64.b64encode(str(value).encode('utf-8')).decode()
-    script = ("$t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(target) + "'));"
-              "$l=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(link) + "'));"
-              "$stage='CreateShortcut';$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l);"
-              "$stage='TargetPath';$s.TargetPath=$t;"
-              "$stage='WorkingDirectory';$s.WorkingDirectory=[IO.Path]::GetDirectoryName($t);"
-              "$stage='Save';$s.Save()")
-    script="$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;try{"+script+"}catch{[Console]::Error.WriteLine($stage+': '+$_.Exception.Message+' '+$_.ScriptStackTrace);exit 1}"
-    result=subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()],
-                          capture_output=True, timeout=60, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-    if result.returncode:
-        fail('Windows 바로가기 생성 실패: '+result.stderr.decode('utf-8',errors='replace').strip()[:700])
-    if not link.exists():
-        fail('바로가기를 만들지 못했습니다.')
+    _windows_shell_link(Path(link).resolve(),Path(target).resolve())
+    if not link.exists():fail('바로가기를 만들지 못했습니다.')
 
 
 def attach_rows(plan_id, main_id, row_ids, attach=True):
