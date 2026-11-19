@@ -75,7 +75,7 @@ function pickDefaultModel(ids){const leaf=id=>String(id).split('/').pop().toLowe
 function modelTier(id){const s=String(id).split('/').pop().toLowerCase();if(/(^|[-_. ])(lite|mini|nano|flash|haiku|small|tiny)([-_. ]|$)/.test(s))return 'light';if(/(^|[-_. ])(pro|opus|ultra|max|sonnet|large)([-_. ]|$)|think|reason|(^|[-_. ])o[1-4]([-_. ]|$)/.test(s))return 'heavy';return 'unknown';}
 function showModelWarning(){const id=chosenModel(),tier=id?modelTier(id):'light';$('#modelWarning').hidden=tier==='light';$('#modelWarning').textContent=tier==='heavy'?'⚠ 상위 모델입니다. 복잡한 조건 해석과 문서 판독에 도움이 될 수 있지만 토큰(크레딧) 단가와 응답 시간이 늘 수 있습니다.':'이 모델의 등급을 확인하지 못했습니다. 상위 모델이라면 토큰을 많이 사용할 수 있으니 학내 API 단가를 확인해주세요.';}
 function ensureModelOption(id,label){if(id&&!$('#aiModel').innerHTML.includes('value="'+esc(id)+'"'))$('#aiModel').innerHTML=$('#aiModel').innerHTML.replace('<option value="__manual__">','<option value="'+esc(id)+'">'+esc(label||id)+'</option><option value="__manual__">');}
-function updateUsageBadge(){const u=S.status?.usage;$('#usageBadge').textContent=S.status?.configured?(S.status.model||'모델 미선택')+' · 이번 달 AI '+(u?u.calls:0)+'회':'AI 미연결 · 설정 필요';}
+function updateUsageBadge(){const u=S.status?.usage;$('#usageBadge').classList[S.status?.configured?'remove':'add']('needs-setup');$('#usageBadge').textContent=S.status?.configured?(S.status.model||'모델 미선택')+' · 이번 달 AI '+(u?u.calls:0)+'회':'AI 미연결 · 설정 필요';}
 function prepareSettings(){const configured=Boolean(S.status?.configured);$('#apiKey').value='';$('#currentAI').hidden=!configured;$('#keyArea').hidden=configured;$('#changeKey').hidden=!configured;$('#changeKey').textContent='API 키 변경';$('#forgetKey').hidden=!configured;$('#modelHeading').textContent=configured?'모델 변경 (바꾸려면 선택 후 연결 확인·저장)':'사용할 모델';
  if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash-Lite ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;$('#settingsStatus').textContent='학내 API 키를 입력하고 연결 확인·저장을 눌러주세요. 모델은 Gemini 3.1 Flash-Lite가 기본으로 선택돼 있습니다.';}
  $('#manualModelArea').hidden=true;showModelWarning();$('#autoClassify').checked=S.status?.prefs?.autoClassify!==false;
@@ -107,7 +107,7 @@ const diagramStyle=document.createElement('style');diagramStyle.textContent=`
 .org-circle{aspect-ratio:1;border-radius:50%;border:4px solid var(--c);background:color-mix(in srgb,var(--c) 7%,white);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:15%;text-align:center;overflow:hidden}
 .org-title{font-weight:bold;font-size:17px;color:var(--c);margin-bottom:10px;border:0;background:transparent;padding:2px 6px}
 .org-kids{display:flex;flex-wrap:wrap;gap:5px;justify-content:center}
-.org-kid{font-size:12px;line-height:1.4;background:#fff;border:1px solid color-mix(in srgb,var(--c) 35%,white);border-radius:999px;padding:3px 9px;color:#24364d}
+.org-kid{font-size:var(--fs-meta);line-height:1.4;background:#fff;border:1px solid color-mix(in srgb,var(--c) 35%,white);border-radius:999px;padding:3px 9px;color:#24364d}
 button.org-kid:hover,button.org-title:hover{background:var(--c);color:#fff}
 .org-circle[data-root]{cursor:pointer;transition:transform .15s,box-shadow .15s}
 .org-circle[data-root]:hover{transform:scale(1.02)}
@@ -136,15 +136,15 @@ const mindStyle=document.createElement('style');mindStyle.textContent=`
 #mindMap li:first-child::after{top:50%;border-top:2px solid var(--line);border-top-left-radius:12px}
 #mindMap li:last-child::after{bottom:50%;border-bottom:2px solid var(--line);border-bottom-left-radius:12px}
 #mindMap li:only-child::after{display:none}#mindMap li:only-child::before{left:0;width:34px}
-#mindMap .mm-node{position:relative;display:inline-flex;align-items:center;gap:6px;background:#fff;border:2px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;cursor:pointer;white-space:nowrap;color:#24364d}
+#mindMap .mm-node{position:relative;display:inline-flex;align-items:center;gap:6px;background:#fff;border:2px solid var(--line);border-radius:999px;padding:6px 14px;font-size:var(--fs-help);cursor:pointer;white-space:nowrap;color:var(--ink)}
 #mindMap .depth-1{background:var(--c);border-color:var(--c);color:#fff;font-size:18px;font-weight:bold;padding:16px 24px}
-#mindMap .depth-2{background:color-mix(in srgb,var(--c) 14%,white);font-weight:bold;font-size:14px}
+#mindMap .depth-2{background:color-mix(in srgb,var(--c) 14%,white);font-weight:bold;font-size:var(--fs-body)}
 #mindMap .custom{border-style:dashed}
 #mindMap .sel{box-shadow:0 0 0 4px color-mix(in srgb,var(--c) 30%,transparent)}
 #mindMap .mm-caret{font-size:10px;opacity:.7}
-#mindMap .mm-count{font-size:11px;background:color-mix(in srgb,var(--c) 20%,white);color:#24364d;border-radius:999px;padding:0 7px}
-#mindMap .mm-tools{position:absolute;left:0;top:100%;margin-top:6px;z-index:5;display:flex;gap:4px;align-items:center;background:#fff;border:1px solid #d8e2ef;border-radius:10px;padding:6px;box-shadow:0 6px 18px #0002;font-weight:normal;font-size:12px}
-#mindMap .mm-tools button{padding:4px 9px;font-size:12px}
+#mindMap .mm-count{font-size:var(--fs-tag);background:color-mix(in srgb,var(--c) 20%,white);color:#24364d;border-radius:999px;padding:0 7px}
+#mindMap .mm-tools{position:absolute;left:0;top:100%;margin-top:6px;z-index:5;display:flex;gap:4px;align-items:center;background:#fff;border:1px solid #d8e2ef;border-radius:10px;padding:6px;box-shadow:0 6px 18px #0002;font-weight:normal;font-size:var(--fs-meta)}
+#mindMap .mm-tools button{padding:4px 9px;font-size:var(--fs-meta);min-height:0}
 #mindMap .mm-input{padding:3px 8px!important;width:190px!important;font-size:13px}`;document.body.appendChild(mindStyle);
 function mmDepth(key){return key.split('.').length;}
 function mmCollapsed(key){return S.mmClosed.has(key)||(mmDepth(key)>=3&&!S.mmOpen.has(key));}
@@ -214,9 +214,10 @@ function nameContractBranches(){if(!S.contracts?.length)return;const used=new Se
 const baseAutoTemplateNames=autoTemplate;autoTemplate=function(){baseAutoTemplateNames();nameContractBranches();renderTree();};
 // 필수 선택 표시(!)와 큰 제목
 const requiredStyle=document.createElement('style');requiredStyle.textContent=`
-#treeStep .card>strong,#treeStep .card>label[for=projectName],#treeStep h3{font-size:19px;font-weight:bold;color:#203049;display:block;margin-bottom:8px}
+#treeStep .card>strong,#treeStep .card>.row>strong,#treeStep .card>label[for=projectName]{font-size:var(--fs-section);font-weight:700;color:var(--ink);display:block;margin-bottom:8px}
+#treeStep h3{font-size:var(--fs-sub);font-weight:700;color:var(--ink);margin:16px 0 8px}
 .req-mark{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#e5484d;color:#fff;font-size:14px;font-weight:bold;margin-right:8px;vertical-align:middle}
-#treeStep .choices button{font-size:16px;min-height:70px}`;document.body.appendChild(requiredStyle);
+#treeStep .choices button{font-size:var(--fs-sub);font-weight:600;min-height:64px}`;document.body.appendChild(requiredStyle);
 function markRequired(){
  const set=(el,need)=>{if(!el)return;let m=el.querySelector?.('.req-mark');if(need&&!m)el.insertAdjacentHTML?.('afterbegin','<span class="req-mark" title="필수 선택" aria-label="필수 선택">!</span>');else if(!need&&m)m.remove();};
  set($('label[for=projectName]'),!$('#projectName').value.trim());
@@ -248,7 +249,7 @@ renderTree=function(...a){normalizeKinds();annotateContracts();const r=baseRende
   circle.ondrop=e=>{e.preventDefault();circle.classList.remove('drop-on');const [a,b]=String(e.dataTransfer.getData('text/plain')).split('/').map(Number);if(!Number.isInteger(a)||a===ti||!S.tree[a]?.children?.[b])return;rememberStructure();const [node]=S.tree[a].children.splice(b,1);(S.tree[ti].children=S.tree[ti].children||[]).push(node);if(typeof numberTree==='function')numberTree(S.tree);S.mmRoot=ti;renderTree();renderAncillary();};});
  return r;};
 const style09=document.createElement('style');style09.textContent=`
-.org-contract{display:block;font-size:11px;color:#a4262c;font-weight:normal;margin-top:2px}
+.org-contract{display:block;font-size:var(--fs-tag);color:#a4262c;font-weight:normal;margin-top:2px}
 .org-kid[draggable=true]{cursor:grab}.org-circle.drop-on{box-shadow:0 0 0 6px #b9cbf7}
 #busyText::before{content:"";display:inline-block;width:16px;height:16px;border:3px solid #c9d6f5;border-top-color:#345fe2;border-radius:50%;animation:gmspin 1s linear infinite;margin-right:10px;vertical-align:middle}
 @keyframes gmspin{to{transform:rotate(360deg)}}

@@ -32,6 +32,7 @@ if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))  # Embedded Python does not add the script folder.
 import doctext  # noqa: E402
 import history_archive as run_history
+import demo_sample
 DATA = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'GongmuChakData'
 GATEWAY = 'https://api.baze.co/v1/gateway'
 INBOX = '0 정리할 문서 모음'
@@ -211,6 +212,14 @@ if($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){
     sid = secrets.token_hex(16)
     SELECTIONS[sid] = str(root)
     return {'selection': sid, 'path': str(root), 'count': len(scan(root))}
+
+
+def demo_folder():
+    """A new synthetic project under the app data folder, so the whole flow can be tried without real documents."""
+    root = demo_sample.create(DATA).resolve()
+    sid = secrets.token_hex(16)
+    SELECTIONS[sid] = str(root)
+    return {'selection': sid, 'path': str(root), 'count': len(scan(root)), 'demo': True}
 
 
 class Blob(ctypes.Structure):
@@ -3958,6 +3967,8 @@ def dispatch(action, payload):
         return {'ok': True}
     if action == '/pick-folder':
         return pick_folder()
+    if action == '/demo-folder':
+        return demo_folder()
     if action == '/upload':
         return upload_contract(payload)
     if action == '/upload-pdf':
@@ -4028,7 +4039,7 @@ def dispatch(action, payload):
 
 
 # Slow work (AI requests, Windows dialogs, search) runs outside the global lock so the UI stays responsive.
-UNLOCKED = {'/auto-contract', '/contract-candidates', '/configure', '/models', '/pick-folder', '/pick-contract', '/analyze-contract', '/review-ai',
+UNLOCKED = {'/auto-contract', '/contract-candidates', '/configure', '/models', '/pick-folder', '/demo-folder', '/pick-contract', '/analyze-contract', '/review-ai',
             '/rules', '/plan-progress', '/thumb', '/collection-verify', '/collection-run', '/collection-parse', '/search', '/search-ai', '/browse', '/index-status', '/index-info', '/open', '/usage'}
 UNLOCKED.update({'/collection-assist','/collection-search-start','/collection-search-status','/collection-search-cancel','/history-summary'})
 
