@@ -1,7 +1,57 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>공무착착 · Windows 시험판</title>
 <style>
-:root{font-family:"Malgun Gothic",system-ui,sans-serif;color:#203049;background:#f4f6fb;line-height:1.6}*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}header{background:#fff;border-bottom:1px solid #dbe3ee;padding:18px 30px;display:flex;align-items:center;gap:16px}header b{font-size:21px}header span{flex:1;color:#64748b;font-size:13px}main{max-width:1100px;margin:28px auto;padding:0 22px 70px}button,select,input{font:inherit}button,.upload-label{cursor:pointer;background:white;border:1px solid #cdd9e9;border-radius:9px;padding:10px 16px;color:#24364d}button.primary{background:#345fe2;border-color:#345fe2;color:white}button:disabled{cursor:default;opacity:.45}input:not([type=checkbox]),select{border:1px solid #ccd8e8;border-radius:8px;padding:11px;width:100%;background:#fff;color:#24364d}input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:9px}h1{font-size:28px;line-height:1.4;margin:10px 0 22px}h2{font-size:19px}p{margin:10px 0}.muted{font-size:13px;color:#63748c}.card{border:1px solid #d8e2ef;border-radius:14px;padding:22px;background:#fff;margin:16px 0}.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.choices button{text-align:left;min-height:78px}.choices button[aria-pressed=true]{background:#edf2ff;border:2px solid #345fe2}.actions{display:flex;justify-content:space-between;gap:12px;margin-top:24px;align-items:center}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row strong{flex:1}.path{background:#f2f5fa;border-radius:9px;padding:14px;margin-top:12px;overflow-wrap:anywhere}.arrow{color:#345fe2;font-size:26px}.pill{font-size:12px;background:#eff3fa;padding:3px 8px;border-radius:8px}.progress{font-size:14px;color:#345fe2;font-weight:bold}.error{border:1px solid #eaa6a6;background:#fff1f1;color:#9c2525;padding:15px;border-radius:9px;margin:15px 0;white-space:pre-wrap}.success{background:#eaf8f0;border:1px solid #b6dec8;padding:15px;border-radius:9px}dialog{border:0;border-radius:16px;padding:28px;max-width:560px;width:calc(100% - 40px);color:#203049}dialog::backdrop{background:#14223866}.tree{padding-left:18px;border-left:1px solid #dce5f2;margin:5px 0}.tree-row{display:flex;align-items:center;gap:5px;margin:5px 0}.tree-row input{padding:6px!important}.tree-row button{padding:5px 9px;font-size:12px}summary{cursor:pointer}.warn{background:#fff6df;padding:12px;border-radius:9px}.sticky{position:sticky;bottom:10px;box-shadow:0 6px 24px #24364d20;z-index:1}.tabs button.on{background:#345fe2;color:white}.file-name{overflow-wrap:anywhere}.tiny{font-size:12px}#busy{position:fixed;inset:0;background:#ffffffd9;z-index:20;display:grid;place-items:center}#busy div{background:#fff;padding:32px;border:1px solid #d8e2ef;border-radius:16px}label{cursor:pointer}#rootPath{word-break:break-all}@media(max-width:650px){header{padding:12px}header span{display:none}.choices{grid-template-columns:1fr}.card{padding:15px}main{padding:0 12px}h1{font-size:23px}}
+:root{--fs-title:26px;--fs-section:19px;--fs-sub:16px;--fs-body:15px;--fs-help:14px;--fs-meta:13px;--fs-tag:12px;
+--ink:#17233a;--ink-2:#3c4a61;--ink-3:#5d6b82;--line:#d4dce8;--line-soft:#e5ebf3;--bg:#f2f4f8;--surface:#fff;--surface-2:#f6f8fb;
+--brand:#2f5bd8;--brand-ink:#1f45b5;--brand-soft:#eaf0ff;--brand-line:#b9cbf5;--danger:#b42318;--danger-soft:#fff1f0;--ok-soft:#e9f7ef;--warn-soft:#fff6df;
+font-family:"Malgun Gothic","맑은 고딕",system-ui,sans-serif;font-size:var(--fs-body);color:var(--ink);background:var(--bg);line-height:1.6;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0}
+header{background:var(--surface);border-bottom:1px solid var(--line);padding:14px 30px;display:flex;align-items:center;gap:12px}
+header b{font-size:20px;letter-spacing:-.01em}header span{flex:1;color:var(--ink-3);font-size:var(--fs-meta)}
+header #homeButton{border-color:transparent;background:transparent}header #homeButton:hover{background:var(--surface-2)}
+header #usageBadge{border-radius:999px;font-size:var(--fs-meta);padding:6px 14px;background:var(--surface-2);color:var(--ink-2)}header #usageBadge.needs-setup{background:var(--warn-soft);border-color:#e7c66f;color:#7a5418;font-weight:700}
+main{max-width:1100px;margin:24px auto;padding:0 22px 70px}
+button,select,input,textarea{font:inherit}
+button,.upload-label{cursor:pointer;background:var(--surface);border:1px solid #c6d2e3;border-radius:9px;padding:9px 16px;min-height:40px;color:var(--ink);font-weight:500;transition:background .12s,border-color .12s}
+button:hover:not(:disabled),.upload-label:hover{border-color:#9fb3d3;background:#f7f9fd}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:700}button.primary:hover:not(:disabled){background:var(--brand-ink);border-color:var(--brand-ink)}
+button:disabled{cursor:default;opacity:.45}
+:focus-visible{outline:3px solid #8fb0f5;outline-offset:2px}
+input:not([type=checkbox]):not([type=radio]),select{border:1px solid #c6d2e3;border-radius:8px;padding:10px 12px;width:100%;background:var(--surface);color:var(--ink)}
+input[type=checkbox]{width:18px;height:18px;vertical-align:middle;margin-right:9px;accent-color:var(--brand)}input[type=radio]{accent-color:var(--brand)}
+h1{font-size:var(--fs-title);font-weight:700;line-height:1.35;letter-spacing:-.01em;margin:8px 0 20px}
+h2,dialog h2{font-size:var(--fs-section);font-weight:700;line-height:1.4;margin:0 0 12px}
+h3{font-size:var(--fs-sub);font-weight:700;line-height:1.45;margin:18px 0 8px;color:var(--ink)}
+p{margin:10px 0}
+label{color:var(--ink-2)}
+.muted{font-size:var(--fs-help);color:var(--ink-2)}.tiny{font-size:var(--fs-meta);color:var(--ink-3)}
+.card{border:1px solid var(--line);border-radius:14px;padding:22px 24px;background:var(--surface);margin:16px 0;box-shadow:0 1px 2px #0f1d3a0a}
+.card>h2:first-child,.card>strong:first-child:not(#rootPath),.card>b:first-child,.card>label:first-child{display:block;font-size:var(--fs-section);font-weight:700;color:var(--ink);line-height:1.4;margin:0 0 10px}
+.card>label:first-child{font-size:var(--fs-sub)}
+.choices{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.choices button{text-align:left;min-height:78px;padding:14px 18px;border-color:var(--line)}
+.choices button b{font-size:var(--fs-sub);color:var(--ink)}.choices button small{font-size:var(--fs-help);color:var(--ink-2);font-weight:400}
+.choices button:hover:not(:disabled){border-color:var(--brand-line);background:#f8faff}
+.choices button[aria-pressed=true]{background:var(--brand-soft);border:2px solid var(--brand);color:var(--brand-ink)}
+.actions{display:flex;justify-content:space-between;gap:12px;margin-top:24px;align-items:center}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row strong{flex:1}
+.path{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:9px;padding:12px 14px;margin-top:12px;overflow-wrap:anywhere;color:var(--ink-2)}
+.arrow{color:var(--brand);font-size:26px}
+.pill{font-size:var(--fs-tag);background:#eef2f8;color:var(--ink-2);padding:3px 9px;border-radius:999px;font-weight:600}
+.progress{font-size:var(--fs-help);color:var(--brand);font-weight:700;margin:0}
+.error{border:1px solid #f0b4ae;background:var(--danger-soft);color:#9c2525;padding:14px 16px;border-radius:9px;margin:15px 0;white-space:pre-wrap}
+.success{background:var(--ok-soft);border:1px solid #b6dec8;padding:14px 16px;border-radius:9px;color:#1d5a3a}
+dialog{border:0;border-radius:16px;padding:28px;max-width:560px;width:calc(100% - 40px);color:var(--ink);box-shadow:0 20px 50px #0f1d3a40}
+dialog::backdrop{background:#14223866}dialog label[for]{display:block;font-weight:700;color:var(--ink);margin-bottom:6px}
+.tree{padding-left:18px;border-left:1px solid #dce5f2;margin:5px 0}.tree-row{display:flex;align-items:center;gap:5px;margin:5px 0}.tree-row input{padding:6px!important}.tree-row button{padding:5px 9px;font-size:var(--fs-meta);min-height:0}
+summary{cursor:pointer}.warn{background:var(--warn-soft);border:1px solid #f0dca6;padding:12px 14px;border-radius:9px}
+.sticky{position:sticky;bottom:10px;box-shadow:0 6px 24px #24364d26;z-index:1}
+.tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.file-name{overflow-wrap:anywhere}
+#busy{position:fixed;inset:0;background:#ffffffd9;z-index:20;display:grid;place-items:center}#busy div{background:var(--surface);padding:28px 32px;border:1px solid var(--line);border-radius:16px;font-weight:600;box-shadow:0 10px 30px #0f1d3a1f}
+label{cursor:pointer}#rootPath{word-break:break-all}
+#wizard>.row:first-child{gap:14px}#wizardBack{min-height:36px;padding:6px 14px}
+@media(max-width:650px){header{padding:12px}header span{display:none}.choices{grid-template-columns:1fr}.card{padding:16px}main{padding:0 12px}:root{--fs-title:22px;--fs-section:18px}}
 </style></head><body>
 <header><b>공무착착</b><span>Windows 개인 시험판 0.11.2 · 차수·표준 위치 우선 · 정리 결과 점검</span><button id="homeButton">시작 화면</button><button id="usageBadge" title="AI 연결 설정 열기">AI 확인 중</button><button id="settingsButton">AI 연결 설정</button></header>
 <main>

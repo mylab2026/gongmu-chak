@@ -12,16 +12,16 @@ function renderContractInput(){
  $('#pendingContracts').innerHTML=`<style>
 #pendingContracts .ci-card{border:1px solid #d8e3f0;border-radius:12px;padding:20px;margin:16px 0;background:#fff}
 #pendingContracts .ci-heading{display:flex;align-items:center;gap:12px;margin-bottom:14px}
-#pendingContracts .ci-heading strong{flex:1;font-size:18px}
+#pendingContracts .ci-heading strong{flex:1;font-size:var(--fs-sub);color:var(--ink)}
 #pendingContracts .ci-number{display:grid;place-items:center;width:32px;height:32px;background:#edf2ff;color:#345fe2;border-radius:8px;font-weight:bold}
 #pendingContracts .ci-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 #pendingContracts .ci-options.three{grid-template-columns:repeat(3,minmax(0,1fr))}
-#pendingContracts .ci-options button{min-height:60px;padding:12px 8px;font-size:14px}
+#pendingContracts .ci-options button{min-height:56px;padding:12px 8px;font-size:var(--fs-body)}
 #pendingContracts .ci-options .chosen{border-color:#92adf2;background:#edf3ff;color:#345fe2}
 #pendingContracts .ci-paste{padding:18px;border:1px dashed #9bb4ee;border-radius:9px;background:#f6f8ff;text-align:center;margin-top:14px}
 #pendingContracts .ci-result{border:1px solid #c9d8f5;background:#f8faff;border-radius:10px;padding:16px;margin-top:15px}
 #pendingContracts .ci-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-#pendingContracts .ci-fields label{display:block;font-size:12px;color:#65768e}
+#pendingContracts .ci-fields label{display:block;font-size:var(--fs-meta);font-weight:600;color:var(--ink-2)}
 #pendingContracts .ci-fields .wide{grid-column:1/-1}
 #pendingContracts .ci-preview{display:block;max-height:190px;max-width:100%;margin:14px auto;border:1px solid #d8e3f0}
 @media(max-width:650px){#pendingContracts .ci-options.three{grid-template-columns:1fr}#pendingContracts .ci-fields{grid-template-columns:1fr}}
