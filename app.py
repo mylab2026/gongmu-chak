@@ -3854,15 +3854,16 @@ def confirm_route(plan_id,row_id):
     row=next((r for r in plan['rows'] if r['id']==row_id),None)
     if plan.get('finished') or not row or row.get('done'):
         fail('확인할 파일을 다시 선택해주세요.')
-    if row.get('historyReview'):
-        return confirm_meeting_origin(plan_id,row_id)
-    if not row.get('destination') or row['destination'] not in plan['paths']:
+    if row.get('destination') and row['destination'] not in plan['paths']:
         fail('먼저 이동할 폴더를 선택해주세요.')
-    if row.get('folderDateReview'):
+    if row.get('destination') and row.get('folderDateReview'):
         fail('자료 묶음의 날짜를 먼저 확인해주세요.')
     rows=[r for r in plan['rows'] if not r.get('done') and (r['id']==row_id or
           row.get('folderGroup') and r.get('folderGroup')==row['folderGroup'] and r.get('destination')==row['destination'])]
-    for item in rows:item.update(reviewed=True,reviewRequired=False)
+    for item in rows:
+        item.update(reviewed=True,reviewRequired=False,holdConfirmed=not bool(item.get('destination')))
+        if item['holdConfirmed']:item.update(aiChecked=True,method='manual')
+        if item.get('destination'):item['historyReview']=False
     return {'rows':rows}
 
 
