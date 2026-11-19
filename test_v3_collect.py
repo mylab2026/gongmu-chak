@@ -36,7 +36,7 @@ class V3Collections(unittest.TestCase):
         before={p:p.stat().st_mtime_ns for p in self.root.rglob('*')}
         data=app.collect(self.project['id'])
         phases={p['name']:p['phase'] for p in data['photos']}
-        self.assertEqual(phases,{'IMG_01.jpg':'before','IMG_02.jpg':'during','IMG_03.jpg':'after','IMG_04.jpg':'check'})
+        self.assertEqual(phases,{'IMG_01.jpg':'before','IMG_02.jpg':'during','IMG_03.jpg':'check','IMG_04.jpg':'check'})
         self.assertIn('촬영일(EXIF)',next(p for p in data['photos'] if p['name']=='IMG_02.jpg')['evidence'])
         self.assertEqual({o['name'] for o in data['officials'] if o.get('scan')},{'스캔_0012.jpg','협조 공문.png'})
         self.assertEqual(before,{p:p.stat().st_mtime_ns for p in self.root.rglob('*')});self.assertEqual(list(self.root.rglob('*.lnk')),[])
@@ -48,7 +48,7 @@ class V3Collections(unittest.TestCase):
         mention=self.write('1 공통/1 공문/260402 통보 공문.txt','수신 ○○종합건설 대표이사\n제목 공정 회의 통보\n발신 시설지원과장')
         self.assertTrue(app.local_match('1 공통/1 공문/260401 협조 공문.txt',sent.read_text(encoding='utf-8'),c)[0])
         self.assertFalse(app.local_match('1 공통/1 공문/260402 통보 공문.txt',mention.read_text(encoding='utf-8'),c)[0])
-        r=app.parse_collection('캠퍼스 관리과에 보낸 공문');self.assertEqual((r['recipient'],r['sender']),('학교',''))
+        r=app.parse_collection('캠퍼스 관리과에 보낸 공문');self.assertEqual((r['recipient'],r['sender']),('캠퍼스 관리과',''))
 
     def test_saved_collection_verification_is_cached_and_failure_is_not_verified(self):
         self.write('1 공통/1 공문/260401 협조 공문.txt','수신 시설지원과장\n제목 자재 승인 요청\n발신 ○○종합건설 대표이사')

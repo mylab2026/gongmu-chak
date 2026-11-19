@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import calendar
 import csv
 import datetime
 import html
@@ -1601,6 +1602,10 @@ def map_roles(project,rows,paths,inbox=INBOX):
         index,target=round_target(paths,parts)
         if index is not None and target:
             row.pop('attachTo',None);row.pop('canonicalAttachment',None);row.pop('canonicalContract',None)
+            # A matched round is moved as one unit. Do not leave a contract
+            # rename proposal on a reference attachment inside that unit.
+            for key in ('proposedName','signedDate','nameReviewRequired'):
+                row.pop(key,None)
             row.update(destination=target,method='rule',aiChecked=True,roleMapped=True,contractReview=False,reviewRequired=False,
                        reason='옛 차수 폴더 대응 · '+parts[index]+' → '+PurePosixPath(target).name+' (내부 구조 그대로)')
             inner='/'.join(parts[index+1:])
@@ -2115,7 +2120,7 @@ def cache_key(plan, row):
 
 def bulk_batches(plan, recheck=False):
     """All unresolved entries, grouped by original folder; no silent 150-file truncation."""
-    rows = [r for r in plan['rows'] if not r['done'] and
+    rows = [r for r in plan['rows'] if not r['done'] and r.get('method')!='manual' and
             (recheck or (r['method'] == 'hold' and not r.get('aiChecked')))]
     rows.sort(key=lambda r: (str(Path(r['relative']).parent), r['name']))
     chunks, current, size = [], [], 0
@@ -2216,6 +2221,7 @@ def run_bulk(job_id):
                     cache[cache_key(plan, row)] = changes[row['id']]
                     follow_main(plan, row)
                 apply_contract_routes(project,plan['rows'],plan['paths'])
+                map_roles(project,plan['rows'],plan['paths'],inbox_of(project))
                 detect_bundles(plan['rows'], inbox_of(project))
                 keep_subfolders(plan['rows'], inbox_of(project))
                 organize_context(plan['rows'],plan['paths'],inbox_of(project))
@@ -2963,7 +2969,7 @@ OFFICIAL_EXT = {'.pdf', '.hwp', '.hwpx', '.doc', '.docx'}
 PHASES = {'before': '공사 전', 'during': '공사 중', 'after': '공사 후', 'check': '확인 필요'}
 PHASE_WORDS = [('before', re.compile(r'(?:공사|착공|시공|보수|교체)\s*전|before', re.I)),
                ('during', re.compile(r'(?:공사|시공|보수|작업)\s*중|진행\s*사진|during', re.I)),
-               ('after', re.compile(r'(?:공사|시공|보수|교체)\s*후|준공\s*사진|완료\s*사진|after', re.I))]
+               ('after', re.compile(r'(?:공사|시공|보수|교체|준공)\s*후|준공\s*사진|완료\s*사진|after', re.I))]
 OFFICIAL_NAME = re.compile(r'공문|시행문|협조\s*(?:요청|전)|회신|통보|개최\s*안내|수신|발신')
 EXPORT_DIR = '인계 안내(공무착착)'
 
@@ -2979,17 +2985,58 @@ def text_dates(text):
     return out
 
 
+def valid_date(value):
+    try:return datetime.date.fromisoformat(str(value)).isoformat()
+    except (ValueError,TypeError):return ''
+
+
+def photo_days(value,default,minimum,maximum):
+    try:return max(minimum,min(maximum,int(value)))
+    except (ValueError,TypeError):return default
+
+
+def photo_schedule(project,relative=''):
+    """Select one construction scope; never combine unrelated contracts' dates."""
+    records=[r for r in project.get('contracts',[]) if (r.get('analysis') or {}).get('kind')=='construction']
+    selected=[]
+    def walk(nodes,parent=''):
+        for node in nodes:
+            path=parent+'/'+node['label'] if parent else node['label']
+            if relative.startswith(path+'/') and node.get('contractId'):selected.append((len(path),node['contractId']))
+            walk(node.get('children',[]),path)
+    walk(project.get('tree',[]))
+    cid=max(selected)[1] if selected else ''
+    record=next((r for r in records if r['id']==cid),None) if cid else records[0] if len(records)==1 else None
+    scope=record['id'] if record else 'project' if not records else ''
+    saved=project.get('photoSchedules',{}).get(scope,{})
+    if not saved and len(records)<=1:saved=project.get('workPeriod') or {}
+    a=(record or {}).get('analysis') or {};dates=text_dates(a.get('period'))
+    signed=[valid_date(a.get('signed_date'))]+[valid_date(v.get('signed_date') or (v.get('analysis') or {}).get('signed_date')) for v in (record or {}).get('versions',[])]
+    return {'scope':scope,'contract':min((d for d in signed if d),default=''),
+            'start':valid_date(saved.get('start')) or (min(dates) if len(dates)>=2 else ''),
+            'end':valid_date(saved.get('actualEnd') or saved.get('end')) or (max(dates) if len(dates)>=2 else ''),
+            'source':'사용자 확인 공사기간' if saved else '계약서 공사기간',
+            'reviewDays':photo_days(saved.get('reviewDays',7),7,0,60),
+            'afterDays':photo_days(saved.get('afterDays',30),30,8,365)}
+
+
 def work_period(project):
-    """User-confirmed period first, else the construction contracts' stated period. Never file times."""
-    saved=project.get('workPeriod') or {}
-    if saved.get('start') and saved.get('end'):
-        return saved['start'],saved['end'],'사용자 확인 공사기간'
-    dates=[]
-    for record in project.get('contracts',[]):
-        a=record.get('analysis') or {}
-        if a.get('kind')=='construction':
-            dates+=text_dates(a.get('period'))
-    return (min(dates),max(dates),'계약서 공사기간') if len(dates)>=2 else ('','','')
+    schedule=photo_schedule(project)
+    return schedule['start'],schedule['end'],schedule['source']
+
+
+def completion_boundaries(project,root):
+    boundaries={}
+    for relative,mark in project.get('photoPhases',{}).items():
+        if mark.get('phase')!='after':continue
+        try:
+            path=safe_path(root,relative)
+            if not path.is_file() or fingerprint(path)!=mark.get('fp'):continue
+            taken=photo_taken(path) or parsed_prefix_date(path.name)[0]
+            scope=photo_schedule(project,relative)['scope']
+            if taken and scope:boundaries[scope]=min(taken,boundaries.get(scope,taken))
+        except (OSError,ValueError):continue
+    return boundaries
 
 
 def photo_taken(path):
@@ -3000,26 +3047,34 @@ def photo_taken(path):
             exif=image.getexif()
             value=exif.get_ifd(0x8769).get(36867) or exif.get(36867)
         m=re.match(r'(\d{4}):(\d{2}):(\d{2})',str(value or ''))
-        return '-'.join(m.groups()) if m else ''
+        return valid_date('-'.join(m.groups())) if m else ''
     except Exception:
         return ''
 
 
-def photo_phase_dated(relative,path,period):
-    phase,evidence=photo_phase(relative)
-    if phase!='check' or evidence!='전·중·후 근거 없음':
-        return phase,evidence,''
+def photo_phase_dated(relative,path,period,schedule=None,boundary=''):
     taken,source=photo_taken(path),'촬영일(EXIF)'
     if not taken:
-        found=parsed_prefix_date(PurePosixPath(relative).name)[0]
-        taken,source=(found,'파일명 날짜') if found else ('','')
+        taken=parsed_prefix_date(PurePosixPath(relative).name)[0]
+        source='파일명 날짜(추정)' if taken else ''
+    phase,evidence=photo_phase(relative)
+    if phase!='check' or evidence!='전·중·후 근거 없음':return phase,evidence,taken
     start,end,why=period
     if not taken:
         return 'check','전·중·후 근거 없음 · 촬영일 없음',''
+    if schedule and schedule.get('contract') and taken<schedule['contract']:
+        return 'before',source+' '+taken+' · 원 공사계약일 '+schedule['contract']+' 이전',taken
+    if boundary and taken>=boundary:
+        return 'after',source+' '+taken+' · 사용자 확인 준공 후 기준일 '+boundary+' 이후',taken
+    if end and taken>end:
+        days=(datetime.date.fromisoformat(taken)-datetime.date.fromisoformat(end)).days
+        review=(schedule or {}).get('reviewDays',7);after=(schedule or {}).get('afterDays',30)
+        if days>=after:return 'after',source+' '+taken+' · '+why+' 종료 '+str(days)+'일 후 (공사 후 추정)',taken
+        return 'check',source+' '+taken+' · '+why+' 종료 '+str(days)+'일 후 · '+('준공 직후 현장 완료 확인 필요' if days<=review else '완료 경계 확인 필요'),taken
     if not start:
         return 'check','촬영일 '+taken+' · 공사기간이 확인되지 않음',taken
-    phase='before' if taken<start else 'after' if taken>end else 'during'
-    return phase,source+' '+taken+' · '+why+' '+start+'~'+end,taken
+    phase='before' if taken<start else 'during' if end and taken<=end else 'check'
+    return phase,source+' '+taken+' · '+why+' '+start+'~'+end+' (추정)',taken
 
 
 def official_scan(relative,text=''):
@@ -3027,14 +3082,15 @@ def official_scan(relative,text=''):
     name=PurePosixPath(relative).name
     if OFFICIAL_NAME.search(Path(name).stem) or re.search(r'스캔|scan|시행문|결재',name,re.I):
         return True
-    if any('공문' in part for part in PurePosixPath(relative).parent.parts):
-        return True
+    # A letter can have genuine site photographs as attachments. The parent's
+    # label alone is not evidence that an image is a scanned document.
     head=str(text or '')[:600]
     return '수신' in head and ('시행' in head or '발신' in head)
 
 
 def official_fields(text):
     head=str(text or '')[:2500]
+    head=re.sub(r'[^\S\n]+(?=(?:문서번호|발\s*신|발신명의|보낸\s*곳|수\s*신(?:자)?|제\s*목|시행)(?:\s*[:：]|\s+))','\n',head)
     def find(pattern):
         m=re.search(pattern,head)
         return re.sub(r'\s+',' ',m.group(1)).strip()[:80] if m else ''
@@ -3064,11 +3120,11 @@ def photo_phase(relative):
 
 def official_kind(relative, text=''):
     name = PurePosixPath(relative).name
+    fields=official_fields(text)
+    if fields['docNumber'] and fields['title'] and fields['sender'] and fields['recipient']:
+        return 'yes','문서 구조 · 문서번호/제목/발신/수신'
     if OFFICIAL_NAME.search(Path(name).stem):
-        return 'yes', '파일명'
-    head = text[:600]
-    if '수신' in head and ('시행' in head or '발신' in head):
-        return 'yes', '문서 첫머리(수신·시행)'
+        return 'check', '파일명 후보 · 실제 공문 구조 확인 필요'
     if any('공문' in p for p in PurePosixPath(relative).parent.parts):
         return 'check', '공문 폴더에 있음 · 문서 확인 필요'
     return '', ''
@@ -3090,6 +3146,8 @@ def collect(pid):
     phases, marks = project.get('photoPhases', {}), project.get('officialMarks', {})
     photos, officials, seen = [], [], {}
     period = work_period(project)
+    boundaries=completion_boundaries(project,root)
+    local_index=collection_text_index(pid);updates={};read=0
     for file in scan(root, False, inbox_of(project)):
         relative, name = file['relative'], file['name']
         suffix = Path(name).suffix.lower()
@@ -3100,6 +3158,9 @@ def collect(pid):
                 'bundle': bundle, 'size': file['size'], 'fp': f"{file['size']}:{file['mtime']}"}
         record = texts.get(relative) or {}
         text = record.get('text', '') if record.get('fp') == base['fp'] else ''
+        if not text and suffix in OFFICIAL_EXT and read<300:
+            text,fresh=collection_text(relative,root/relative,local_index)
+            if fresh:updates[relative]=local_index[relative];read+=1
         if suffix in PHOTO_EXT and official_scan(relative, text) and phases.get(relative, {}).get('fp') != base['fp']:
             kind = 'yes' if marks.get(relative) else 'check'
             if relative in marks and not marks[relative]:
@@ -3108,7 +3169,9 @@ def collect(pid):
                               'confirmed': relative in marks, 'scan': True, **official_fields(text)})
             continue
         if suffix in PHOTO_EXT:
-            phase, evidence, taken = photo_phase_dated(relative, root / relative, period)
+            schedule=photo_schedule(project,relative)
+            phase,evidence,taken=photo_phase_dated(relative,root/relative,
+                (schedule['start'],schedule['end'],schedule['source']),schedule,boundaries.get(schedule['scope'],''))
             saved = phases.get(relative)
             confirmed = bool(saved and saved.get('fp') == base['fp'])
             if confirmed:
@@ -3117,7 +3180,7 @@ def collect(pid):
             seen.setdefault((name.casefold(), file['size']), []).append(photos[-1])
         elif suffix in OFFICIAL_EXT:
             record = texts.get(relative) or {}
-            kind, evidence = official_kind(relative, record.get('text', '') if record.get('fp') == base['fp'] else '')
+            kind,evidence=official_kind(relative,text)
             if relative in marks:
                 kind, evidence = ('yes' if marks[relative] else ''), '사용자 확인'
             if kind:
@@ -3135,6 +3198,7 @@ def collect(pid):
     if previous != current:
         latest = get_project(pid); latest['collectSnapshot'] = sorted(current); store_project(latest)
     photos.sort(key=lambda i: i['relative']); officials.sort(key=lambda i: (i.get('date') or '9', i['relative']))
+    store_collection_texts(pid,updates)
     return {'photos': photos, 'officials': officials, 'missing': missing, 'stale': stale, 'phases': PHASES,
             'counts': {k: sum(p['phase'] == k for p in photos) for k in PHASES},
             'officialCheck': sum(o['status'] == 'check' for o in officials),
@@ -3146,8 +3210,26 @@ DOC_TYPES={'공문':['공문','시행문','협조','회신','통보','요청'],'
            '회의록':['회의록','회의'],'도면':['도면','dwg'],'보고서':['보고','검토의견서'],'견적서':['견적'],'사진':[]}
 ROLES={'시공사':['시공사','시공업체','도급사','건설','종합건설','공사업체'],'감리':['감리'],'설계사':['설계사','건축사사무소','엔지니어링'],
        '기술지도':['기술지도','안전'],'학교':['캠퍼스','본부','관리과','시설과','시설지원과','대학교','학교']}
-VERIFY_VERSION='v1'
-STOP_WORDS={'모아','모아줘','보기','보여줘','줘','문서','관련','모든','전부','만','것','자료','찾아줘','찾아','중','중에서','및','그리고','보낸','받은'}
+VERIFY_VERSION='v2-content-and-context'
+STOP_WORDS={'모아','모아줘','모아보기','보기','보여줘','줘','문서','관련','모든','전부','만','것','자료','찾아줘','찾아','중','중에서','및','그리고','보낸','받은'}
+
+
+def collection_text_index(pid):
+    return read_json(DATA/'collection-text'/(valid_name(pid)+'.json'),{}) or {}
+
+
+def collection_text(relative,path,index):
+    fp=fingerprint(path);record=index.get(relative,{})
+    if record.get('fp')==fp:return record.get('text',''),False
+    text=local_text(path);index[relative]={'fp':fp,'text':text}
+    return text,True
+
+
+def store_collection_texts(pid,updates):
+    if not updates:return
+    with LOCK:
+        index=collection_text_index(pid);index.update(updates)
+        atomic_json(DATA/'collection-text'/(valid_name(pid)+'.json'),index)
 
 
 def alias_of(word):
@@ -3159,7 +3241,7 @@ def alias_of(word):
 
 def parse_collection(text):
     """Natural language -> visible, editable conditions. Independent conditions are AND; aliases are OR."""
-    text=str(text or '').strip();rest=text;c={'types':[],'sender':'','senderAliases':[],'recipient':'','recipientAliases':[],
+    text=str(text or '').strip();rest=re.sub(r'모아\s*보기|모아\s*보여\s*줘|모아\s*줘',' ',text);c={'types':[],'sender':'','senderAliases':[],'recipient':'','recipientAliases':[],
         'dateFrom':'','dateTo':'','keywordsAll':[],'exclude':[],'text':text}
     for m in re.finditer(r'(\S+?)\s*(?:은|는)?\s*(?:제외|빼고)',rest):
         c['exclude'].append(m.group(1));rest=rest.replace(m.group(0),' ')
@@ -3178,12 +3260,13 @@ def parse_collection(text):
             rest=rest.replace(kind,' ')
     for key in ('sender','recipient'):
         role=alias_of(c[key])
-        if role:c[key]=role;c[key+'Aliases']=ROLES[role]
+        if role and (c[key]==role or c[key] in ROLES[role]):c[key]=role;c[key+'Aliases']=ROLES[role]
         elif c[key]:c[key+'Aliases']=[c[key]]
     m=re.search(r'(\d{2,4})\s*년\s*(\d{1,2})\s*월',rest)
     if m:
         y=int(m.group(1));y=y+2000 if y<100 else y;mo=int(m.group(2))
-        c['dateFrom']='%04d-%02d-01'%(y,mo);c['dateTo']='%04d-%02d-31'%(y,mo);rest=rest.replace(m.group(0),' ')
+        if not 1<=mo<=12:fail('검색 기간의 월은 1~12월로 입력해주세요.')
+        c['dateFrom']='%04d-%02d-01'%(y,mo);c['dateTo']='%04d-%02d-%02d'%(y,mo,calendar.monthrange(y,mo)[1]);rest=rest.replace(m.group(0),' ')
     m=re.search(r'(\d{6})\s*[~\-]\s*(\d{6})',rest)
     if m:
         c['dateFrom'],c['dateTo']=[parsed_prefix_date(x+' ')[0] for x in m.groups()];rest=rest.replace(m.group(0),' ')
@@ -3224,8 +3307,13 @@ def delete_collection(pid,cid):
     return {'ok':True}
 
 
-def verify_key(fp,conditions):
-    raw=json.dumps({'fp':fp,'c':{k:v for k,v in conditions.items() if k!='text'},'v':VERIFY_VERSION},ensure_ascii=False,sort_keys=True)
+def verification_context(project,relative):
+    return {'project':project['id'],'relative':relative,'contracts':[
+        {'id':r['id'],**{k:(r.get('analysis') or {}).get(k,'') for k in ('kind','party','title')}} for r in project.get('contracts',[])]}
+
+
+def verify_key(content_hash,conditions,context=None):
+    raw=json.dumps({'sha256':content_hash,'context':context,'c':{k:v for k,v in conditions.items() if k!='text'},'v':VERIFY_VERSION},ensure_ascii=False,sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
@@ -3234,6 +3322,7 @@ def local_match(relative,text,c):
     name=PurePosixPath(relative).name;hay=(relative+' '+text[:3000]).casefold();evidence={}
     if c.get('types'):
         hits=[t for t in c['types'] if t in name or any(w.casefold() in hay for w in DOC_TYPES[t])]
+        if '공문' in c['types'] and official_kind(relative,text)[0]=='yes' and '공문' not in hits:hits.append('공문')
         if not hits:return False,{}
         evidence['문서 종류']='파일명/경로/본문에 '+', '.join(hits)
     fields=official_fields(text)
@@ -3263,26 +3352,32 @@ def run_collection(pid,cid):
     item=next((i for i in saved_collections(pid) if i['id']==cid),None)
     if not item:fail('저장된 모아보기를 찾지 못했습니다.')
     c=item['conditions'];texts=text_cache(pid).get('files',{});checks=project.get('collectionChecks',{})
-    result={'verified':[],'mismatch':[],'unclear':[],'candidates':[]};read=0
+    result={'verified':[],'mismatch':[],'unclear':[],'candidates':[]};read=0;unindexed=0
+    local_index=collection_text_index(pid);updates={}
+    checked_paths={v.get('relative') for v in checks.values()}
     for file in scan(root,False,inbox_of(project)):
         relative=file['relative'];suffix=Path(file['name']).suffix.lower()
         if relative.startswith(EXPORT_DIR+'/') or suffix=='.lnk':continue
         if c.get('types')==['사진'] and suffix not in PHOTO_EXT:continue
         fp=f"{file['size']}:{file['mtime']}";record=texts.get(relative) or {}
         text=record.get('text','') if record.get('fp')==fp else ''
-        if not text and suffix in doctext.TEXT_TYPES and read<300 and c.get('types') and any(w in relative for t in c['types'] for w in DOC_TYPES[t]+[t]):
-            read+=1;text=local_text(root/relative)
+        if not text and suffix in doctext.TEXT_TYPES:
+            if read<300 or (local_index.get(relative) or {}).get('fp')==fp:
+                text,fresh=collection_text(relative,root/relative,local_index)
+                if fresh:updates[relative]=local_index[relative];read+=1
+            else:unindexed+=1
         ok,evidence=local_match(relative,text,c)
         if not ok:continue
         base={'relative':relative,'name':file['name'],'folder':str(PurePosixPath(relative).parent),'fp':fp,'evidence':evidence,**official_fields(text),
               'date':parsed_prefix_date(file['name'])[0]}
-        saved=checks.get(verify_key(fp,c))
+        saved=checks.get(verify_key(file_hash(root/relative),c,verification_context(project,relative))) if relative in checked_paths else None
         if saved:
             base.update(saved.get('fields',{}));base['aiEvidence']=saved.get('evidence',{});base['status']=saved['decision']
             result[{'match':'verified','mismatch':'mismatch'}.get(saved['decision'],'unclear')].append(base)
         else:
             base['status']='candidate';result['candidates'].append(base)
-    result.update(collection=item,estimate={'candidates':len(result['candidates']),'cached':len(result['verified'])+len(result['mismatch'])+len(result['unclear']),
+    store_collection_texts(pid,updates)
+    result.update(collection=item,unindexed=unindexed,estimate={'candidates':len(result['candidates']),'cached':len(result['verified'])+len(result['mismatch'])+len(result['unclear']),
                                             'aiCalls':len(result['candidates'])})
     return result
 
@@ -3296,20 +3391,29 @@ def verify_collection(pid,cid,relatives):
     for relative in list(relatives or [])[:50]:
         path=safe_path(root,relative)
         if not path.is_file():failed.append({'relative':relative,'error':'파일이 없습니다.'});continue
-        fp=fingerprint(path);text=cached_text(project,relative,path)[:3000]
+        content_hash=file_hash(path);text=cached_text(project,relative,path)[:3000]
+        context=verification_context(project,relative)
         try:
             parts=[{'type':'text','text':'문서 앞부분:\n'+text}] if text.strip() else excerpt(path,1)[0]
             answer=gateway([{'role':'system','content':'너는 시설공사 문서를 확인하는 도우미다. 주어진 조건에 문서가 맞는지 문서에 적힌 근거로만 판단하고 JSON으로만 답한다. '
                              '“시공사 공문”은 시공사가 보낸(발신) 공문을 뜻하며 시공사가 언급만 된 문서는 아니다. 근거가 없으면 unclear.'},
-                            {'role':'user','content':[{'type':'text','text':'조건(JSON): '+json.dumps({k:v for k,v in c.items() if k!='text'},ensure_ascii=False)+
+                            {'role':'user','content':[{'type':'text','text':'확인된 사업 맥락(JSON): '+json.dumps(context,ensure_ascii=False)+
+                             '\n조건(JSON): '+json.dumps({k:v for k,v in c.items() if k!='text'},ensure_ascii=False)+
                              '\n답 형식: {"decision":"match|mismatch|unclear","evidence":{"조건 이름":"문서 근거"},"docNumber":"","title":"","sender":"","recipient":"","docDate":"YYYY-MM-DD"}'}]+parts}])
+            if not isinstance(answer,dict):fail('AI 판정 형식을 읽지 못했습니다. 다시 확인해주세요.')
         except Exception as error:
             failed.append({'relative':relative,'error':str(error)[:200]});continue
         decision=answer.get('decision') if answer.get('decision') in ('match','mismatch','unclear') else 'unclear'
+        if decision=='match' and not answer.get('evidence'):decision='unclear'
         fields={k:str(answer.get(k) or '')[:80] for k in ('docNumber','title','sender','recipient','docDate') if answer.get(k)}
-        latest=get_project(pid);latest.setdefault('collectionChecks',{})[verify_key(fp,c)]={'decision':decision,'evidence':answer.get('evidence') or {},
-                                                                                            'fields':fields,'at':now(),'relative':relative}
-        store_project(latest);done.append({'relative':relative,'decision':decision})
+        with LOCK:
+            latest=get_project(pid)
+            if not path.is_file() or file_hash(path)!=content_hash or verification_context(latest,relative)!=context:
+                failed.append({'relative':relative,'error':'확인 중 문서 또는 사업 정보가 바뀌었습니다. 다시 확인해주세요.'});continue
+            latest.setdefault('collectionChecks',{})[verify_key(content_hash,c,context)]={'decision':decision,'evidence':answer.get('evidence') or {},
+                                                                                        'fields':fields,'at':now(),'relative':relative}
+            store_project(latest)
+        done.append({'relative':relative,'decision':decision})
     return {'done':done,'failed':failed}
 
 
@@ -3537,7 +3641,7 @@ def dispatch(action, payload):
         return resolve_staged_contracts(payload.get('ids', []))
     if action == '/status':
         return {'model': read_json(DATA / 'ai.json', {}).get('model', ''), 'configured': (DATA / 'api-key.dpapi').exists(),
-                'projects': projects(), 'templates': TEMPLATES, 'version': '0.11.0-test', 'prefs': prefs(), 'usage': usage_summary()}
+                'projects': projects(), 'templates': TEMPLATES, 'version': '0.11.1-test', 'prefs': prefs(), 'usage': usage_summary()}
     if action == '/prefs':
         return set_prefs(payload)
     if action == '/usage':

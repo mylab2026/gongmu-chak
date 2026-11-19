@@ -43,6 +43,7 @@ class CollectExport(unittest.TestCase):
 
     def test_export_creates_nothing_until_approved_and_never_overwrites_user_files(self):
         self.write(self.report+'/공사전 사진.jpg',b'p1');self.write(self.report+'/관련 공문.pdf',b'n1');self.write('3 시공단계/IMG.jpg',b'?')
+        app.set_official(self.project['id'],self.report+'/관련 공문.pdf',True)  # Filename alone is only a candidate.
         before=self.snapshot()
         plan=app.export_plan(self.project['id'])
         self.assertEqual(self.snapshot(),before);self.assertEqual(list(self.root.rglob('*.lnk')),[])
