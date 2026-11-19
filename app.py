@@ -1769,7 +1769,7 @@ def make_plan(pid, ongoing, virtual=None):
     if virtual is None:rows.extend(add_empty_bundle_folders(root,rows,ongoing,inbox))
     plan['contextSummary']=meeting_coverage(project,plan)
     rows[:] = [r for r in rows if not r.get('destination') or str(PurePosixPath(effective_folder(r,r['destination']))/(r.get('proposedName') or r['name'])) != r.get('current',r['relative'])]
-    plan['scanInfo']['alreadyInPlaceCount']=len(files)-len(rows)
+    plan['scanInfo']['alreadyInPlaceCount']=max(0,len(files)-sum(r.get('kind')!='directory' for r in rows))
     PROGRESS.pop('plan', None)
     plan['localCount'] = sum(1 for r in rows if r['method'] in ('rule', 'attach'))
     PLANS[plan['id']] = plan
@@ -1799,6 +1799,8 @@ def keep_subfolders(rows, inbox=INBOX):
     """Keep the user's own subfolders: below a folder matching the destination, or a folder whose files all go to one place."""
     groups = {}
     standard_labels={semantic_label(PurePosixPath(p).name) for p in ALL_STANDARD_PATHS()}
+    # Older projects also use these shortened classification headings.
+    standard_labels.update({'최초품의','최초계약서'})
     for row in rows:
         groups.setdefault(str(PurePosixPath(row['relative']).parent), []).append(row)
     for row in rows:
@@ -1834,7 +1836,7 @@ def keep_subfolders(rows, inbox=INBOX):
             date_index = next((i for i, part in enumerate(parts) if re.match(r'^(?:\d{8}|\d{6})(?:\D|$)|^\d{4}[.\-]\d{1,2}[.\-]\d{1,2}', part)), None)
             if date_index is not None:
                 sub = parts[date_index:]  # Preserve dated delivery batches, including a single file.
-            elif semantic_label(parts[-1]) not in standard_labels and not is_structural(parts[-1]) and len(siblings) >= 2 and all(r.get('destination') == row['destination'] for r in siblings) \
+            elif semantic_label(parts[-1]) not in standard_labels and not is_structural(parts[-1]) and all(r.get('destination') == row['destination'] for r in siblings) \
                     and not same_folder_name(parts[-1], leaf) and not re.fullmatch(r'\d{2,6}|새 폴더.*|자료|기타', parts[-1]):
                 sub = parts[-1:]
         if not sub and existing_sub and row.get('method')=='manual':
@@ -1843,15 +1845,59 @@ def keep_subfolders(rows, inbox=INBOX):
             row['keepSub'] = '/'.join(sub)
             row['keepSubFor'] = row['destination']
 
+    preserve_bundle_members(rows,inbox,standard_labels)
     by_id = {r['id']: r for r in rows}
     for row in rows:
         main = by_id.get(row.get('attachTo'))
         if main and not row.get('canonicalAttachment') and not row.get('roleMapped'):
+            if main.get('keepSub') and row.get('keepSubFor')==main.get('destination') and row.get('keepSub','').startswith(main['keepSub']+'/'):
+                continue  # An attachment already inside this bundle keeps its own relative path.
             row.pop('keepSub', None)
             row.pop('keepSubFor', None)
             if main.get('keepSub'):
                 row['keepSub'] = main['keepSub']
                 row['keepSubFor'] = main['destination']
+
+
+def preserve_bundle_members(rows,inbox,standard_labels):
+    """Extend a preserved source bundle to its nested members; never invent a category.
+
+    Only a single confirmed destination can carry a whole bundle. Explicit standard/
+    round routing and registered contracts remain governed by their existing rules.
+    """
+    internal=re.compile(r'^(?:\d+[.)_ -]*)?(?:첨부(?:자료|문서|파일)?|붙임(?:자료|문서|파일)?|사진|도면|원본)$')
+    generic=re.compile(r'^\d{2,6}$|^새 폴더.*|^(?:자료|기타|원본|파일)$')
+    roots={}
+    def custom(name):
+        return bool(name and semantic_label(name) not in standard_labels and not is_structural(name) and not generic.fullmatch(name))
+    for row in rows:
+        if row.get('done') or not row.get('destination') or row.get('roleMapped') or row.get('canonicalContract'):
+            continue
+        sub=row.get('keepSub') if row.get('keepSubFor')==row['destination'] else ''
+        source=row_folder_source(row,sub) if sub else ''
+        if source.startswith('자료묶음:'):continue
+        if source and internal.fullmatch(PurePosixPath(source).name):
+            parent=PurePosixPath(source).parent
+            if custom(parent.name) and parent.name not in INBOXES and parent.name!=inbox:
+                source=str(parent)
+        if not source:
+            # A folder containing only nested attachments still has a material root.
+            parent=PurePosixPath(row['relative']).parent
+            if internal.fullmatch(parent.name):
+                while internal.fullmatch(parent.name):parent=parent.parent
+                if custom(parent.name) and parent.name not in INBOXES and parent.name!=inbox:source=str(parent)
+        if source and source not in ('.',inbox,*INBOXES):roots.setdefault(source,set()).add(row['destination'])
+    covered=[]
+    for source,destinations in sorted(roots.items(),key=lambda item:(len(PurePosixPath(item[0]).parts),item[0])):
+        if len(destinations)!=1 or any(source==p or source.startswith(p+'/') for p in covered):continue
+        destination=next(iter(destinations))
+        members=[r for r in rows if r['relative'].startswith(source+'/')]
+        if not members or any(r.get('done') or r.get('destination')!=destination or r.get('roleMapped') or r.get('canonicalContract') for r in members):continue
+        for row in members:
+            inner=PurePosixPath(row['relative']).relative_to(source).parent.as_posix()
+            row['keepSub']=PurePosixPath(source).name+('/'+inner if inner!='.' else '')
+            row['keepSubFor']=destination
+        covered.append(source)
 
 
 def effective_folder(row, folder):
