@@ -2324,13 +2324,17 @@ def make_shortcut(target, link):
     if os.name != 'nt':
         link.write_text('바로가기 → ' + str(target), encoding='utf-8')  # Demo/tests on other systems.
         return
+    target=Path(target).resolve();link=Path(link).resolve()
     encode = lambda value: base64.b64encode(str(value).encode('utf-8')).decode()
     script = ("$t=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(target) + "'));"
               "$l=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(link) + "'));"
               "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($l);$s.TargetPath=$t;"
               "$s.WorkingDirectory=[IO.Path]::GetDirectoryName($t);$s.Save()")
-    subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()],
-                   capture_output=True, timeout=60, check=True, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    script="$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.Encoding]::UTF8;try{"+script+"}catch{[Console]::Error.WriteLine($_.Exception.Message);exit 1}"
+    result=subprocess.run(['powershell.exe', '-NoProfile', '-EncodedCommand', base64.b64encode(script.encode('utf-16le')).decode()],
+                          capture_output=True, timeout=60, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if result.returncode:
+        fail('Windows 바로가기 생성 실패: '+result.stderr.decode('utf-8',errors='replace').strip()[:700])
     if not link.exists():
         fail('바로가기를 만들지 못했습니다.')
 

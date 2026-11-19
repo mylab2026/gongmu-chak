@@ -41,7 +41,15 @@ jobs:
           name: browser-smoke-evidence
           path: browser-smoke-results
       - run: python -B build_package.py
+      - name: Stage installer in artifact directory
+        shell: python
+        run: |
+          from pathlib import Path
+          import shutil
+          output=Path('dist')
+          output.mkdir(exist_ok=True)
+          shutil.copyfile(Path('..')/'GongmuChak-Windows-Test-0.11.1.zip',output/'GongmuChak-Windows-Test-0.11.1.zip')
       - uses: actions/upload-artifact@v4
         with:
           name: windows-test-${{ matrix.os }}
-          path: ../GongmuChak-Windows-Test-0.11.1.zip
+          path: dist/GongmuChak-Windows-Test-0.11.1.zip
