@@ -3,6 +3,7 @@ import io
 import tempfile
 import unittest
 import json
+import os
 import threading
 import urllib.request
 import urllib.error
@@ -106,7 +107,12 @@ class FileOperations(unittest.TestCase):
     def test_symlink_escape_rejected(self):
         external = self.base / 'outside'
         external.mkdir()
-        (self.root / 'link').symlink_to(external, target_is_directory=True)
+        try:
+            (self.root / 'link').symlink_to(external, target_is_directory=True)
+        except OSError as error:  # Windows without Developer Mode/admin: WinError 1314.
+            if os.name == 'nt' and getattr(error, 'winerror', None) == 1314:
+                self.skipTest('이 Windows 계정은 심볼릭 링크를 만들 권한이 없습니다.')
+            raise
         with self.assertRaises(ValueError):
             app.safe_path(self.root, 'link/out.pdf')
 

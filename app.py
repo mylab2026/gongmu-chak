@@ -1526,7 +1526,10 @@ def round_key(label,ancestors=()):
         return ('작업지시',int(site.group(1)))
     m=re.search(r'(?<!\d)(\d{1,2})차',value)
     if not m:
-        return None
+        # '설계변경(1차)': the round can be the whole parenthesis, which semantic_label removes.
+        m=re.search(r'[(（]\s*제?\s*(\d{1,2})\s*차\s*[)）]',label_word(str(label)))
+        if not m:
+            return None
     family=next((f for w,f in ROUND_FAMILIES if w in value),None)
     if not family and re.fullmatch(r'\d{1,2}차',value):
         family=next((f for a in reversed(list(ancestors)[-2:]) for w,f in ROUND_FAMILIES if w in semantic_label(a)),None)
@@ -2525,6 +2528,7 @@ def execute(plan_id, choices):
                 child['status']='이동 완료' if all(r['done'] for r in matching) else '일부 이동 보류' if any(r.get('executionError') for r in matching) else '이동 전'
     plan['contextSummary']=journal.get('contextSummary',[])
     sync_moved_references(plan,journal,root,journal_path)
+    carry_collection_marks(project['id'],[(e['source'],e['destination']) for e in journal['entries'] if e['status']=='moved' and e.get('kind')!='directory'])
     journal['folderShortcuts']=[];journal['shortcutErrors']=list(journal.get('referenceRepairErrors',[]))
     atomic_json(journal_path,journal)
     if project.get('learned'):
@@ -2797,6 +2801,7 @@ def undo(journal_id):
     project = get_project(journal['projectId'])
     root = root_available(project)
     journal['folderRestoreErrors'] = []
+    restored = []
     for relative in sorted(set(journal.get('cleanupCandidates', [])) | set(journal.get('removedFolders', [])), key=lambda p: p.count('/')):
         try:
             safe_path(root, relative).mkdir(parents=True, exist_ok=True)
@@ -2817,10 +2822,12 @@ def undo(journal_id):
                 fail('이동 후 수정된 파일이라 자동으로 되돌리지 않았습니다.')
             move_no_replace(destination, source)
             entry['status'] = 'restored'
+            if entry.get('kind')!='directory':restored.append((entry['destination'],entry['source']))
         except (OSError, ValueError) as error:
             entry['status'] = 'undo-blocked'
             entry['error'] = str(error)
         atomic_json(path, journal)
+    carry_collection_marks(project['id'],restored)
     for entry in journal['entries']:
         if entry.get('shortcut') and entry['status'] == 'restored':
             try:
@@ -3231,7 +3238,8 @@ def collect(pid):
                 item['copies'] = [c['relative'] for c in copies if c is not item]
     current = {i['relative'] for i in photos + officials}
     previous = set(project.get('collectSnapshot', []))
-    missing = sorted(previous - current)
+    # Only files no longer at that path; one still there but no longer a candidate has not disappeared.
+    missing = sorted(p for p in previous - current if not (root / p).is_file())
     stale = sorted(set(phases) - {p['relative'] for p in photos}) + sorted(set(marks) - current)
     if previous != current:
         latest = get_project(pid); latest['collectSnapshot'] = sorted(current); store_project(latest)
@@ -3505,6 +3513,28 @@ def set_official(pid, relative, value):
         marks[relative] = bool(value)
     store_project(project)
     return {'ok': True}
+
+
+def carry_collection_marks(pid, moves):
+    """User-confirmed photo phases and 공문 marks follow files the app itself moved (and moved back on undo).
+    A rename keeps size and mtime, so the saved fingerprint still guards against later edits."""
+    if not moves:
+        return
+    with LOCK:
+        project = get_project(pid);changed = False
+        for key in ('photoPhases', 'officialMarks'):
+            marks = project.get(key) or {}
+            for old, new in moves:
+                if old in marks and new not in marks:
+                    marks[new] = marks.pop(old);changed = True
+        # The app's own moves are not files that disappeared from their previous place.
+        snapshot = project.get('collectSnapshot')
+        if snapshot:
+            moved = dict(moves);updated = sorted({moved.get(p, p) for p in snapshot})
+            if updated != sorted(snapshot):
+                project['collectSnapshot'] = updated;changed = True
+        if changed:
+            store_project(project)
 
 
 EXPORTS = {}
