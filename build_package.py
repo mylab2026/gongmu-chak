@@ -10,6 +10,7 @@ files = ['설치.cmd', 'install.ps1', '설치복구.cmd', 'repair.ps1', '업데�
          'requirements.txt', 'requirements-dev.txt', 'requirements-browser.txt', 'tools/browser_smoke.py', 'README.html', 'THIRD_PARTY.txt', 'VALIDATION.txt',
          'REVISION.md', 'QA-0.11.1.md', 'test_app.py', 'test_revision.py', 'test_automation.py', 'test_corrections.py', 'test_meeting_policy.py', 'test_collect_export.py', 'test_v3_roles.py', 'test_v3_collect.py', 'test_user_requirements.py', 'test_windows_runtime.py', 'test_revision_ui.cjs', 'test_ui.cjs', 'reference-builder.html', 'build_package.py']
 files.extend(['collection_assistant.py','test_collection_assistant.py','tools/browser_smoke_gateway.py','QA-0.11.2.md'])
+files.append('test_flat_destination_bundles.py')
 manifest = {}
 with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
     for name in files:
