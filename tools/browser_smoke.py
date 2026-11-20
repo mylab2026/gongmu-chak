@@ -71,10 +71,13 @@ def main():
                     browser=p.chromium.launch(**options);page=browser.new_page(viewport={'width':1440,'height':1000})
                     page.on('pageerror',lambda error:errors.append(str(error)))
                     page.goto(url);page.locator('#homeProjects').wait_for(state='attached');page.wait_for_function("S.status!==null")
-                    # 0.11.3: AI settings no longer pop up on start; an inline note on the home screen offers it instead.
-                    assert not page.evaluate("$('#settings').open")
-                    assert page.locator('#homeAINote').is_visible()==(not page.evaluate('S.status.configured'))
-                    result['no_startup_settings_popup']=True
+                    # AI is required: without a key the settings dialog opens on start, and the home screen keeps saying so after it is closed.
+                    configured=page.evaluate('S.status.configured')
+                    assert page.evaluate("$('#settings').open")==(not configured)
+                    if not configured:page.locator('#closeSettings').click()
+                    assert page.locator('#homeAINote').is_visible()==(not configured)
+                    if not configured:expect(page.locator('#homeAINote')).to_contain_text('AI 연결이 필요합니다')
+                    result['ai_required_on_start']=True
                     page.screenshot(path=str(output/'01-home.png'),full_page=True)
                     # Support handoff is opt-in, editable, downloadable and read-only.
                     page.locator('#chatbotHelp').click()

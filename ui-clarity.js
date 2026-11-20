@@ -42,7 +42,7 @@ function fold(section,nodes,label){nodes=nodes.filter(Boolean);if(!nodes.length|
 const leads={
  folderStep:()=>['전체 사업 폴더를 고른 뒤 ‘다음’을 누르세요','실제 폴더 없이 써 보려면 ‘예시 사업 폴더로 시연’을 누르세요.'],
  projectStep:()=>['정리할 사업을 고른 뒤 ‘다음’을 누르세요','새로 생긴 계약이 있을 때만 아래 칸을 체크하세요.'],
- contractStep:()=>S.mode==='ongoing'?['새로 생긴 계약서를 등록하세요','등록한 계약은 기존 사업에 더해집니다.']:S.status?.configured?['계약서를 등록하거나, 없으면 ‘계약서 없음’을 고르세요','계약서를 등록하면 사업 단계와 문서 분류가 더 정확해집니다.']:['AI 연결 전이라 ‘계약서 없음’으로 진행하면 됩니다','AI를 연결하면 계약서를 자동으로 읽어 분류 정확도가 높아집니다.'],
+ contractStep:()=>S.mode==='ongoing'?['새로 생긴 계약서를 등록하세요','등록한 계약은 기존 사업에 더해집니다.']:S.status?.configured?['계약서를 등록하거나, 없으면 ‘계약서 없음’을 고르세요','계약서를 등록하면 사업 단계와 문서 분류가 더 정확해집니다.']:['먼저 AI를 연결해주세요','계약서 자동 읽기와 문서 분류에 학내 AI 연결이 필요합니다.'],
  treeStep:()=>['사업유형을 고르면 기본 폴더 구조가 자동으로 만들어집니다','폴더 이름은 필요할 때만 고치고 ‘다음’을 누르세요.'],
  reviewStep:()=>{const left=S.plan?S.plan.rows.filter(mapNeedsCheck).length:0;return left?['확인이 필요한 파일 '+left+'개를 차례로 확인한 뒤 ‘파일 이동 실행’을 누르세요','보류 파일은 원래 위치에 그대로 둡니다.']:['연결도를 훑어본 뒤 ‘파일 이동 실행’을 누르세요','목적지를 정한 파일만 이동하며, 보류 파일은 원래 위치에 그대로 둡니다.'];}
 };
@@ -81,7 +81,7 @@ clearError=function(){baseClearError();unmark();errorBox.classList.remove('soft'
 
 /* 3. AI 미연결 안내 */
 const contractNote=document.createElement('div');contractNote.className='ai-note';contractNote.id='contractAINote';contractNote.hidden=true;
-contractNote.innerHTML='<b>AI가 아직 연결되지 않았어요.</b> 계약서를 자동으로 읽으려면 AI 연결이 필요합니다. 지금은 ‘계약서 없이 진행’으로 넘어가고, 나중에 ‘계속 문서 정리’에서 계약서를 추가할 수 있어요.<div class="row"><button class="primary" id="noContractQuick">계약서 없이 진행</button><button id="contractAIConnect">AI 연결 설정</button></div>';
+contractNote.innerHTML='<b>AI가 연결되지 않았습니다.</b> 계약서를 읽으려면 AI 연결이 필요합니다. 연결한 뒤 ‘계약서 다시 찾기’를 누르세요. 예시 사업 폴더로 시연 중이라면 계약서 없이 진행해도 됩니다.<div class="row"><button class="primary" id="contractAIConnect">AI 연결 설정</button><button id="noContractQuick">계약서 없이 진행</button></div>';
 $('#lead-contractStep').after(contractNote);
 const noContractLabel=$('#noContractLabel');noContractLabel.classList.add('choice-card');contractNote.after(noContractLabel);
 $('#noContractQuick').onclick=()=>{const box=$('#noContracts');if(box.disabled)return;box.checked=true;box.onchange?.();updateContractNote();$('#contractNext').focus();};
@@ -90,9 +90,9 @@ function updateContractNote(){const off=!S.status?.configured&&S.mode==='initial
 $('#noContracts').addEventListener('change',updateContractNote);
 
 const homeNote=document.createElement('div');homeNote.className='ai-note';homeNote.id='homeAINote';homeNote.hidden=true;
-homeNote.innerHTML='<b>AI 연결 전에도 시작할 수 있어요.</b> 폴더 구조 만들기와 PC 규칙 분류는 바로 쓸 수 있고, 계약서 자동 읽기와 AI 분류는 연결 후에 쓸 수 있습니다.<div class="row"><button id="homeAIConnect">AI 연결 설정</button></div>';
+homeNote.innerHTML='<b>AI 연결이 필요합니다.</b> 공무착착은 학내 AI로 계약서를 읽고 문서를 분류합니다. 학내 API 키를 등록한 뒤 문서 정리를 시작해주세요.<div class="row"><button class="primary" id="homeAIConnect">AI 연결 설정</button></div>';
 $('#home h1').after(homeNote);$('#homeAIConnect').onclick=()=>$('#settingsButton').click();
-function updateHome(){homeNote.hidden=Boolean(S.status?.configured);const hasProjects=Boolean(S.status?.projects?.length);$('#initialButton').classList.toggle('recommended',!hasProjects);$('#ongoingButton').classList.toggle('recommended',hasProjects);}
+function updateHome(){homeNote.hidden=Boolean(S.status?.configured);const ready=Boolean(S.status?.configured),hasProjects=Boolean(S.status?.projects?.length);$('#initialButton').classList.toggle('recommended',ready&&!hasProjects);$('#ongoingButton').classList.toggle('recommended',ready&&hasProjects);}
 
 /* 사업유형 카드: 고르기 전에 차이를 알 수 있게 */
 const typeInfo={planning:['사업 구상·예산 단계부터 맡은 사업','기획 → 설계 → 시공 → 인수인계'],design:['설계용역을 직접 발주·관리하는 사업','설계(용역 관리) → 시공 → 인수인계'],construction:['설계가 끝나고 공사부터 맡은 사업','설계(성과품 보관) → 시공 → 인수인계'],annual:['연간단가 계약으로 작업지시·검수하는 업무','공통 → 시공(작업지시)']};

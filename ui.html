@@ -176,7 +176,7 @@ $('#treeNext').onclick=()=>{if(!$('#noContracts').checked&&S.contracts.filter(c=
 async function undoJournal(id){if(!await ask('이 정리를 되돌릴까요?','이동 후 수정되지 않았고 원래 위치가 비어 있는 파일만 복원합니다.'))return;await task('이동한 파일 되돌리는 중…',async()=>{const j=await api('/undo',{id});if($('#history').open)$('#history').close();await openPlan();$('#moveResult').textContent=j.entries.filter(e=>e.status==='restored').length+'개 복원 · '+j.entries.filter(e=>e.status==='undo-blocked').length+'개 복원 보류';});}
 $('#closeHistory').onclick=()=>$('#history').close();
 document.addEventListener('input',clearError);
-task('공무착착 시작 중…',async()=>{await refresh();if(typeof Event==='function')document.dispatchEvent?.(new Event('gongmu:ready'));});
+task('공무착착 시작 중…',async()=>{await refresh();if(typeof Event==='function')document.dispatchEvent?.(new Event('gongmu:ready'));if(!S.status.configured)$('#settings').showModal();});
 </script><!-- REVIEW_MAP_SCRIPT --><!-- CONTRACT_INPUT_SCRIPT --><!-- WORKFLOW_SCRIPT --><!-- FINDER_SCRIPT --><!-- COLLECTION_SCRIPT -->
 <!-- REVISION_UI_SCRIPT --><!-- CHATBOT_SUPPORT_SCRIPT --><!-- UI_CLARITY_SCRIPT --></body></html>
 

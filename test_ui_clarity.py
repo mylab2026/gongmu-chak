@@ -14,9 +14,13 @@ class UIClarityPackaging(unittest.TestCase):
         for name in ('install.ps1', 'update.ps1', 'build_package.py'):
             self.assertIn("'ui-clarity.js'", (ROOT / name).read_text(encoding='utf-8-sig'), name)
 
-    def test_start_does_not_force_the_settings_dialog(self):
+    def test_start_opens_settings_when_ai_is_not_connected(self):
+        # AI 연결이 전제인 프로그램이므로 미연결 상태로 시작하면 설정 창을 연다.
         start = re.search(r"task\('공무착착 시작 중…'.*", (ROOT / 'ui.html').read_text(encoding='utf-8')).group(0)
-        self.assertNotIn('showModal', start)
+        self.assertIn("if(!S.status.configured)$('#settings').showModal()", start)
+        clarity = (ROOT / 'ui-clarity.js').read_text(encoding='utf-8')
+        self.assertIn('AI 연결이 필요합니다', clarity)
+        self.assertNotIn('AI 연결 전에도', clarity)
 
     def test_display_layer_does_not_call_the_server(self):
         source = (ROOT / 'ui-clarity.js').read_text(encoding='utf-8')
