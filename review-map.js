@@ -109,11 +109,13 @@ renderReview=function(reveal=false){
  const held=unassigned.find(mapNeedsCheck);$('#mapHold').innerHTML='<span>보류 · 원래 위치 유지 · '+unassigned.length+'개</span>'+(held?mapReviewMarker(held,'보류 파일의 경로 확인'):'');
  $('#mapCaption').textContent=active?(active.executionError?'이동 보류 · '+active.executionError+' | ':'')+active.relative+' → '+(active.done?'이동 완료: ':'')+(active.destination||'보류 · 원래 위치 유지'):'파일마다 하나의 화살표가 연결됩니다. 왼쪽 파일을 눌러 경로를 강조하세요.';
  if(active&&MapReview.inspection===active.id&&mapNeedsCheck(active))$('#mapCaption').innerHTML+='<div class="map-route-hint">'+esc(checkLabel[needsCheck(active)]||active.reason)+(active.destination?' · 경로가 맞으면 선 옆의 맞아요를 누르세요.':' · 원래 위치에 둘 파일이면 맞아요를 누르세요. 이동하려면 오른쪽에서 폴더를 눌러주세요.')+'</div>';
- $$('[data-map-review]').forEach(b=>b.onclick=event=>{event?.stopPropagation?.();mapFocusFile(b.dataset.mapReview,true);});
+ $$('[data-map-review]').forEach(b=>b.onclick=event=>{event?.stopPropagation?.();mapFocusFile(b.dataset.mapReview,true);requestAnimationFrame(()=>requestAnimationFrame(()=>revealAboveSticky($('.map-route-ok'))));});
  $$('[data-route-confirm]').forEach(b=>b.onclick=event=>{event?.stopPropagation?.();return confirmMapRoute(b.dataset.routeConfirm);});
  $('#retargetMode').disabled=!active||active.done;$('#reviewActiveContent').disabled=!active||active.done||active.kind==='directory';
  requestAnimationFrame(()=>{if(reveal){const file=active||groupRows.find(r=>r.destination);if(file){const source=$$('[data-map-file]').find(e=>e.dataset.mapFile===file.id),target=shownMapTarget(file.destination);for(const [pane,node]of [[$('#mapSources'),source],[$('#mapTargets'),target]]){if(node){const a=pane.getBoundingClientRect(),b=node.getBoundingClientRect();pane.scrollTop+=b.top-a.top-a.height/3;}}}}drawMapEdges();});
 };
+// The sticky action bar at the bottom of 4단계 can cover the 맞아요 button; scroll just enough to show it above the bar.
+function revealAboveSticky(el){if(!el)return;const bar=$('#reviewStep .sticky'),r=el.getBoundingClientRect(),limit=(bar&&bar.offsetParent?bar.getBoundingClientRect().top:innerHeight)-12;if(r.bottom>limit)window.scrollBy(0,r.bottom-limit);else if(r.top<12)window.scrollBy(0,r.top-12);}
 async function confirmMapRoute(id){
  const row=S.plan?.rows.find(r=>r.id===id);if(!row||row.done)return;
  const position={page:window.scrollY||0,left:$('#mapSources').scrollTop,right:$('#mapTargets').scrollTop};

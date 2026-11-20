@@ -108,7 +108,7 @@ def main():
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
                     assert page.locator('#checkPanel').inner_text().find('아래 화살표와 !를 보고 경로를 확정해주세요')>=0
                     assert page.locator('.map-route-ok').count()==0
-                    page.locator('#mapSources [data-map-review]').first.click()
+                    skip=page.evaluate('rels=>rels.map(rel=>S.plan.rows.find(r=>r.relative===rel).id)',[held_relative,retarget_relative]);page.locator('#mapSources [data-map-review]'+''.join(':not([data-map-review="'+i+'"])' for i in skip)).first.click()  # file order differs by OS: confirm a moving file first; the held and retarget files are checked below
                     page.locator('.map-route-ok').wait_for(state='visible')
                     page.screenshot(path=str(output/'05a-inline-route-confirm.png'),full_page=True)
                     page.locator('.map-route-ok').scroll_into_view_if_needed();before_y=page.evaluate('window.scrollY');page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
