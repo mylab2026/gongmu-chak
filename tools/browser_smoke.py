@@ -70,7 +70,11 @@ def main():
                     if executable:options['executable_path']=executable
                     browser=p.chromium.launch(**options);page=browser.new_page(viewport={'width':1440,'height':1000})
                     page.on('pageerror',lambda error:errors.append(str(error)))
-                    page.goto(url);page.locator('#closeSettings').click()
+                    page.goto(url);page.locator('#homeProjects').wait_for(state='attached');page.wait_for_function("S.status!==null")
+                    # 0.11.3: AI settings no longer pop up on start; an inline note on the home screen offers it instead.
+                    assert not page.evaluate("$('#settings').open")
+                    assert page.locator('#homeAINote').is_visible()==(not page.evaluate('S.status.configured'))
+                    result['no_startup_settings_popup']=True
                     page.screenshot(path=str(output/'01-home.png'),full_page=True)
                     # Support handoff is opt-in, editable, downloadable and read-only.
                     page.locator('#chatbotHelp').click()
@@ -107,6 +111,11 @@ def main():
                     result['home_history_zip_selected_project_verified']=True
                     # First step's Back returns home; later Back/Next preserves the same plan.
                     page.locator('#initialButton').click();expect(page.locator('#folderBack')).to_be_visible()
+                    # Each step leads with one '지금 할 일' line; errors appear next to the control to fix.
+                    expect(page.locator('#lead-folderStep')).to_contain_text('지금 할 일')
+                    page.locator('#folderNext').click()
+                    assert page.evaluate("(()=>{const e=$('#error');return !e.hidden&&e.classList.contains('inline')&&e.nextElementSibling===$('#chooseRoot')})()")
+                    result['inline_error_next_to_field']=True
                     page.locator('#wizardBack').click();expect(page.locator('#home')).to_be_visible()
                     page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
                     expect(page.locator('#downloadHistory')).to_be_hidden()
@@ -131,6 +140,10 @@ def main():
                     assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
                     assert page.locator('#checkPanel').inner_text().find('아래 화살표와 !를 보고 경로를 확정해주세요')>=0
+                    expect(page.locator('#checkPanel')).to_contain_text('경로 확인 0 / ')
+                    expect(page.locator('#lead-reviewStep')).to_contain_text('지금 할 일')
+                    assert page.locator('#mapSources .map-group [data-short]').count()>=1 or not page.evaluate("$$('#mapSources .map-group').some(b=>b.textContent.includes('/'))")
+                    result['check_progress_and_short_paths']=True
                     assert page.locator('.map-route-ok').count()==0
                     skip=page.evaluate('rels=>rels.map(rel=>S.plan.rows.find(r=>r.relative===rel).id)',[held_relative,retarget_relative]);page.locator('#mapSources [data-map-review]'+''.join(':not([data-map-review="'+i+'"])' for i in skip)).first.click()  # file order differs by OS: confirm a moving file first; the held and retarget files are checked below
                     page.locator('.map-route-ok').wait_for(state='visible')

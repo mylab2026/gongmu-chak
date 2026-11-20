@@ -16,7 +16,7 @@ try {
     $running = Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq (Join-Path $runtimeDir 'python.exe') }
     if ($running) { throw '실행 중인 공무착착 콘솔 창을 종료한 후 설치해주세요.' }
     New-Item -ItemType Directory -Force -Path $appDir,$runtimeDir,$packageDir,$downloadDir | Out-Null
-    foreach ($name in @('app.py','collection_assistant.py','history_archive.py','chatbot_support.py','chatbot-support.js','demo_sample.py','doctext.py','olefile.py','ui.html','review-map.js','contract-input.js','workflow.js','finder.js','collection.js','revision-ui.js','templates.json','requirements.txt','run.cmd','runtime_check.py','reference-builder.html','README.html','THIRD_PARTY.txt')) {
+    foreach ($name in @('app.py','collection_assistant.py','history_archive.py','chatbot_support.py','chatbot-support.js','ui-clarity.js','demo_sample.py','doctext.py','olefile.py','ui.html','review-map.js','contract-input.js','workflow.js','finder.js','collection.js','revision-ui.js','templates.json','requirements.txt','run.cmd','runtime_check.py','reference-builder.html','README.html','THIRD_PARTY.txt')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $appDir -Force
     }
     $pythonExe = Join-Path $runtimeDir 'python.exe'

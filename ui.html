@@ -53,7 +53,7 @@ label{cursor:pointer}#rootPath{word-break:break-all}
 #wizard>.row:first-child{gap:14px}#wizardBack{min-height:36px;padding:6px 14px}
 @media(max-width:650px){header{padding:12px}header span{display:none}.choices{grid-template-columns:1fr}.card{padding:16px}main{padding:0 12px}:root{--fs-title:22px;--fs-section:18px}}
 </style></head><body>
-<header><b>공무착착</b><span>Windows 개인 시험판 0.11.2 · 차수·표준 위치 우선 · 정리 결과 점검</span><button id="homeButton">시작 화면</button><button id="usageBadge" title="AI 연결 설정 열기">AI 확인 중</button><button id="settingsButton">AI 연결 설정</button></header>
+<header><b>공무착착</b><span>Windows 시험판 0.11.2 · 사업 문서 정리 도우미</span><button id="homeButton">시작 화면</button><button id="usageBadge" title="AI 연결 설정 열기">AI 확인 중</button><button id="settingsButton">AI 연결 설정</button></header>
 <main>
 <div id="error" class="error" role="alert" hidden></div>
 <section id="home"><h1>어떤 문서를 정리할까요?</h1><div class="choices"><button id="initialButton"><b>처음 문서 정리</b><br><small>전체 사업 폴더를 연결하고 정리 구조를 만듭니다.</small></button><button id="ongoingButton"><b>계속 문서 정리</b><br><small>사업의 ‘0 정리할 문서 모음’에 넣은 문서를 정리합니다.</small></button></div><div class="card"><h2>등록된 사업</h2><div id="homeProjects"></div></div><div class="card" id="historyDownloadCard"><h2>누적 정리 이력</h2><p id="historyDownloadHint">챗봇의 도움이 필요할 때 누적 정리 이력을 ZIP으로 내려받아 주세요. 압축을 풀고 해당 날짜·회차의 정리 이력.txt를 챗봇에 첨부하면 됩니다. 정리할 때마다 이동·보류·되돌리기 기록이 쌓입니다.</p><label for="historyProject">사업 선택</label><div class="row"><select id="historyProject" style="flex:1;min-width:180px" disabled><option value="">등록된 사업이 없습니다</option></select><button id="downloadHistory" aria-describedby="historyDownloadHint" disabled>누적 정리 이력 ZIP 다운로드</button></div></div><p class="muted">이 시험판은 확정한 실제 파일을 이동합니다. 이동 전 확인 팝업을 표시하며 동일 이름의 파일은 덮어쓰지 않습니다.</p></section>
@@ -176,7 +176,7 @@ $('#treeNext').onclick=()=>{if(!$('#noContracts').checked&&S.contracts.filter(c=
 async function undoJournal(id){if(!await ask('이 정리를 되돌릴까요?','이동 후 수정되지 않았고 원래 위치가 비어 있는 파일만 복원합니다.'))return;await task('이동한 파일 되돌리는 중…',async()=>{const j=await api('/undo',{id});if($('#history').open)$('#history').close();await openPlan();$('#moveResult').textContent=j.entries.filter(e=>e.status==='restored').length+'개 복원 · '+j.entries.filter(e=>e.status==='undo-blocked').length+'개 복원 보류';});}
 $('#closeHistory').onclick=()=>$('#history').close();
 document.addEventListener('input',clearError);
-task('공무착착 시작 중…',async()=>{await refresh();if(!S.status.configured)$('#settings').showModal();});
+task('공무착착 시작 중…',async()=>{await refresh();if(typeof Event==='function')document.dispatchEvent?.(new Event('gongmu:ready'));});
 </script><!-- REVIEW_MAP_SCRIPT --><!-- CONTRACT_INPUT_SCRIPT --><!-- WORKFLOW_SCRIPT --><!-- FINDER_SCRIPT --><!-- COLLECTION_SCRIPT -->
-<!-- REVISION_UI_SCRIPT --><!-- CHATBOT_SUPPORT_SCRIPT --></body></html>
+<!-- REVISION_UI_SCRIPT --><!-- CHATBOT_SUPPORT_SCRIPT --><!-- UI_CLARITY_SCRIPT --></body></html>
 

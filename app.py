@@ -4093,6 +4093,7 @@ class Handler(BaseHTTPRequestHandler):
         html = html.replace('<!-- COLLECTION_SCRIPT -->', '<script>' + (APP / 'collection.js').read_text(encoding='utf-8') + '</script>')
         html = html.replace('<!-- REVISION_UI_SCRIPT -->', '<script>' + (APP / 'revision-ui.js').read_text(encoding='utf-8') + '</script>')
         html = html.replace('<!-- CHATBOT_SUPPORT_SCRIPT -->', '<script>' + (APP / 'chatbot-support.js').read_text(encoding='utf-8') + '</script>')
+        html = html.replace('<!-- UI_CLARITY_SCRIPT -->', '<script>' + (APP / 'ui-clarity.js').read_text(encoding='utf-8') + '</script>')
         self.send(200, html, 'text/html; charset=utf-8')
 
     def do_POST(self):
