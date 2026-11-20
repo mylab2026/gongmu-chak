@@ -13,7 +13,7 @@ files.extend(['collection_assistant.py','test_collection_assistant.py','tools/br
 files.extend(['test_flat_destination_bundles.py','history_archive.py','test_history_archive.py'])
 files.extend(['demo_sample.py','test_demo_sample.py'])
 files.extend(['chatbot_support.py','chatbot-support.js','test_chatbot_support.py','QA-CHATBOT.md'])
-files.extend(str(p.relative_to(root)) for p in sorted((root/'chatbot').glob('*')) if p.is_file())
+files.extend(p.relative_to(root).as_posix() for p in sorted((root/'chatbot').glob('*')) if p.is_file())
 manifest = {}
 with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
     for name in files:
