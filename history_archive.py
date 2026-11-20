@@ -29,6 +29,10 @@ def clean(value, project):
         if root:
             for form in {root,root.replace('\\','/'),root.replace('/','\\')}:
                 value=value.replace(form,'[사업 폴더]' if root==project.get('root') else '[개인 폴더]')
+    # Windows errors may use an 8.3 alias, different casing or a UNC name
+    # rather than the saved root. Keep the diagnosis, omit absolute paths.
+    value = re.sub(r'(?i)\b[A-Z]:[\\/][^\r\n<>"\']+', '[절대 경로 숨김]', value)
+    value = re.sub(r'\\\\[^\r\n<>"\']+', '[네트워크 경로 숨김]', value)
     return value
 
 
@@ -147,3 +151,4 @@ def build(data, project, current_text, reader):
         put('01 전체 이력 목록.txt','정리 회차 '+str(len(runs))+'회 (생략 없음)\n'+'\n'.join(index)+'\n')
     return {'data':base64.b64encode(out.getvalue()).decode('ascii'),'mime':'application/zip',
             'runCount':len(runs),'eventCount':sum(map(len,runs.values())),'dates':sorted(date_counts)}
+

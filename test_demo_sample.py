@@ -22,7 +22,7 @@ class DemoFolder(unittest.TestCase):
         first=app.dispatch('/demo-folder',{});second=app.dispatch('/demo-folder',{})
         a,b=Path(first['path']),Path(second['path'])
         self.assertNotEqual(a,b);self.assertTrue(first['demo'])
-        self.assertTrue(a.is_relative_to(self.data/demo_sample.DEMO_DIR))
+        self.assertTrue(a.resolve().is_relative_to((self.data/demo_sample.DEMO_DIR).resolve()))
         self.assertEqual(first['count'],len(demo_sample.DOCUMENTS)+len(demo_sample.PHOTOS)+len(demo_sample.LETTERS))
         self.assertTrue((a/demo_sample.EMPTY[0]).is_dir())
 
@@ -40,3 +40,4 @@ class DemoFolder(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+

@@ -13,6 +13,16 @@ import app
 
 
 class CumulativeHistory(unittest.TestCase):
+    def test_windows_alias_and_unc_errors_hide_absolute_paths(self):
+        project={'root':r'C:\Users\Runner Admin\project'}
+        raw={'error':r'테스트 잠금: C:\Users\RUNNER~1\project\첨부.txt',
+             'unc':r'공유 잠금: \\server\share\project\첨부.txt',
+             'relative':'미분류/첨부.txt'}
+        clean=app.run_history.clean(raw,project)
+        self.assertEqual(clean['error'],'테스트 잠금: [절대 경로 숨김]')
+        self.assertEqual(clean['unc'],'공유 잠금: [네트워크 경로 숨김]')
+        self.assertEqual(clean['relative'],raw['relative'])
+
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.base=Path(self.temp.name)
         self.data=self.base/'settings';self.root=self.base/'project';self.root.mkdir()
@@ -155,3 +165,4 @@ class CumulativeHistory(unittest.TestCase):
         moved=self.base/'new-project';self.root.rename(moved);project=app.get_project(self.pid);project['root']=str(moved);app.store_project(project)
         _,z=self.archive();text='\n'.join(z.read(n).decode('utf-8-sig') for n in z.namelist())
         self.assertNotIn(old_root,text);self.assertNotIn(str(moved),text)
+
