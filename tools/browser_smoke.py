@@ -72,6 +72,30 @@ def main():
                     page.on('pageerror',lambda error:errors.append(str(error)))
                     page.goto(url);page.locator('#closeSettings').click()
                     page.screenshot(path=str(output/'01-home.png'),full_page=True)
+                    # Support handoff is opt-in, editable, downloadable and read-only.
+                    page.locator('#chatbotHelp').click()
+                    expect(page.locator('#chatbotSupport')).to_be_visible()
+                    page.locator('#supportQuestion').fill('합성 상담: 첨부 자료 위치를 확인하고 싶어요')
+                    page.locator('#supportProject').select_option(move_project['id'])
+                    assert not page.locator('#supportInclude').is_checked()
+                    page.locator('#supportPreview').click()
+                    expect(page.locator('#supportDownload')).to_be_enabled()
+                    plain=page.locator('#supportText').input_value()
+                    assert 'support-v1' in plain and '[현재 파일 위치]' not in plain
+                    page.locator('#supportInclude').check()
+                    expect(page.locator('#supportDownload')).to_be_disabled()
+                    page.locator('#supportPreview').click()
+                    expect(page.locator('#supportDownload')).to_be_enabled()
+                    full=page.locator('#supportText').input_value()
+                    assert '[현재 파일 위치]' in full and 'SYNTHETIC' not in full
+                    assert str(move_root) not in full and snapshot()==before
+                    page.locator('#supportText').fill(plain+'\n사용자 검토 완료')
+                    with page.expect_download() as support_download:page.locator('#supportDownload').click()
+                    support_path=output/'sample-support.txt';support_download.value.save_as(str(support_path))
+                    assert support_path.read_text(encoding='utf-8-sig').endswith('사용자 검토 완료')
+                    page.screenshot(path=str(output/'01a-chatbot-support.png'),full_page=True)
+                    page.locator('#supportClose').click()
+                    result['support_preview_opt_in_edit_download_read_only']=True
                     expect(page.locator('#downloadHistory')).to_be_visible()
                     assert '챗봇의 도움이 필요할 때' in page.locator('#historyDownloadHint').inner_text()
                     page.locator('#historyProject').select_option(move_project['id'])
@@ -171,3 +195,4 @@ def main():
 
 
 if __name__=='__main__':main()
+

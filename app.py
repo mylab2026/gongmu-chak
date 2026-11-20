@@ -33,6 +33,7 @@ if str(APP) not in sys.path:
 import doctext  # noqa: E402
 import history_archive as run_history
 import demo_sample
+import chatbot_support
 DATA = Path(os.environ.get('LOCALAPPDATA', str(Path.home()))) / 'GongmuChakData'
 GATEWAY = 'https://api.baze.co/v1/gateway'
 INBOX = '0 정리할 문서 모음'
@@ -3901,6 +3902,19 @@ def confirm_route(plan_id,row_id):
 
 
 def dispatch(action, payload):
+    if action == '/support-report':
+        project = get_project(payload['id']) if payload.get('id') else None
+        current = None
+        if type(payload.get('includeState', False)) is not bool:
+            fail('사업 정보 포함 여부를 확인해주세요.')
+        if payload.get('includeState'):
+            if not project:fail('정보를 포함할 사업을 선택해주세요.')
+            try:current = history_summary(project['id'])['text']
+            except (OSError, ValueError):current = '현재 사업 폴더를 읽지 못했습니다. 최신 파일 위치는 확인되지 않았습니다. 누적 정리 이력 ZIP에서 과거 기록을 확인해주세요.'
+        settings = read_json(DATA / 'ai.json', {})
+        return chatbot_support.make_report(payload, project=project, current=current,
+            model=str(settings.get('model') or ''), configured=(DATA / 'api-key.dpapi').exists(),
+            secrets=(TOKEN,), roots=(str(Path.home()), str(DATA), (project or {}).get('root','')))
     if action == '/history-archive':
         return history_archive(payload['id'])
     if action == '/history-summary':
@@ -3937,7 +3951,7 @@ def dispatch(action, payload):
         return resolve_staged_contracts(payload.get('ids', []))
     if action == '/status':
         return {'model': read_json(DATA / 'ai.json', {}).get('model', ''), 'configured': (DATA / 'api-key.dpapi').exists(),
-                'projects': projects(), 'templates': TEMPLATES, 'version': '0.11.2-test', 'prefs': prefs(), 'usage': usage_summary()}
+                'projects': projects(), 'templates': TEMPLATES, 'version': '0.11.2-test', 'build': chatbot_support.BUILD, 'prefs': prefs(), 'usage': usage_summary()}
     if action == '/prefs':
         return set_prefs(payload)
     if action == '/usage':
@@ -4078,6 +4092,7 @@ class Handler(BaseHTTPRequestHandler):
         html = html.replace('<!-- FINDER_SCRIPT -->', '<script>' + finder_script + '</script>')
         html = html.replace('<!-- COLLECTION_SCRIPT -->', '<script>' + (APP / 'collection.js').read_text(encoding='utf-8') + '</script>')
         html = html.replace('<!-- REVISION_UI_SCRIPT -->', '<script>' + (APP / 'revision-ui.js').read_text(encoding='utf-8') + '</script>')
+        html = html.replace('<!-- CHATBOT_SUPPORT_SCRIPT -->', '<script>' + (APP / 'chatbot-support.js').read_text(encoding='utf-8') + '</script>')
         self.send(200, html, 'text/html; charset=utf-8')
 
     def do_POST(self):
@@ -4132,3 +4147,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

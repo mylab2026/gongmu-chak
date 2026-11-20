@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-11-20",
+  "supportBuild": "0.11.2-test / chatbot-support.1",
+  "sourceBranch": "codex/chatbot-support-handoff",
+  "baseCommit": "676606823a5425f62e3a11b7fcfea9572a29b011",
+  "releases": [],
+  "chatbotUrl": null,
+  "supportContact": null,
+  "note": "설치본 승인·업로드 후 운영자가 releases에 version, approved=true, downloadUrl 또는 실제 첨부 파일명, sha256, updatedAt을 등록합니다. 빈 목록은 설치본 배포가 승인·등록되지 않았다는 뜻입니다. GitHub 소스 ZIP을 설치 파일로 안내하지 마세요."
+}
