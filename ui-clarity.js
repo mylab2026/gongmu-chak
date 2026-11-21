@@ -1,4 +1,4 @@
-/* 화면 시인성 정리(0.11.3).
+/* 화면 시인성 정리와 화면 테마 A(업무 프로그램형).
    - 단계마다 '지금 할 일' 한 줄을 크게 보여 주고, 부가 설명은 '자세히'로 접는다.
    - 오류는 화면 맨 위가 아니라 고칠 입력칸 바로 옆에 띄우고 그 위치로 스크롤한다.
    - AI 미연결은 빨간 오류 대신 안내와 선택지(계약서 없이 진행 / AI 연결)로 보여 준다.
@@ -107,7 +107,7 @@ function renderCheckProgress(){
  const open=S.plan.rows.filter(mapNeedsCheck);open.forEach(r=>progressState.ids.add(r.id));
  const total=progressState.ids.size;if(!total)return;
  const done=total-open.length,pct=Math.round(done/total*100);
- panel.innerHTML=open.length?'<div class="check-progress"><b>경로 확인 '+done+' / '+total+'</b><span class="bar" aria-hidden="true"><i style="width:'+pct+'%"></i></span><button class="primary" id="nextCheck">다음 확인할 파일 ▶</button></div><p class="muted check-hint">'+open.length+'개 남음 · 아래 화살표와 !를 보고 경로를 확정해주세요. 맞으면 ‘맞아요’, 다르면 파일을 오른쪽 폴더로 끌어 옮기면 됩니다.</p>'
+ panel.innerHTML=open.length?'<div class="check-progress"><b>경로 확인 '+done+' / '+total+'</b><span class="bar" aria-hidden="true"><i style="width:'+pct+'%"></i></span><button class="primary" id="nextCheck">다음 확인할 파일</button></div><p class="muted check-hint">'+open.length+'개 남음 · 아래 화살표와 !를 보고 경로를 확정해주세요. 맞으면 ‘맞아요’, 다르면 파일을 오른쪽 폴더로 끌어 옮기면 됩니다.</p>'
   :'<p class="success" style="margin:0">경로 확인을 마쳤습니다 ('+total+'개). 아래 ‘파일 이동 실행’을 누르세요.</p>';
  const next=$('#nextCheck');if(next)next.onclick=()=>{const order=open.findIndex(r=>r.id===MapReview.inspection);const row=open[(order+1)%open.length]||open[0];mapFocusFile(row.id,true);
   requestAnimationFrame(()=>requestAnimationFrame(()=>{$$('[data-map-file]').find(e=>e.dataset.mapFile===row.id)?.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>revealAboveSticky($('.map-route-ok')),350);}));};
@@ -125,4 +125,133 @@ refresh=async function(...args){const result=await baseRefresh(...args);updateHo
 document.addEventListener('gongmu:ready',()=>{updateHome();});
 $('#settings').addEventListener('close',()=>{updateHome();updateContractNote();updateLead();});
 if(S.status)updateHome();
+
+/* 5. 화면 테마 A · 업무 프로그램형: 왼쪽 메뉴(작업 중인 사업·진행 단계), 아이콘, 색감.
+   기존 버튼은 새로 만들지 않고 왼쪽 메뉴로 옮겨 기능과 id를 그대로 쓴다. */
+const ICON={
+ folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+ contract:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+ tree:'<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2h12v2"/>',
+ move:'<path d="M4 8h14l-4-4M20 16H6l4 4"/>',
+ check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+ alert:'<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>',
+ ai:'<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
+ search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+ grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+ refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>',
+ home:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+ help:'<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7M12 17h.01"/>',
+ archive:'<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
+ arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+ back:'<path d="M19 12H5M11 6l-6 6 6 6"/>',
+ hold:'<circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/>',
+ building:'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>',
+ file:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+ gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'
+};
+const svg=(name,size=20)=>'<svg aria-hidden="true" width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICON[name]+'</svg>';
+const mask=name=>'url("data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICON[name]+'</svg>')+'")';
+const themeStyle=document.createElement('style');themeStyle.textContent=`
+:root{--bg:#eef2f7;--line:#d6deea;--side:#13233f;--side-2:#1b3157;--side-on:#2b4a7e;--side-ink:#c7d2e8;--side-muted:#94a3c4}
+body{display:flex;align-items:stretch;min-height:100vh;background:var(--bg)}
+body>header{display:none!important}
+body>main{flex:1 1 auto;min-width:0;width:100%;max-width:1140px;margin:24px auto;padding:0 28px 70px;box-sizing:border-box}
+#appSide{flex:0 0 248px;box-sizing:border-box;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--side);color:#fff;display:flex;flex-direction:column;gap:20px;padding:22px 14px}
+#appSide .side-brand{display:flex;align-items:center;gap:10px;padding:0 6px}
+#appSide .side-logo{display:flex;width:38px;height:38px;border-radius:10px;align-items:center;justify-content:center;background:var(--brand)}
+#appSide .side-brand b{display:block;font-size:18px;letter-spacing:-.01em}#appSide .side-brand small{display:block;font-size:12px;color:var(--side-muted)}
+#appSide .side-project{background:var(--side-2);border-radius:12px;padding:12px 14px}#appSide .side-project small{display:block;font-size:12px;color:var(--side-muted)}#appSide .side-project b{display:block;font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+#appSide .side-label{font-size:12px;color:var(--side-muted);padding:0 10px;margin-bottom:2px}
+#appSide .side-steps,#appSide .side-nav{display:flex;flex-direction:column;gap:3px}
+#appSide .side-step{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--side-muted);font-size:14px}
+#appSide .side-step span:nth-child(2){flex:1}#appSide .side-step.now{background:var(--side-on);color:#fff;font-weight:700}#appSide .side-step.done{color:#a7f3d0}#appSide .side-step .n{font-size:12px;font-weight:700}
+#appSide .side-nav button,#appSide .side-bottom button{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:9px 12px;border:0;border-radius:10px;background:transparent;color:var(--side-ink);font-size:14px;font-weight:500;text-align:left}
+#appSide .side-nav button:hover:not(:disabled),#appSide .side-bottom button:hover:not(:disabled){background:var(--side-2);color:#fff}
+#appSide .side-nav button.on{background:var(--side-on);color:#fff;font-weight:700}
+#appSide .side-bottom{margin-top:auto;display:flex;flex-direction:column;gap:4px;border-top:1px solid #ffffff1f;padding-top:12px}
+#appSide #usageBadge{color:#fcd34d}#appSide #usageBadge:not(.needs-setup){color:#a7f3d0}
+.has-ic::before{content:'';display:inline-block;flex:none;width:18px;height:18px;margin-right:8px;vertical-align:-3px;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}
+#appSide .has-ic::before{margin-right:0;width:20px;height:20px}
+.step-head{display:flex;align-items:center;gap:14px;margin:6px 0 18px}.step-head .step-ic{display:flex;flex:none;width:48px;height:48px;border-radius:12px;align-items:center;justify-content:center;background:var(--brand);color:#fff}
+.step-head h1{margin:0}.step-head #progress{margin:0}
+#home .choices button{display:flex;align-items:flex-start;gap:14px;min-height:104px;padding:18px 20px;border-radius:14px}
+#home .choices .choice-ic{display:flex;flex:none;width:48px;height:48px;border-radius:12px;align-items:center;justify-content:center;background:var(--brand-soft);color:var(--brand)}
+#home .choices .choice-tx b{font-size:17px}
+.card-title{display:flex!important;align-items:center;gap:8px}#reviewSummary{display:none}.card-title svg{color:var(--brand);flex:none}
+#homeProjects .path{position:relative;padding-left:50px}#homeProjects .path::before{content:'';position:absolute;left:16px;top:14px;width:22px;height:22px;background:var(--brand);-webkit-mask:${mask('building')} center/contain no-repeat;mask:${mask('building')} center/contain no-repeat}
+#stepStats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 16px}
+#stepStats .stat{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+#stepStats .stat-ic{display:flex;width:40px;height:40px;border-radius:10px;align-items:center;justify-content:center}
+#stepStats .stat small{display:block;font-size:13px;color:var(--ink-3)}#stepStats .stat b{display:block;font-size:22px;line-height:1.2}
+#reviewMap .map-group>span:first-child::before,#reviewMap [data-map-target]::before{content:'';display:inline-block;width:18px;height:18px;margin-right:7px;vertical-align:-3px;background:#d49a1a;-webkit-mask:${mask('folder')} center/contain no-repeat;mask:${mask('folder')} center/contain no-repeat}
+#reviewMap [data-map-file]::before{content:'';display:inline-block;width:16px;height:16px;margin-right:7px;vertical-align:-3px;background:var(--ink-3);-webkit-mask:${mask('file')} center/contain no-repeat;mask:${mask('file')} center/contain no-repeat}
+@media(max-width:900px){body{flex-direction:column}#appSide{position:static;height:auto;flex:none}#stepStats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+`;document.head.appendChild(themeStyle);
+function iconize(el,name){if(el){el.classList.add('has-ic');el.style.setProperty('--ic',mask(name));}}
+
+const version=(document.querySelector('header span')?.textContent.match(/\d+\.\d+\.\d+/)||[''])[0];
+const side=document.createElement('aside');side.id='appSide';
+side.innerHTML='<div class="side-brand"><span class="side-logo">'+svg('folder',22)+'</span><div><b>공무착착</b><small>Windows 시험판 '+esc(version)+'</small></div></div>'
+ +'<div class="side-project"><small>작업 중인 사업</small><b id="sideProject">선택 안 함</b></div>'
+ +'<div id="sideStepsWrap" hidden><div class="side-label" id="sideStepsLabel"></div><div class="side-steps" id="sideSteps" role="list"></div></div>'
+ +'<nav class="side-nav" id="sideNav" aria-label="메뉴"></nav><div class="side-bottom" id="sideBottom"></div>';
+document.body.prepend(side);
+const nav=$('#sideNav'),bottom=$('#sideBottom');
+const navButton=(id,label,icon,go)=>{const b=document.createElement('button');b.id=id;b.textContent=label;b.onclick=go;iconize(b,icon);nav.appendChild(b);return b;};
+const home=$('#homeButton');iconize(home,'home');nav.appendChild(home);
+const openFrom=id=>()=>{for(const s of ['#finder','#collection'])if($(s))$(s).hidden=true;$(id)?.click();};
+navButton('sideFind','문서 찾기','search',openFrom('#findButton'));
+navButton('sideCollect','모아보기','grid',openFrom('#collectButton'));
+const help=$('#chatbotHelp');if(help){iconize(help,'help');nav.appendChild(help);}
+const usage=$('#usageBadge');iconize(usage,'ai');bottom.appendChild(usage);
+const settings=$('#settingsButton');iconize(settings,'gear');bottom.appendChild(settings);
+
+/* 단계 제목: 아이콘 타일 + ‘n / 4 · 처음 문서 정리’ + 제목 */
+const stepHead=document.createElement('div');stepHead.className='step-head';stepHead.innerHTML='<span class="step-ic" id="stepIcon"></span><div id="stepHeadText"></div>';
+$('#heading').before(stepHead);$('#stepHeadText').append($('#progress'),$('#heading'));
+const stepIcons={folderStep:'folder',projectStep:'building',contractStep:'contract',treeStep:'tree',reviewStep:'move'};
+
+/* 버튼 아이콘: 글자가 바뀌어도 유지되도록 CSS 아이콘으로 */
+[['#bulkMove','move'],['#bulkAI','ai'],['#finishReview','check'],['#chooseRoot','folder'],['#demoRoot','grid'],['#downloadHistory','archive'],['#addContracts','contract'],
+ ['#wizardBack','back'],['#folderBack','back'],['#projectBack','back'],['#contractBack','back'],['#treeBack','back'],['#reviewBack','back'],['#homeAIConnect','ai'],['#contractAIConnect','ai'],['#nextCheck','arrow']].forEach(([sel,name])=>iconize($(sel),name));
+
+/* 시작 화면 카드·제목 아이콘 */
+const choiceIcons={initialButton:'folder',ongoingButton:'refresh',findButton:'search',collectButton:'grid'};
+$$('#home .choices button').forEach(b=>{const name=choiceIcons[b.id];if(!name||b.querySelector('.choice-ic'))return;b.innerHTML='<span class="choice-ic">'+svg(name,24)+'</span><span class="choice-tx">'+b.innerHTML+'</span>';});
+const titleIcons={'등록된 사업':'building','누적 정리 이력':'archive','폴더 구조':'tree','사업유형 선택':'tree','사업 이름':'building'};
+function titleIcon(el){if(!el||el.querySelector('svg'))return;const name=titleIcons[el.textContent.trim()];if(!name)return;el.classList.add('card-title');el.insertAdjacentHTML('afterbegin',svg(name,20));}
+$$('#home .card > h2, #treeStep .card > strong, #treeStep .card .row > strong, label[for=projectName]').forEach(titleIcon);
+
+/* 4단계 숫자 요약 */
+const stats=document.createElement('div');stats.id='stepStats';$('#lead-reviewStep').after(stats);
+function renderStats(){if(!S.plan){stats.innerHTML='';return;}const rows=S.plan.rows,done=rows.filter(r=>r.done).length,proposed=rows.filter(r=>!r.done&&r.destination).length,held=rows.filter(r=>!r.done&&!r.destination).length;
+ stats.innerHTML=[['전체 파일',rows.length,'file','#3c4a61'],['목적지 제안',proposed,'arrow','#2f5bd8'],['보류',held,'hold','#b45309'],['이동 완료',done,'check','#15803d']].map(([label,n,icon,color])=>'<div class="stat"><span class="stat-ic" style="background:'+color+'1a;color:'+color+'">'+svg(icon,20)+'</span><div><small>'+label+'</small><b>'+n+'</b></div></div>').join('');}
+const themeRenderReview=renderReview;
+renderReview=function(...args){const result=themeRenderReview(...args);if(S.plan)renderStats();iconize($('#nextCheck'),'arrow');return result;};
+
+/* 왼쪽 메뉴 상태: 작업 중인 사업, 진행 단계, 현재 화면 */
+const stepNames={initial:['폴더 선택','계약서 등록','폴더 구조','파일 이동'],initialIcons:['folder','contract','tree','move'],ongoing3:['사업 선택','계약서 추가','파일 이동'],ongoing2:['사업 선택','파일 이동'],ongoingIcons3:['building','contract','move'],ongoingIcons2:['building','move']};
+function currentProjectName(){const visible=id=>$(id)&&!$(id).hidden;
+ if(visible('#wizard'))return S.project?.name||$('#projectName').value.trim()||(S.selection?.path?String(S.selection.path).split(/[\\/]/).filter(Boolean).pop():'')||'선택 안 함';
+ const chosen=sel=>{const o=$(sel)?.selectedOptions?.[0];return o&&o.value?o.textContent:'';};
+ if(visible('#finder'))return chosen('#finderProject')||'선택 안 함';
+ if(visible('#collection'))return chosen('#collectProject')||'선택 안 함';
+ return '선택 안 함';}
+let sideQueued=false;
+function updateSide(){sideQueued=false;
+ const visible=id=>$(id)&&!$(id).hidden,inWizard=visible('#wizard');
+ $('#sideProject').textContent=currentProjectName();
+ const m=($('#progress').textContent||'').match(/(\d+)\s*\/\s*(\d+)/),wrap=$('#sideStepsWrap');
+ wrap.hidden=!(inWizard&&m);
+ if(inWizard&&m){const now=Number(m[1]),total=Number(m[2]),initial=S.mode==='initial';
+  const names=initial?stepNames.initial:total>=3?stepNames.ongoing3:stepNames.ongoing2,icons=initial?stepNames.initialIcons:total>=3?stepNames.ongoingIcons3:stepNames.ongoingIcons2;
+  $('#sideStepsLabel').textContent=initial?'처음 문서 정리':'계속 문서 정리';
+  $('#sideSteps').innerHTML=names.map((name,i)=>{const n=i+1,state=n<now?'done':n===now?'now':'idle';return '<div class="side-step '+state+'" role="listitem"'+(state==='now'?' aria-current="step"':'')+'>'+svg(icons[i],20)+'<span>'+esc(name)+'</span>'+(state==='done'?svg('check',18):'<span class="n">'+n+'</span>')+'</div>';}).join('');}
+ const section=['folderStep','projectStep','contractStep','treeStep','reviewStep'].find(id=>visible('#'+id));
+ if(section)$('#stepIcon').innerHTML=svg(stepIcons[section],26);
+ home.classList.toggle('on',visible('#home'));$('#sideFind').classList.toggle('on',visible('#finder'));$('#sideCollect').classList.toggle('on',visible('#collection'));}
+function queueSide(){if(!sideQueued){sideQueued=true;requestAnimationFrame(updateSide);}}
+new MutationObserver(queueSide).observe(document.querySelector('main'),{attributes:true,attributeFilter:['hidden'],subtree:true,childList:true,characterData:true});
+document.addEventListener('change',queueSide);document.addEventListener('input',queueSide);
+updateSide();
 })();

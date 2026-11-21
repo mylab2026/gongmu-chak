@@ -116,6 +116,9 @@ def main():
                     page.locator('#initialButton').click();expect(page.locator('#folderBack')).to_be_visible()
                     # Each step leads with one '지금 할 일' line; errors appear next to the control to fix.
                     expect(page.locator('#lead-folderStep')).to_contain_text('지금 할 일')
+                    # Theme A: a fixed left menu keeps the header buttons (same ids) and shows the step in progress.
+                    expect(page.locator('#appSide')).to_be_visible();assert page.locator('#appSide #homeButton').count()==1 and page.locator('#homeButton').count()==1
+                    expect(page.locator('#sideSteps .side-step.now')).to_contain_text('폴더 선택')
                     page.locator('#folderNext').click()
                     assert page.evaluate("(()=>{const e=$('#error');return !e.hidden&&e.classList.contains('inline')&&e.nextElementSibling?.contains($('#chooseRoot'))})()")
                     result['inline_error_next_to_field']=True
@@ -145,6 +148,9 @@ def main():
                     assert page.locator('#checkPanel').inner_text().find('아래 화살표와 !를 보고 경로를 확정해주세요')>=0
                     expect(page.locator('#checkPanel')).to_contain_text('경로 확인 0 / ')
                     expect(page.locator('#lead-reviewStep')).to_contain_text('지금 할 일')
+                    expect(page.locator('#sideSteps .side-step.now')).to_contain_text('파일 이동');expect(page.locator('#sideProject')).not_to_have_text('선택 안 함')
+                    assert page.locator('#stepStats .stat').count()==4
+                    result['theme_side_menu_and_stats']=True
                     assert page.locator('#mapSources .map-group [data-short]').count()>=1 or not page.evaluate("$$('#mapSources .map-group').some(b=>b.textContent.includes('/'))")
                     result['check_progress_and_short_paths']=True
                     assert page.locator('.map-route-ok').count()==0
