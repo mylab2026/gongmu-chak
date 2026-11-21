@@ -73,7 +73,7 @@ error=function(message,field){
  errorBox.hidden=false;errorBox.textContent=message;errorBox.classList.toggle('soft',/AI 연결을 먼저 설정/.test(message));
  if(!target){restoreErrorBox();errorBox.scrollIntoView({behavior:'smooth',block:'center'});if(field)$(field)?.focus?.();return;}
  const control=/^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName);
- target.before(errorBox);errorBox.classList.add('inline');target.classList.add('field-invalid');
+ const row=target.parentElement?.classList.contains('row')?target.parentElement:null;(row||target).before(errorBox);errorBox.classList.add('inline');target.classList.add('field-invalid');
  target.scrollIntoView({behavior:'smooth',block:'center'});
  if(control)target.focus();else target.querySelector('input,select,button')?.focus({preventScroll:true});
 };

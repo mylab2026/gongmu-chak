@@ -117,7 +117,7 @@ def main():
                     # Each step leads with one '지금 할 일' line; errors appear next to the control to fix.
                     expect(page.locator('#lead-folderStep')).to_contain_text('지금 할 일')
                     page.locator('#folderNext').click()
-                    assert page.evaluate("(()=>{const e=$('#error');return !e.hidden&&e.classList.contains('inline')&&e.nextElementSibling===$('#chooseRoot')})()")
+                    assert page.evaluate("(()=>{const e=$('#error');return !e.hidden&&e.classList.contains('inline')&&e.nextElementSibling?.contains($('#chooseRoot'))})()")
                     result['inline_error_next_to_field']=True
                     page.locator('#wizardBack').click();expect(page.locator('#home')).to_be_visible()
                     page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
