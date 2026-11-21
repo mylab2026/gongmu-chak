@@ -1,0 +1,512 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>공무착착 문서트리 Builder FINAL</title>
+<style>
+:root{--bg:#f5f7fb;--line:#d9e0ea;--text:#202939;--muted:#697586;--blue:#356ae6;--bluebg:#edf3ff;--green:#17875d;--memo:#fff7df;--gray:#f8fafc}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Arial,'Noto Sans KR',sans-serif;color:var(--text)}button{font:inherit;cursor:pointer}.wrap{max-width:1280px;margin:24px auto;padding:0 18px 60px}.head h1{margin:0;font-size:26px}.head p{color:var(--muted);font-size:14px;line-height:1.55;margin:7px 0 18px}.grid{display:grid;grid-template-columns:310px 1fr;gap:16px}.side,.main{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 3px 12px #0000000a}.side{padding:16px;height:max-content;position:sticky;top:12px}.main{padding:18px}.type{width:100%;text-align:left;padding:12px;border:1px solid var(--line);background:#fff;border-radius:11px;margin-bottom:9px}.type.on{border-color:var(--blue);background:var(--bluebg)}.type b{display:block;margin-bottom:4px}.type small{color:var(--muted);line-height:1.4}.legend{font-size:12px;line-height:1.65;color:#596579;border-top:1px solid var(--line);margin-top:14px;padding-top:12px}.actions{display:grid;gap:8px;margin-top:14px}.actions button{padding:10px;border:1px solid var(--line);background:#fff;border-radius:9px}.actions .primary{background:var(--blue);color:#fff;border-color:var(--blue)}.actiondesc{font-size:11px;color:var(--muted);line-height:1.45;margin:-3px 3px 6px}.title{font-size:21px;font-weight:700}.desc{font-size:13px;color:var(--muted);margin:5px 0 15px}.l1{border:1px solid var(--line);border-radius:13px;overflow:hidden;margin-bottom:10px}.l1h{font-weight:700;padding:12px 14px;background:var(--gray)}.l2{border-top:1px solid #edf0f4}.row{display:flex;align-items:center;gap:9px;padding:10px 14px}.row.off,.node.off{opacity:.42}.check{width:23px;height:23px;border:1px solid #ccd4df;border-radius:6px;background:#fff;display:inline-flex;align-items:center;justify-content:center;flex:0 0 23px}.check.on{background:var(--blue);color:#fff;border-color:var(--blue)}.exp{border:0;background:transparent;color:#65758b;font-size:13px;padding:0 2px}.name{flex:1;font-weight:600}.tag{font-size:11px;color:var(--green);background:#eaf8f2;padding:3px 7px;border-radius:10px}.children{display:none;padding:3px 14px 12px 47px}.children.open{display:block}.node{font-size:13px;padding:4px 0}.node-row{display:flex;align-items:flex-start;gap:8px;padding:2px 0}.node .check{width:20px;height:20px;flex-basis:20px;font-size:12px}.node-label{flex:1;padding-top:2px}.indent{border-left:1px solid #dce3ec;margin-left:10px;padding-left:15px}.memo{font-size:11px;color:#755a13;background:var(--memo);border-radius:6px;padding:4px 7px;margin:3px 0 4px 28px;display:inline-block}.contractbox{margin:0 14px 11px 47px;padding:10px;background:#f9fbff;border:1px solid #e4eaf4;border-radius:9px}.contractinput{display:flex;gap:7px;flex-wrap:wrap}.contractinput input{padding:9px;border:1px solid var(--line);border-radius:8px;min-width:610px;flex:1 1 610px;max-width:100%}.contractinput button{padding:8px 11px;border:1px solid var(--line);background:#fff;border-radius:8px}.hint{font-size:11px;color:var(--muted);margin-top:5px}.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;background:#edf3ff;border:1px solid #cddcff;border-radius:16px;font-size:12px}.chip button{border:0;background:transparent;color:#6b7480;font-size:12px;padding:0}.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#17202d;color:#fff;padding:10px 15px;border-radius:9px;display:none;z-index:50}
+@media(max-width:880px){.grid{grid-template-columns:1fr}.side{position:static}.contractinput input{min-width:0;flex-basis:100%}}
+
+.quick-guide{background:#fff;border:1px solid #d9e0ea;border-radius:16px;padding:18px 20px;margin:18px 0 18px;box-shadow:0 3px 12px #0000000a}
+.guide-title{font-size:19px;font-weight:700;text-align:center;margin-bottom:14px}
+.guide-flow{display:flex;align-items:stretch;justify-content:center;gap:10px}
+.guide-step{flex:1;min-width:0;border:1px solid #e1e6ee;border-radius:12px;padding:12px 13px;display:grid;grid-template-columns:32px 1fr;column-gap:9px;align-items:center}
+.guide-step span{grid-row:1/3;width:30px;height:30px;border-radius:50%;background:#356ae6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.guide-step b{font-size:14px}.guide-step small{font-size:11px;color:#697586;margin-top:3px;line-height:1.35}
+.guide-arrow{display:flex;align-items:center;font-size:23px;color:#8b98aa}
+.guide-note{margin-top:13px;padding:10px 12px;background:#f3f6ff;border-radius:9px;text-align:center;font-size:12px;color:#46556b;line-height:1.5}
+@media(max-width:850px){.guide-flow{display:grid}.guide-arrow{justify-content:center;transform:rotate(90deg)}}
+
+
+
+.contract-module{margin-top:9px;border:1px solid #d9e0ea;border-radius:9px;padding:8px;background:#fbfcfe}
+.contract-module-head{display:flex;align-items:center;gap:7px}
+.contract-module-head input{flex:1;padding:7px;border:1px solid #d9e0ea;border-radius:7px}
+.add-contract{margin-top:8px;padding:7px 10px;border:1px dashed #9eb5d6;border-radius:7px;background:#f6f9ff}
+.remove-contract{padding:6px 8px;border:1px solid #e0b3b3;border-radius:7px;background:#fff}
+
+.contractinput button{padding:8px 12px;border:1px solid #356ae6;border-radius:8px;background:#356ae6;color:#fff;white-space:nowrap}
+
+.handoff-callout{margin-top:14px;border:2px solid #356ae6;background:#f2f6ff;border-radius:13px;padding:15px 18px;text-align:center;box-shadow:0 4px 12px #356ae61a}
+.handoff-badge{display:inline-block;background:#356ae6;color:#fff;font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;margin-bottom:7px}
+.handoff-title{font-size:17px;font-weight:800;color:#20345d;margin-bottom:6px}
+.handoff-text{font-size:13px;line-height:1.5}
+.handoff-flow{display:flex;justify-content:center;align-items:center;gap:9px;flex-wrap:wrap;margin:11px 0 8px;font-size:12px}
+.handoff-flow span{background:#fff;border:1px solid #cbd8f2;border-radius:8px;padding:7px 9px;font-weight:600}
+.handoff-flow b{color:#356ae6;font-size:16px}
+.handoff-sub{font-size:11px;color:#596579;line-height:1.5}
+.side-step{font-size:11px;font-weight:800;color:#356ae6;text-align:center;margin:5px 0 -2px}
+.handoff-button{font-size:14px!important;font-weight:800!important;padding:13px 10px!important;box-shadow:0 3px 10px #356ae633}
+@media(max-width:850px){.handoff-flow{display:grid}.handoff-flow b{transform:rotate(90deg)}}
+
+.contract-separator-label{font-size:11px;font-weight:800;color:#5d6b7e;margin:7px 0 6px}
+.base-contract,.extra-contract{margin-bottom:10px}
+.base-contract{border-left:4px solid #356ae6}
+.extra-contract{border-left:4px solid #6f8f7a}
+.contract-module-head b{min-width:28px;font-size:14px}
+.contract-confirm{padding:7px 10px;border:1px solid #356ae6;border-radius:7px;background:#356ae6;color:#fff}
+
+.type-section-title{margin:0 0 10px;padding:12px 13px;border-radius:12px;background:#eef4ff;border:1px solid #cfdcf7}
+.type-section-title span{display:inline-block;margin-right:7px;padding:3px 7px;border-radius:999px;background:#356ae6;color:#fff;font-size:10px;font-weight:800}
+.type-section-title b{display:inline-block;font-size:14px;color:#20345d}
+.type-section-title small{display:block;margin-top:6px;font-size:11px;line-height:1.45;color:#637087}
+.type{width:100%;text-align:left;border:1px solid #d7dfeb;background:#fff;border-radius:12px;padding:13px 14px;margin-bottom:9px;cursor:pointer;transition:.15s ease}
+.type:hover{border-color:#9eb5df;background:#f8fbff;transform:translateY(-1px)}
+.type.on{border:2px solid #356ae6;background:#eef4ff;box-shadow:0 3px 12px #356ae622}
+.type-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.type b{font-size:15px;color:#22324a}
+.type small{display:block;margin-top:5px;font-size:11px;line-height:1.45;color:#657286}
+.selected-badge{flex:0 0 auto;padding:3px 7px;border-radius:999px;background:#356ae6;color:#fff;font-size:10px;font-weight:800}
+.autosave-badge{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:999px;background:#eaf8f2;color:#2f7656;font-size:10px;font-weight:800}
+
+:root{
+  --step1:#c94b4b;
+  --step1-soft:#fff2f2;
+  --step2:#4f78c8;
+  --step2-soft:#f3f6fb;
+  --step-muted:#d7dde6;
+}
+.side{position:relative}
+.step1-panel{border:2px solid var(--step-muted);border-radius:16px;padding:12px;background:#fafbfc;transition:.18s ease;box-shadow:none}
+.step1-panel.active{border-color:var(--step1);background:var(--step1-soft);box-shadow:0 4px 16px rgba(201,75,75,.12)}
+.type-section-title{background:transparent!important;border:0!important;padding:0 0 10px!important;margin:0!important}
+.type-section-title span{background:var(--step1)!important}
+.type-section-title b{color:#6f2929!important}
+.type.on{border-color:var(--step1)!important;background:#fff7f7!important;box-shadow:0 3px 12px rgba(201,75,75,.15)!important}
+.selected-badge{background:var(--step1)!important}
+.step2-panel{border:2px solid var(--step-muted);border-radius:16px;padding:14px;background:#fafbfc;transition:.18s ease}
+.step2-panel.active{border-color:var(--step2);background:#f8fbff;box-shadow:0 4px 16px rgba(79,120,200,.12)}
+.step2-heading{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.step2-heading .badge{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--step2);color:#fff;font-size:10px;font-weight:800}
+.step2-heading b{font-size:14px;color:#294a82}
+.step2-heading small{margin-left:auto;font-size:11px;color:#7a8595}
+.step2-panel:not(.active){opacity:.72}
+
+
+/* FINAL15: step color system */
+:root{
+  --step1:#c84a4a;
+  --step1-soft:#fff4f4;
+  --step2:#3f6fc5;
+  --step2-soft:#f3f7ff;
+  --step3:#2f8b63;
+  --step3-soft:#f1faf5;
+}
+
+/* Top horizontal 3-step guide */
+.guide-step1{border:2px solid var(--step1);background:var(--step1-soft)}
+.guide-step1 span{background:var(--step1)}
+.guide-step1 b{color:#7d2d2d}
+
+.guide-step2{border:2px solid var(--step2);background:var(--step2-soft)}
+.guide-step2 span{background:var(--step2)}
+.guide-step2 b{color:#294f8f}
+
+.guide-step3{border:2px solid var(--step3);background:var(--step3-soft)}
+.guide-step3 span{background:var(--step3)}
+.guide-step3 b{color:#23694b}
+
+/* STEP 1 detailed area */
+.step1-panel{border-color:var(--step1)!important;background:var(--step1-soft)!important}
+.step1-panel.active{border-color:var(--step1)!important;background:var(--step1-soft)!important;box-shadow:0 4px 16px rgba(200,74,74,.12)!important}
+.type-section-title span{background:var(--step1)!important}
+.type-section-title b{color:#7d2d2d!important}
+.type.on{border-color:var(--step1)!important;background:#fff8f8!important;box-shadow:0 3px 12px rgba(200,74,74,.15)!important}
+.selected-badge{background:var(--step1)!important}
+
+/* STEP 2 detailed area */
+.step2-panel{border-color:var(--step2)!important;background:var(--step2-soft)!important;opacity:1!important}
+.step2-panel.active{border-color:var(--step2)!important;background:var(--step2-soft)!important;box-shadow:0 4px 16px rgba(63,111,197,.12)!important}
+.step2-heading .badge{background:var(--step2)!important}
+.step2-heading b{color:#294f8f!important}
+
+/* STEP 3 detailed area + actual copy button */
+.handoff-callout{border-color:var(--step3)!important;background:var(--step3-soft)!important;box-shadow:0 4px 12px rgba(47,139,99,.13)!important}
+.handoff-badge{background:var(--step3)!important}
+.handoff-title{color:#23694b!important}
+.handoff-flow span{border-color:#b9dfcb!important}
+.handoff-flow b{color:var(--step3)!important}
+.side-step{color:var(--step3)!important}
+.handoff-button{background:var(--step3)!important;border-color:var(--step3)!important;box-shadow:0 3px 10px rgba(47,139,99,.25)!important}
+
+
+/* FINAL16 layout alignment */
+.quick-guide{margin-bottom:18px}
+.grid{align-items:start}
+.side{display:flex;flex-direction:column;gap:12px}
+.step1-panel{order:1}
+.actions{order:2;margin-top:0}
+.actions .reset-block{margin-bottom:14px}
+.copy-stage{border-top:1px solid #e3e8ef;padding-top:12px;margin-top:4px}
+.copy-stage .side-step{margin:0 0 8px;font-size:11px;font-weight:800;color:var(--step3)!important;text-align:center}
+.copy-stage .handoff-button{width:100%;display:block}
+.copy-stage .actiondesc{margin-top:7px;line-height:1.45}
+.main{min-width:0}
+.step2-panel{min-height:100%}
+@media(max-width:880px){
+  .side{gap:10px}
+  .copy-stage{padding-top:10px}
+}
+
+
+/* FINAL17: STEP3 detailed guide under left copy action */
+.copy-stage .handoff-callout{margin:12px 0 0;padding:13px 11px;border-radius:11px}
+.copy-stage .handoff-title{font-size:14px;margin-bottom:5px}
+.copy-stage .handoff-text{font-size:11px;line-height:1.45}
+.copy-stage .handoff-flow{display:grid;grid-template-columns:1fr;gap:5px;margin:9px 0 7px}
+.copy-stage .handoff-flow b{transform:rotate(90deg);line-height:10px}
+.copy-stage .handoff-flow span{font-size:10px;padding:6px 7px}
+.copy-stage .handoff-sub{font-size:10px;line-height:1.45}
+
+/* FINAL19: collapsible top-level stages */
+.l1h.l1-toggle{width:100%;display:flex;align-items:center;gap:8px;border:0;text-align:left;cursor:pointer}
+.l1-arrow{display:inline-flex;width:18px;justify-content:center;font-size:12px;color:#58677d}
+.l1-body{display:none}
+.l1-body.open{display:block}
+.l1-toggle:hover{filter:brightness(.985)}
+
+/* FINAL20: hierarchy 2/3 collapse-expand */
+.l3-children{display:none}
+.l3-children.open{display:block}
+.node-row .exp{flex:0 0 18px}
+</style></head><body><div class="wrap"><div class="head"><h1>공무착착 문서트리 Builder <small style="font-size:12px;color:#778">FINAL · VER.4(2)</small></h1><p>사업유형을 선택한 뒤 실제 사업과 다른 부분만 조정하세요. 위계2~4를 선택·해제할 수 있고, 계약·용역·관급자재 항목은 실제 명칭을 입력할 수 있습니다.</p></div>
+<div class="quick-guide">
+  <div class="guide-title">사업 문서트리 구성은 3단계면 충분합니다</div>
+  <div class="guide-flow">
+    <div class="guide-step guide-step1"><span>1</span><b>사업유형 선택 (STEP 1)</b><small>사업에 가장 가까운 기본형 선택</small></div>
+    <div class="guide-arrow">→</div>
+    <div class="guide-step guide-step2"><span>2</span><b>필요한 폴더 선택 (STEP 2)</b><small>필요한 항목만 남기고 구성</small></div>
+    <div class="guide-arrow">→</div>
+    <div class="guide-step guide-step3"><span>3</span><b>구성 · 복사 붙여넣기 (STEP 3)</b><small>복사 후 공무착착에서 빈 폴더 파일 받기</small></div>
+  </div>
+  
+</div>
+
+<div class="grid"><aside class="side">
+<div id="step1Panel" class="step1-panel active"><div id="types"></div></div>
+<div class="actions">
+  <div class="reset-block">
+    <button onclick="resetTemplate()">기본형 복원</button>
+    <div class="actiondesc">현재 수정 내용을 취소하고 선택한 사업유형의 원래 표준 템플릿으로 되돌립니다.</div>
+  </div>
+  <div class="copy-stage">
+    <div class="side-step">STEP 3 · 구성이 끝나면 여기!</div>
+    <button class="primary handoff-button" onclick="copyForChatbot()">📋 공무착착에 전달할 구성 복사</button>
+    <div class="actiondesc">이 버튼을 누른 뒤 원래 챗봇 창으로 돌아가 붙여넣기(Ctrl+V) 하세요. 빈 폴더 생성으로 이어집니다.</div><div class="handoff-callout">
+  <div class="handoff-badge">STEP 3</div>
+  <div class="handoff-title">폴더 선택이 끝났다고 완료가 아닙니다!</div>
+  <div class="handoff-text">화면 왼쪽 아래의 <b>「공무착착에 전달할 구성 복사」</b> 버튼을 꼭 눌러주세요.</div>
+  <div class="handoff-flow"><span>① 구성 복사 버튼 클릭</span><b>→</b><span>② 원래 챗봇 창으로 돌아가기</span><b>→</b><span>③ 붙여넣기(Ctrl+V)</span></div>
+  <div class="handoff-sub">여기서 <b>공무착착</b>은 지금 대화하던 <b>원래 챗봇</b>을 뜻합니다. 붙여넣으면 챗봇이 선택한 구조로 빈 폴더 생성 파일을 만들어 줍니다.</div>
+</div>
+  </div>
+</div>
+</aside><main class="main"><div id="step2Panel" class="step2-panel"><div class="step2-heading"><span class="badge">STEP 2</span><b>필요한 폴더 선택</b><small>체크/해제하여 사업별 구조를 구성합니다.</small></div><div id="title" class="title"></div><div id="desc" class="desc"></div><div id="tree"></div></div></main></div></div><div id="toast" class="toast"></div>
+<script>const T={"planning": {"name": "기획·설계형", "desc": "기획단계부터 수행하고 설계용역을 포함하는 사업", "source": "ver.4 챗봇용(기획설계형)", "tree": [{"id": "1 공통", "label": "1 공통", "level": 1, "children": [{"id": "1 공통 > 11 예산관리", "label": "11 예산관리", "level": 2, "children": [{"id": "1 공통 > 11 예산관리 > 1101 예산 수립 및 변경 이력", "label": "1101 예산 수립 및 변경 이력", "level": 3, "children": [], "memo": ["사업비 확정 및 증감 과정 관리"], "hint": ""}, {"id": "1 공통 > 11 예산관리 > 1102 연도별 예산 지출 현황", "label": "1102 연도별 예산 지출 현황", "level": 3, "children": [], "memo": ["회계연도별 실제 집행 내역 (ex 25년, 26년, 27년)"], "hint": ""}], "memo": [], "hint": ""}, {"id": "1 공통 > 12 주요 보고자료", "label": "12 주요 보고자료", "level": 2, "children": [], "memo": [], "hint": "내부보고 자료"}, {"id": "1 공통 > 13 타기관 협의자료", "label": "13 타기관 협의자료", "level": 2, "children": [], "memo": [], "hint": "공문, 공지, 민원 등"}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상", "label": "2 기획 및 기본구상", "level": 1, "children": [{"id": "2 기획 및 기본구상 > 21 사업계획", "label": "21 사업계획", "level": 2, "children": [{"id": "2 기획 및 기본구상 > 21 사업계획 > 2101 최초 사업계획서", "label": "2101 최초 사업계획서", "level": 3, "children": [], "memo": ["예산 확보 및 추진 승인 서류"], "hint": ""}, {"id": "2 기획 및 기본구상 > 21 사업계획 > 2102 기획설계 도서", "label": "2102 기획설계 도서", "level": 3, "children": [], "memo": ["Space Program, 배치안, 기본 컨셉 등"], "hint": ""}, {"id": "2 기획 및 기본구상 > 21 사업계획 > 2103 교육시방서 및 과업지시서", "label": "2103 교육시방서 및 과업지시서", "level": 3, "children": [], "memo": ["사용자 요구사항, 교육시설 특수조건 및 지침"], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보", "label": "22 공사 전 건물 정보", "level": 2, "children": [{"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2201 건축물대장", "label": "2201 건축물대장", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2202 기존도면", "label": "2202 기존도면", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2203 석면조사 보고서", "label": "2203 석면조사 보고서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2204 내진성능 평가 보고서", "label": "2204 내진성능 평가 보고서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2205 안전 점검 및 진단보고서", "label": "2205 안전 점검 및 진단보고서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2206 지반조사보고서", "label": "2206 지반조사보고서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 22 공사 전 건물 정보 > 2207 현황사진 및 실측자료", "label": "2207 현황사진 및 실측자료", "level": 3, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 23 각종 위원회 및 회의 자료", "label": "23 각종 위원회 및 회의 자료", "level": 2, "children": [{"id": "2 기획 및 기본구상 > 23 각종 위원회 및 회의 자료 > 2301 기획위원회", "label": "2301 기획위원회", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 23 각종 위원회 및 회의 자료 > 2302 캠퍼스 위원회", "label": "2302 캠퍼스 위원회", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 23 각종 위원회 및 회의 자료 > 2303 기타회의", "label": "2303 기타회의", "level": 3, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1", "label": "24 용역1", "level": 2, "children": [{"id": "2 기획 및 기본구상 > 24 용역1 > 2401 최초 품의 및 최초 계약서", "label": "2401 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "2 기획 및 기본구상 > 24 용역1 > 2401 최초 품의 및 최초 계약서 > 2401-1 품의서", "label": "2401-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2401 최초 품의 및 최초 계약서 > 2401-2 계약서", "label": "2401-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2402 용역사에 제공 한 자료", "label": "2402 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2403 착수계", "label": "2403 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2404 지출서류", "label": "2404 지출서류", "level": 3, "children": [{"id": "2 기획 및 기본구상 > 24 용역1 > 2404 지출서류 > 2404-1 선금", "label": "2404-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2404 지출서류 > 2404-2 노무비", "label": "2404-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2404 지출서류 > 2404-3 기성", "label": "2404-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2405 회의 및 협의기록", "label": "2405 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의, 설계공모 운영 용역의 경우(공모참자가 제공자료, 홍도 동영상, 현장설명자료, 질의회신자료, 참가등록자료, 접수작풉자료, 심사 자료 등)"], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2406 설계변경", "label": "2406 설계변경", "level": 3, "children": [{"id": "2 기획 및 기본구상 > 24 용역1 > 2406 설계변경 > 2406-1 1차 설계변경", "label": "2406-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2406 설계변경 > 2406-1 2차 설계변경", "label": "2406-1 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2407 완수계", "label": "2407 완수계", "level": 3, "children": [{"id": "2 기획 및 기본구상 > 24 용역1 > 2407 완수계 > 2407-1 완수계 공문 및 검사 조서", "label": "2407-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2407 완수계 > 2407-2 최종 성과품", "label": "2407-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2408 기타공문", "label": "2408 기타공문", "level": 3, "children": [{"id": "2 기획 및 기본구상 > 24 용역1 > 2408 기타공문 > 2408-1 수신", "label": "2408-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "2 기획 및 기본구상 > 24 용역1 > 2408 기타공문 > 2408-2 발신", "label": "2408-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": "설계공모 운영용역, 안전보건 대장 관련 용역 등"}], "memo": [], "hint": ""}, {"id": "3 설계단계", "label": "3 설계단계", "level": 1, "children": [{"id": "3 설계단계 > 31 설계 용역", "label": "31 설계 용역", "level": 2, "children": [{"id": "3 설계단계 > 31 설계 용역 > 3101 최초 품의 및 최초 계약서", "label": "3101 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 설계단계 > 31 설계 용역 > 3101 최초 품의 및 최초 계약서 > 3101-1 품의서", "label": "3101-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3101 최초 품의 및 최초 계약서 > 3101-2 계약서", "label": "3101-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3102 용역사에 제공 한 자료", "label": "3102 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3103 착수계", "label": "3103 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3104 지출서류", "label": "3104 지출서류", "level": 3, "children": [{"id": "3 설계단계 > 31 설계 용역 > 3104 지출서류 > 3104-1 선금", "label": "3104-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3104 지출서류 > 3104-2 노무비", "label": "3104-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3104 지출서류 > 3104-3 기성", "label": "3104-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3105 회의 및 협의기록", "label": "3105 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의"], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3106 설계변경", "label": "3106 설계변경", "level": 3, "children": [{"id": "3 설계단계 > 31 설계 용역 > 3106 설계변경 > 3106-1 1차 설계변경", "label": "3106-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3106 설계변경 > 3106-2 2차 설계변경", "label": "3106-2 2차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3107 완수계", "label": "3107 완수계", "level": 3, "children": [{"id": "3 설계단계 > 31 설계 용역 > 3107 완수계 > 3107-1 완수계 공문 및 검사 조서", "label": "3107-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3107 완수계 > 3107-2 최종 성과품", "label": "3107-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3108 기타공문", "label": "3108 기타공문", "level": 3, "children": [{"id": "3 설계단계 > 31 설계 용역 > 3108 기타공문 > 3108-1 수신", "label": "3108-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 31 설계 용역 > 3108 기타공문 > 3108-2 발신", "label": "3108-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": "안전보건 대장 관련 용역 등"}, {"id": "3 설계단계 > 32 용역1", "label": "32 용역1", "level": 2, "children": [{"id": "3 설계단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서", "label": "3201 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 설계단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서 > 3201-1 품의서", "label": "3201-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서 > 3201-2 계약서", "label": "3201-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3202 용역사에 제공 한 자료", "label": "3202 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3203 착수계", "label": "3203 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3204 지출서류", "label": "3204 지출서류", "level": 3, "children": [{"id": "3 설계단계 > 32 용역1 > 3204 지출서류 > 3204-1 선금", "label": "3204-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3204 지출서류 > 3204-2 노무비", "label": "3204-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3204 지출서류 > 3204-3 기성", "label": "3204-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3205 회의 및 협의기록", "label": "3205 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의"], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3206 설계변경", "label": "3206 설계변경", "level": 3, "children": [{"id": "3 설계단계 > 32 용역1 > 3206 설계변경 > 3206-1 1차 설계변경", "label": "3206-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3206 설계변경 > 3206-2 2차 설계변경", "label": "3206-2 2차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3207 완수계", "label": "3207 완수계", "level": 3, "children": [{"id": "3 설계단계 > 32 용역1 > 3207 완수계 > 3207-1 완수계 공문 및 검사 조서", "label": "3207-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3207 완수계 > 3207-2 최종 성과품", "label": "3207-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3208 기타공문", "label": "3208 기타공문", "level": 3, "children": [{"id": "3 설계단계 > 32 용역1 > 3208 기타공문 > 3208-1 수신", "label": "3208-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 설계단계 > 32 용역1 > 3208 기타공문 > 3208-2 발신", "label": "3208-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": "DFS 용역, 설계VE 용역 등"}], "memo": [], "hint": ""}, {"id": "4 시공단계", "label": "4 시공단계", "level": 1, "children": [{"id": "4 시공단계 > 41 도급공사", "label": "41 도급공사", "level": 2, "children": [{"id": "4 시공단계 > 41 도급공사 > 4101 최초 품의 및 최초 계약서", "label": "4101 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "4 시공단계 > 41 도급공사 > 4101 최초 품의 및 최초 계약서 > 4101-1 품의서", "label": "4101-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4101 최초 품의 및 최초 계약서 > 4101-2 계약서", "label": "4101-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4102 시공사에 제공 한 자료", "label": "4102 시공사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4103 착공계", "label": "4103 착공계", "level": 3, "children": [], "memo": ["현장 조직도, 선임계, 종합가설계획, 예정공정표, 계약내역서, 직접시공계획서, 신고필증 등"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4104 지출서류", "label": "4104 지출서류", "level": 3, "children": [{"id": "4 시공단계 > 41 도급공사 > 4104 지출서류 > 4104-1 선금", "label": "4104-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4104 지출서류 > 4104-2 노무비", "label": "4104-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4104 지출서류 > 4104-3 기성", "label": "4104-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4105 회의 및 협의기록", "label": "4105 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의 및 시공사 협의 자료, 현황보고"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4106 설계변경", "label": "4106 설계변경", "level": 3, "children": [{"id": "4 시공단계 > 41 도급공사 > 4106 설계변경 > 4106-1 1차 설계변경", "label": "4106-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4106 설계변경 > 4106-2 2차 설계변경", "label": "4106-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4107 하도급 통보", "label": "4107 하도급 통보", "level": 3, "children": [], "memo": ["통보 공문, 검토의견"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4108 승인요청", "label": "4108 승인요청", "level": 3, "children": [], "memo": ["자재공급원, 시공계획서, 안전관리계획서, 샵드로잉 등"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4109 안전관리비 사용 현황", "label": "4109 안전관리비 사용 현황", "level": 3, "children": [], "memo": ["산업안전보건관리비 사용 내역"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4110 사진", "label": "4110 사진", "level": 3, "children": [{"id": "4 시공단계 > 41 도급공사 > 4110 사진 > 4110-1 공사전", "label": "4110-1 공사전", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4110 사진 > 4110-2 공사중", "label": "4110-2 공사중", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4110 사진 > 4110-3 공사후", "label": "4110-3 공사후", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4111 준공계", "label": "4111 준공계", "level": 3, "children": [], "memo": ["준공계 공문 및 검사 조서, 준공도서, 보험료 증빙자료, 폐기물 증빙자료, 각종 합의서, 하자보증서, 사진대지 등"], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4112 준공정산", "label": "4112 준공정산", "level": 3, "children": [{"id": "4 시공단계 > 41 도급공사 > 4112 준공정산 > 4112-1 품의서", "label": "4112-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4112 준공정산 > 4112-2 계약서", "label": "4112-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4113 기타공문", "label": "4113 기타공문", "level": 3, "children": [{"id": "4 시공단계 > 41 도급공사 > 4113 기타공문 > 4113-1 수신", "label": "4113-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 41 도급공사 > 4113 기타공문 > 4113-2 발신", "label": "4113-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["\"착공계, 준공계, 기성, 설계변경, 안전관리비, 하도급 통보\" 제외한 공문"], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1", "label": "42 용역1", "level": 2, "children": [{"id": "4 시공단계 > 42 용역1 > 4201 최초 품의 및 최초 계약서", "label": "4201 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "4 시공단계 > 42 용역1 > 4201 최초 품의 및 최초 계약서 > 4201-1 품의서", "label": "4201-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4201 최초 품의 및 최초 계약서 > 4201-2 계약서", "label": "4201-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4202 용역사에 제공 한 자료", "label": "4202 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4203 착수계", "label": "4203 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4204 지출서류", "label": "4204 지출서류", "level": 3, "children": [{"id": "4 시공단계 > 42 용역1 > 4204 지출서류 > 4204-1 선금", "label": "4204-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4204 지출서류 > 4204-2 노무비", "label": "4204-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4204 지출서류 > 4204-3 기성", "label": "4204-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4205 회의 및 협의기록", "label": "4205 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의"], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4206 설계변경", "label": "4206 설계변경", "level": 3, "children": [{"id": "4 시공단계 > 42 용역1 > 4206 설계변경 > 4206-1 1차 설계변경", "label": "4206-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4206 설계변경 > 4206-2 2차 설계변경", "label": "4206-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4207 완수계", "label": "4207 완수계", "level": 3, "children": [{"id": "4 시공단계 > 42 용역1 > 4207 완수계 > 4207-1 완수계 공문 및 검사 조서", "label": "4207-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4207 완수계 > 4207-2 최종 성과품", "label": "4207-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4208 기타공문", "label": "4208 기타공문", "level": 3, "children": [{"id": "4 시공단계 > 42 용역1 > 4208 기타공문 > 4208-1 수신", "label": "4208-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 42 용역1 > 4208 기타공문 > 4208-2 발신", "label": "4208-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": "기술지도, 감리, 건설사업관리, 폐기물처리 용역 등"}, {"id": "4 시공단계 > 43 관급자재 1", "label": "43 관급자재 1", "level": 2, "children": [{"id": "4 시공단계 > 43 관급자재 1 > 4301 최초 품의 및 최초 계약서", "label": "4301 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "4 시공단계 > 43 관급자재 1 > 4301 최초 품의 및 최초 계약서 > 4301-1 품의서", "label": "4301-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4301 최초 품의 및 최초 계약서 > 4301-2 계약서", "label": "4301-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4302 납품사에 제공 한 자료", "label": "4302 납품사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4303 착수계", "label": "4303 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4304 지출서류", "label": "4304 지출서류", "level": 3, "children": [{"id": "4 시공단계 > 43 관급자재 1 > 4304 지출서류 > 4304-1 선금", "label": "4304-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4304 지출서류 > 4304-2 노무비", "label": "4304-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4304 지출서류 > 4304-3 기성", "label": "4304-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4305 회의 및 협의기록", "label": "4305 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의 및 시공사 협의 자료"], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4306 설계변경", "label": "4306 설계변경", "level": 3, "children": [{"id": "4 시공단계 > 43 관급자재 1 > 4306 설계변경 > 4306-1 1차 설계변경", "label": "4306-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4306 설계변경 > 4306-2 2차 설계변경", "label": "4306-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4307 완수계", "label": "4307 완수계", "level": 3, "children": [], "memo": ["완수계 공문, 최종 납품내역서, 검사 조서"], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4308 기타공문", "label": "4308 기타공문", "level": 3, "children": [{"id": "4 시공단계 > 43 관급자재 1 > 4308 기타공문 > 4308-1 수신", "label": "4308-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 시공단계 > 43 관급자재 1 > 4308 기타공문 > 4308-2 발신", "label": "4308-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관)", "label": "5 인수인계(시설지원과 → 사용기관)", "level": 1, "children": [{"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서", "label": "51 인수인계 도서", "level": 2, "children": [{"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5101 인수인계 확인서", "label": "5101 인수인계 확인서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5102 도서", "label": "5102 도서", "level": 3, "children": [{"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5102 도서 > 5102-1 공사 도서", "label": "5102-1 공사 도서", "level": 4, "children": [], "memo": ["각 공종 도면, 건물개요, 주요자재 리스트, 건축물 관리계획서"], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5102 도서 > 5102-2 인허가도서", "label": "5102-2 인허가도서", "level": 4, "children": [], "memo": ["각 공종 도면, 필증, 인증서, 사용승인서, 건축물 대장"], "hint": ""}], "memo": [], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5103 사진", "label": "5103 사진", "level": 3, "children": [{"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5103 사진 > 5103-1 공사 완료 사진", "label": "5103-1 공사 완료 사진", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 51 인수인계 도서 > 5103 사진 > 5103-2 유지보수 자재 사진", "label": "5103-2 유지보수 자재 사진", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 52 사업 최종 결산 자료", "label": "52 사업 최종 결산 자료", "level": 2, "children": [{"id": "5 인수인계(시설지원과 → 사용기관) > 52 사업 최종 결산 자료 > 5201 결산자료", "label": "5201 결산자료", "level": 3, "children": [], "memo": ["결산자료 및 자산등재 관련 공문 등"], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 52 사업 최종 결산 자료 > 5202 과세 표준 점검표", "label": "5202 과세 표준 점검표", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "5 인수인계(시설지원과 → 사용기관) > 52 사업 최종 결산 자료 > 5203 증빙 자료", "label": "5203 증빙 자료", "level": 3, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}]}, "design": {"name": "설계용역형", "desc": "기획단계 없이 별도 설계용역부터 수행하는 사업", "source": "ver.4 챗봇용(설계용역형)", "tree": [{"id": "1 공통", "label": "1 공통", "level": 1, "children": [{"id": "1 공통 > 11 사업계획서", "label": "11 사업계획서", "level": 2, "children": [], "memo": [], "hint": ""}, {"id": "1 공통 > 12 예산관리", "label": "12 예산관리", "level": 2, "children": [{"id": "1 공통 > 12 예산관리 > 1201 예산 수립 및 변경 이력", "label": "1201 예산 수립 및 변경 이력", "level": 3, "children": [], "memo": ["사업비 확정 및 증감 과정 관리"], "hint": ""}, {"id": "1 공통 > 12 예산관리 > 1202 연도별 예산 지출 현황", "label": "1202 연도별 예산 지출 현황", "level": 3, "children": [], "memo": ["회계연도별 실제 집행 내역 (ex 25년, 26년, 27년)"], "hint": ""}], "memo": [], "hint": ""}, {"id": "1 공통 > 13 주요 보고자료(내부보고 자료)", "label": "13 주요 보고자료(내부보고 자료)", "level": 2, "children": [], "memo": [], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등)", "label": "14 타기관 협의자료(공문, 공지, 민원 등)", "level": 2, "children": [{"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1401 공문 및 협의기록", "label": "1401 공문 및 협의기록", "level": 3, "children": [{"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1401 공문 및 협의기록 > 1401-1 수신", "label": "1401-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1401 공문 및 협의기록 > 1401-2 발신", "label": "1401-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["별도 계약이 체결된 용역 및 공사 제외"], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1402 학내 안내", "label": "1402 학내 안내", "level": 3, "children": [], "memo": ["공고문, 홈페이지 게시글 등"], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1403 민원", "label": "1403 민원", "level": 3, "children": [], "memo": ["국민신문고, 유선/방문 민원 대응 이력"], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 설계단계", "label": "2 설계단계", "level": 1, "children": [{"id": "2 설계단계 > 21 설계 용역", "label": "21 설계 용역", "level": 2, "children": [{"id": "2 설계단계 > 21 설계 용역 > 2101 최초 품의 및 최초 계약서", "label": "2101 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "2 설계단계 > 21 설계 용역 > 2101 최초 품의 및 최초 계약서 > 2101-1 품의서", "label": "2101-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2101 최초 품의 및 최초 계약서 > 2101-2 계약서", "label": "2101-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2102 용역사에 제공 한 자료", "label": "2102 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2103 착수계", "label": "2103 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2104 지출서류", "label": "2104 지출서류", "level": 3, "children": [{"id": "2 설계단계 > 21 설계 용역 > 2104 지출서류 > 2104-1 선금", "label": "2104-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2104 지출서류 > 2104-2 노무비", "label": "2104-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2104 지출서류 > 2104-3 기성", "label": "2104-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2105 회의 및 협의기록", "label": "2105 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의"], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2106 설계변경", "label": "2106 설계변경", "level": 3, "children": [{"id": "2 설계단계 > 21 설계 용역 > 2106 설계변경 > 2106-1 1차 설계변경", "label": "2106-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2106 설계변경 > 2106-2 2차 설계변경", "label": "2106-2 2차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2107 완수계", "label": "2107 완수계", "level": 3, "children": [{"id": "2 설계단계 > 21 설계 용역 > 2107 완수계 > 2107-1 완수계 공문 및 검사 조서", "label": "2107-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2107 완수계 > 2107-2 최종 성과품", "label": "2107-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2108 기타공문", "label": "2108 기타공문", "level": 3, "children": [{"id": "2 설계단계 > 21 설계 용역 > 2108 기타공문 > 2108-1 수신", "label": "2108-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "2 설계단계 > 21 설계 용역 > 2108 기타공문 > 2108-2 발신", "label": "2108-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계", "label": "3 시공단계", "level": 1, "children": [{"id": "3 시공단계 > 31 도급공사 1", "label": "31 도급공사 1", "level": 2, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3101 최초 품의 및 최초 계약서", "label": "3101 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3101 최초 품의 및 최초 계약서 > 3101-1 품의서", "label": "3101-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3101 최초 품의 및 최초 계약서 > 3101-2 계약서", "label": "3101-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3102 시공사에 제공 한 자료", "label": "3102 시공사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3103 착공계", "label": "3103 착공계", "level": 3, "children": [], "memo": ["현장 조직도, 선임계, 종합가설계획, 예정공정표, 계약내역서, 직접시공계획서, 신고필증 등"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류", "label": "3104 지출서류", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류 > 3104-1 선금", "label": "3104-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류 > 3104-2 노무비", "label": "3104-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류 > 3104-3 기성", "label": "3104-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3105 회의 및 협의기록", "label": "3105 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의 및 시공사 협의 자료, 현황보고"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3106 설계변경", "label": "3106 설계변경", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3106 설계변경 > 3106-1 1차 설계변경", "label": "3106-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3106 설계변경 > 3106-2 2차 설계변경", "label": "3106-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3107 하도급 통보", "label": "3107 하도급 통보", "level": 3, "children": [], "memo": ["통보 공문, 검토의견"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3108 승인요청", "label": "3108 승인요청", "level": 3, "children": [], "memo": ["자재공급원, 시공계획서, 안전관리계획서, 샵드로잉 등"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3109 안전관리비 사용 현황", "label": "3109 안전관리비 사용 현황", "level": 3, "children": [], "memo": ["산업안전보건관리비 사용 내역"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3110 사진", "label": "3110 사진", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3110 사진 > 3110-1 공사전", "label": "3110-1 공사전", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3110 사진 > 3110-2 공사중", "label": "3110-2 공사중", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3110 사진 > 3110-3 공사후", "label": "3110-3 공사후", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3111 준공계", "label": "3111 준공계", "level": 3, "children": [], "memo": ["준공계 공문 및 검사 조서, 준공도서, 보험료 증빙자료, 폐기물 증빙자료, 각종 합의서, 하자보증서, 사진대지 등"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3112 준공정산", "label": "3112 준공정산", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3112 준공정산 > 3112-1 품의서", "label": "3112-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3112 준공정산 > 3112-2 계약서", "label": "3112-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3113 기타공문", "label": "3113 기타공문", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3113 기타공문 > 3113-1 수신", "label": "3113-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3113 기타공문 > 3113-2 발신", "label": "3113-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["\"착공계, 준공계, 기성, 설계변경, 안전관리비, 하도급 통보\" 제외한 공문"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1", "label": "32 용역1", "level": 2, "children": [{"id": "3 시공단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서", "label": "3201 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서 > 3201-1 품의서", "label": "3201-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서 > 3201-2 계약서", "label": "3201-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3202 용역사에 제공 한 자료", "label": "3202 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3203 착수계", "label": "3203 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3204 지출서류", "label": "3204 지출서류", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3204 지출서류 > 3204-1 선금", "label": "3204-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3204 지출서류 > 3204-2 노무비", "label": "3204-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3204 지출서류 > 3204-3 기성", "label": "3204-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3205 회의 및 협의기록", "label": "3205 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3206 설계변경", "label": "3206 설계변경", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3206 설계변경 > 3206-1 1차 설계변경", "label": "3206-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3206 설계변경 > 3206-2 2차 설계변경", "label": "3206-2 2차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3207 완수계", "label": "3207 완수계", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3207 완수계 > 3207-1 완수계 공문 및 검사 조서", "label": "3207-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3207 완수계 > 3207-2 최종 성과품", "label": "3207-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3208 기타공문", "label": "3208 기타공문", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3208 기타공문 > 3208-1 수신", "label": "3208-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3208 기타공문 > 3208-2 발신", "label": "3208-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": "기술지도, 감리, 건설사업관리, 폐기물처리 용역 등"}, {"id": "3 시공단계 > 33 관급자재 1", "label": "33 관급자재 1", "level": 2, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3301 최초 품의 및 최초 계약서", "label": "3301 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3301 최초 품의 및 최초 계약서 > 3301-1 품의서", "label": "3301-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3301 최초 품의 및 최초 계약서 > 3301-2 계약서", "label": "3301-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3302 납품사에 제공 한 자료", "label": "3302 납품사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3303 착수계", "label": "3303 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류", "label": "3304 지출서류", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류 > 3304-1 선금", "label": "3304-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류 > 3304-2 노무비", "label": "3304-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류 > 3304-3 기성", "label": "3304-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3305 회의 및 협의기록", "label": "3305 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의 및 시공사 협의 자료"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3306 설계변경", "label": "3306 설계변경", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3306 설계변경 > 3306-1 1차 설계변경", "label": "3306-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3306 설계변경 > 3306-2 2차 설계변경", "label": "3306-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3307 완수계", "label": "3307 완수계", "level": 3, "children": [], "memo": ["완수계 공문, 최종 납품내역서, 검사 조서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3308 기타공문", "label": "3308 기타공문", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3308 기타공문 > 3308-1 수신", "label": "3308-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3308 기타공문 > 3308-2 발신", "label": "3308-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관)", "label": "4 인수인계(시설지원과 → 사용기관)", "level": 1, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서", "label": "41 인수인계 도서", "level": 2, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4101 인수인계 확인서", "label": "4101 인수인계 확인서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4102 도서", "label": "4102 도서", "level": 3, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4102 도서 > 4102-1 공사 도서", "label": "4102-1 공사 도서", "level": 4, "children": [], "memo": ["각 공종 도면, 건물개요, 주요자재 리스트, 건축물 관리계획서"], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4102 도서 > 4102-2 인허가도서", "label": "4102-2 인허가도서", "level": 4, "children": [], "memo": ["각 공종 도면, 필증, 인증서, 사용승인서, 건축물 대장"], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4103 사진", "label": "4103 사진", "level": 3, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4103 사진 > 4103-1 공사 완료 사진", "label": "4103-1 공사 완료 사진", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4103 사진 > 4103-2 유지보수 자재 사진", "label": "4103-2 유지보수 자재 사진", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 42 사업 최종 결산 자료", "label": "42 사업 최종 결산 자료", "level": 2, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 42 사업 최종 결산 자료 > 4201 결산자료", "label": "4201 결산자료", "level": 3, "children": [], "memo": ["결산자료 및 예산 반납 공문 등"], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}]}, "construction": {"name": "시공중심형", "desc": "별도 설계용역 없이 자체설계 또는 기존 설계자료를 활용하여 공사를 시행하는 사업", "source": "ver.4 챗봇용(시공중심형)", "tree": [{"id": "1 공통", "label": "1 공통", "level": 1, "children": [{"id": "1 공통 > 11 사업계획서", "label": "11 사업계획서", "level": 2, "children": [], "memo": [], "hint": ""}, {"id": "1 공통 > 12 예산관리", "label": "12 예산관리", "level": 2, "children": [{"id": "1 공통 > 12 예산관리 > 1201 예산 수립 및 변경 이력", "label": "1201 예산 수립 및 변경 이력", "level": 3, "children": [], "memo": ["사업비 확정 및 증감 과정 관리"], "hint": ""}, {"id": "1 공통 > 12 예산관리 > 1202 연도별 예산 지출 현황", "label": "1202 연도별 예산 지출 현황", "level": 3, "children": [], "memo": ["회계연도별 실제 집행 내역 (ex 25년, 26년, 27년)"], "hint": ""}], "memo": [], "hint": ""}, {"id": "1 공통 > 13 주요 보고자료(내부보고 자료)", "label": "13 주요 보고자료(내부보고 자료)", "level": 2, "children": [], "memo": [], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등)", "label": "14 타기관 협의자료(공문, 공지, 민원 등)", "level": 2, "children": [{"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1401 공문 및 협의기록", "label": "1401 공문 및 협의기록", "level": 3, "children": [{"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1401 공문 및 협의기록 > 1401-1 수신", "label": "1401-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1401 공문 및 협의기록 > 1401-2 발신", "label": "1401-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["별도 계약이 체결된 용역 및 공사 제외"], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1402 학내 안내", "label": "1402 학내 안내", "level": 3, "children": [], "memo": ["공고문, 홈페이지 게시글 등"], "hint": ""}, {"id": "1 공통 > 14 타기관 협의자료(공문, 공지, 민원 등) > 1403 민원", "label": "1403 민원", "level": 3, "children": [], "memo": ["국민신문고, 유선/방문 민원 대응 이력"], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "2 설계단계", "label": "2 설계단계", "level": 1, "children": [{"id": "2 설계단계 > 21 성과품", "label": "21 성과품", "level": 2, "children": [], "memo": [], "hint": "설계도서"}, {"id": "2 설계단계 > 22 기술검토 자료", "label": "22 기술검토 자료", "level": 2, "children": [], "memo": [], "hint": "시설지원과 검토 자료_시설지원과 자체 공사시 생략"}, {"id": "2 설계단계 > 23 설계용역 정보", "label": "23 설계용역 정보", "level": 2, "children": [], "memo": [], "hint": "설계용역 계약서, 용역사 연락처 등_시설지원과 자체 공사시 생략"}], "memo": [], "hint": ""}, {"id": "3 시공단계", "label": "3 시공단계", "level": 1, "children": [{"id": "3 시공단계 > 31 도급공사 1", "label": "31 도급공사 1", "level": 2, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3101 최초 품의 및 최초 계약서", "label": "3101 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3101 최초 품의 및 최초 계약서 > 3101-1 품의서", "label": "3101-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3101 최초 품의 및 최초 계약서 > 3101-2 계약서", "label": "3101-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3102 시공사에 제공 한 자료", "label": "3102 시공사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3103 착공계", "label": "3103 착공계", "level": 3, "children": [], "memo": ["현장 조직도, 선임계, 종합가설계획, 예정공정표, 계약내역서, 직접시공계획서, 신고필증 등"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류", "label": "3104 지출서류", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류 > 3104-1 선금", "label": "3104-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류 > 3104-2 노무비", "label": "3104-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3104 지출서류 > 3104-3 기성", "label": "3104-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3105 회의 및 협의기록", "label": "3105 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의 및 시공사 협의 자료, 현황보고"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3106 설계변경", "label": "3106 설계변경", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3106 설계변경 > 3106-1 1차 설계변경", "label": "3106-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3106 설계변경 > 3106-2 2차 설계변경", "label": "3106-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3107 하도급 통보", "label": "3107 하도급 통보", "level": 3, "children": [], "memo": ["통보 공문, 검토의견"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3108 승인요청", "label": "3108 승인요청", "level": 3, "children": [], "memo": ["자재공급원, 시공계획서, 안전관리계획서, 샵드로잉 등"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3109 안전관리비 사용 현황", "label": "3109 안전관리비 사용 현황", "level": 3, "children": [], "memo": ["산업안전보건관리비 사용 내역"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3110 사진", "label": "3110 사진", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3110 사진 > 3110-1 공사전", "label": "3110-1 공사전", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3110 사진 > 3110-2 공사중", "label": "3110-2 공사중", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3110 사진 > 3110-3 공사후", "label": "3110-3 공사후", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3111 준공계", "label": "3111 준공계", "level": 3, "children": [], "memo": ["준공계 공문 및 검사 조서, 준공도서, 보험료 증빙자료, 폐기물 증빙자료, 각종 합의서, 하자보증서, 사진대지 등"], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3112 준공정산", "label": "3112 준공정산", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3112 준공정산 > 3112-1 품의서", "label": "3112-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3112 준공정산 > 3112-2 계약서", "label": "3112-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3113 기타공문", "label": "3113 기타공문", "level": 3, "children": [{"id": "3 시공단계 > 31 도급공사 1 > 3113 기타공문 > 3113-1 수신", "label": "3113-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 31 도급공사 1 > 3113 기타공문 > 3113-2 발신", "label": "3113-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["\"착공계, 준공계, 기성, 설계변경, 안전관리비, 하도급 통보\" 제외한 공문"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1", "label": "32 용역1", "level": 2, "children": [{"id": "3 시공단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서", "label": "3201 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서 > 3201-1 품의서", "label": "3201-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3201 최초 품의 및 최초 계약서 > 3201-2 계약서", "label": "3201-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3202 용역사에 제공 한 자료", "label": "3202 용역사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3203 착수계", "label": "3203 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3204 지출서류", "label": "3204 지출서류", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3204 지출서류 > 3204-1 선금", "label": "3204-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3204 지출서류 > 3204-2 노무비", "label": "3204-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3204 지출서류 > 3204-3 기성", "label": "3204-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3205 회의 및 협의기록", "label": "3205 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3206 설계변경", "label": "3206 설계변경", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3206 설계변경 > 3206-1 1차 설계변경", "label": "3206-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3206 설계변경 > 3206-2 2차 설계변경", "label": "3206-2 2차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3207 완수계", "label": "3207 완수계", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3207 완수계 > 3207-1 완수계 공문 및 검사 조서", "label": "3207-1 완수계 공문 및 검사 조서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3207 완수계 > 3207-2 최종 성과품", "label": "3207-2 최종 성과품", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3208 기타공문", "label": "3208 기타공문", "level": 3, "children": [{"id": "3 시공단계 > 32 용역1 > 3208 기타공문 > 3208-1 수신", "label": "3208-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 32 용역1 > 3208 기타공문 > 3208-2 발신", "label": "3208-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": ["기타공문"], "hint": ""}], "memo": [], "hint": "기술지도, 감리, 건설사업관리, 폐기물처리 용역 등"}, {"id": "3 시공단계 > 33 관급자재 1", "label": "33 관급자재 1", "level": 2, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3301 최초 품의 및 최초 계약서", "label": "3301 최초 품의 및 최초 계약서", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3301 최초 품의 및 최초 계약서 > 3301-1 품의서", "label": "3301-1 품의서", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3301 최초 품의 및 최초 계약서 > 3301-2 계약서", "label": "3301-2 계약서", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3302 납품사에 제공 한 자료", "label": "3302 납품사에 제공 한 자료", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3303 착수계", "label": "3303 착수계", "level": 3, "children": [], "memo": ["착수계 공문 및 첨부 서류"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류", "label": "3304 지출서류", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류 > 3304-1 선금", "label": "3304-1 선금", "level": 4, "children": [], "memo": ["선금 신청서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류 > 3304-2 노무비", "label": "3304-2 노무비", "level": 4, "children": [], "memo": ["노무비 신청서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3304 지출서류 > 3304-3 기성", "label": "3304-3 기성", "level": 4, "children": [], "memo": ["기성 신청서 및 검사 조서"], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3305 회의 및 협의기록", "label": "3305 회의 및 협의기록", "level": 3, "children": [], "memo": ["주간회의, 상시회의, 기타 회의 및 시공사 협의 자료"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3306 설계변경", "label": "3306 설계변경", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3306 설계변경 > 3306-1 1차 설계변경", "label": "3306-1 1차 설계변경", "level": 4, "children": [], "memo": ["실정보고서 공문, 설계변경 검토의견서, 변경 품의서, 변경 계약서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3306 설계변경 > 3306-2 2차 설계변경", "label": "3306-2 2차 설계변경", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3307 완수계", "label": "3307 완수계", "level": 3, "children": [], "memo": ["완수계 공문, 최종 납품내역서, 검사 조서"], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3308 기타공문", "label": "3308 기타공문", "level": 3, "children": [{"id": "3 시공단계 > 33 관급자재 1 > 3308 기타공문 > 3308-1 수신", "label": "3308-1 수신", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "3 시공단계 > 33 관급자재 1 > 3308 기타공문 > 3308-2 발신", "label": "3308-2 발신", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관)", "label": "4 인수인계(시설지원과 → 사용기관)", "level": 1, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서", "label": "41 인수인계 도서", "level": 2, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4101 인수인계 확인서", "label": "4101 인수인계 확인서", "level": 3, "children": [], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4102 도서", "label": "4102 도서", "level": 3, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4102 도서 > 4102-1 공사 도서", "label": "4102-1 공사 도서", "level": 4, "children": [], "memo": ["각 공종 도면, 건물개요, 주요자재 리스트, 건축물 관리계획서"], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4102 도서 > 4102-2 인허가도서", "label": "4102-2 인허가도서", "level": 4, "children": [], "memo": ["각 공종 도면, 필증, 인증서, 사용승인서, 건축물 대장"], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4103 사진", "label": "4103 사진", "level": 3, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4103 사진 > 4103-1 공사 완료 사진", "label": "4103-1 공사 완료 사진", "level": 4, "children": [], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 41 인수인계 도서 > 4103 사진 > 4103-2 유지보수 자재 사진", "label": "4103-2 유지보수 자재 사진", "level": 4, "children": [], "memo": [], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}, {"id": "4 인수인계(시설지원과 → 사용기관) > 42 사업 최종 결산 자료", "label": "42 사업 최종 결산 자료", "level": 2, "children": [{"id": "4 인수인계(시설지원과 → 사용기관) > 42 사업 최종 결산 자료 > 4201 결산자료", "label": "4201 결산자료", "level": 3, "children": [], "memo": ["결산자료 및 예산 반납 공문 등"], "hint": ""}], "memo": [], "hint": ""}], "memo": [], "hint": ""}]}};let current='planning',selected=new Set(),instances={},expanded=new Set();let l1Expanded=new Set();let l3Expanded=new Set();let extraContracts={};let extraExpanded=new Set();let drafts={};const enc=encodeURIComponent,dec=decodeURIComponent;
+const step1Panel=document.getElementById('step1Panel');
+const step2Panel=document.getElementById('step2Panel');
+
+function flatten(nodes){const a=[];function walk(n){a.push(n);(n.children||[]).forEach(walk)}nodes.forEach(walk);return a}function allNodes(){return flatten(T[current].tree)}function selectable(){return allNodes().filter(n=>n.level>=2&&n.level<=4)}function resetTemplate(){activateStep1();selected=new Set(selectable().map(n=>n.id));instances={};expanded=new Set();extraContracts={};extraExpanded=new Set();drafts={};l1Expanded=new Set(T[current].tree.map(n=>n.id));l3Expanded=new Set();render()}function esc(s){return String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]))}
+function lead(label){const m=String(label).match(/^(\d+)\s*/);return m?m[1]+' ':''}function contractType(label){
+ const x=plainName(label);
+ if(current==='construction' && x==='설계용역 정보')return'';
+ if(/^도급공사/.test(x))return'공사';
+ if(/관급자재/.test(x))return'관급자재';
+ if(/설계\s*용역/.test(x)||/용역\s*\d*$/.test(x))return'용역';
+ return'';
+}
+function infoOnly(n){return current==='construction' && plainName(n.label)==='설계용역 정보'}
+function plainName(label){return String(label).replace(/^\s*\d+(?:-\d+)?\s*/,'').trim()}
+function findNode(id){return allNodes().find(n=>n.id===id)}
+function parentNode(n){const p=n.id.split(' > ');return p.length>1?findNode(p.slice(0,-1).join(' > ')):null}
+function slotCount(n){
+ if(n.level!==2||!contractType(n.label))return 1;
+ return 1+((extraContracts[n.id]||[]).length);
+}
+function siblingOrdinal(n){
+ const p=parentNode(n);if(!p)return 1;
+ const sib=(p.children||[]).filter(x=>selected.has(x.id));
+ let ord=1;
+ for(const x of sib){
+   if(x.id===n.id)break;
+   ord+=slotCount(x);
+ }
+ return ord;
+}
+function dynamicCode(n,instanceOffset=0){
+ if(n.level===1){const m=String(n.label).match(/^\s*(\d+)/);return m?m[1]:''}
+ const p=parentNode(n);if(!p)return'';
+ if(n.level===2)return dynamicCode(p)+String(siblingOrdinal(n)+instanceOffset);
+ const sib=(p.children||[]).filter(x=>selected.has(x.id));
+ const pos=sib.findIndex(x=>x.id===n.id);
+ const idx=(pos>=0?pos:0)+1;
+ if(n.level===3)return dynamicCode(p)+String(idx).padStart(2,'0');
+ if(n.level===4)return dynamicCode(p)+'-'+String(idx);
+ return'';
+}
+function dynamicLabel(n,custom,instanceOffset=0){if(n.level===1)return n.label;return (dynamicCode(n,instanceOffset)+' '+(custom||plainName(n.label))).trim()}
+function displayName(n,name,instanceOffset=0){return dynamicLabel(n,name,instanceOffset)}
+function descendants(n){let a=[];(n.children||[]).forEach(c=>{a.push(c);a.push(...descendants(c))});return a}
+function setNode(id,on){
+ const n=findNode(id);if(!n)return;
+ if(on)selected.add(id);else selected.delete(id);
+ descendants(n).filter(x=>x.level<=4).forEach(x=>on?selected.add(x.id):selected.delete(x.id));
+ if(on){const p=id.split(' > ');for(let i=2;i<=Math.min(4,p.length);i++)selected.add(p.slice(0,i).join(' > '))}
+ render()
+}
+function toggleNode(x){activateStep2();const id=dec(x);setNode(id,!selected.has(id))}
+
+function extraKey(l2id,idx){return l2id+'::'+idx}
+function fullChildSet(l2){return new Set(descendants(l2).filter(x=>x.level<=4).map(x=>x.id))}
+function setDraft(x,v){activateStep2();
+ const id=dec(x);drafts[id]=v;
+}
+function autoCommitBaseContract(x,inputId,showToast=false){
+ const id=dec(x),el=document.getElementById(inputId);
+ const v=(el?el.value:(drafts[id]||'')).trim();
+ if(!v)return false;
+ instances[id]=[v];drafts[id]=v;
+ if(showToast)show('계약명이 저장되었습니다.');
+ return true
+}
+function commitBaseContract(x,inputId){
+ if(autoCommitBaseContract(x,inputId,true))render();
+ else show('실제 계약명을 입력해 주세요.');
+}
+function addExtraContract(x){activateStep2();
+ const id=dec(x),l2=findNode(id);
+ instances[id]=instances[id]||[];
+ const v=(drafts[id]||'').trim();
+ if(v){instances[id]=[v]}
+ if(!instances[id].length||!instances[id][0].trim()){show('첫 번째 실제 계약명을 입력하고 Enter를 눌러 주세요.');return}
+ extraContracts[id]=extraContracts[id]||[];
+ extraContracts[id].push({name:'',sel:fullChildSet(l2)});
+ extraExpanded.add(extraKey(id,extraContracts[id].length-1));
+ render()
+}
+function setExtraName(x,idx,v){activateStep2();
+ const id=dec(x);
+ if(extraContracts[id]&&extraContracts[id][idx])extraContracts[id][idx].name=v
+}
+function confirmExtraName(x,idx){
+ const id=dec(x),ex=extraContracts[id]&&extraContracts[id][idx];
+ if(!ex||!ex.name.trim()){show('실제 계약명을 입력해 주세요.');return}
+ show('계약명이 입력되었습니다.');
+ render()
+}
+function removeExtra(x,idx){const id=dec(x);if(extraContracts[id])extraContracts[id].splice(idx,1);render()}
+function toggleExtra(x,idx,nodeX){activateStep2();
+ const id=dec(x),nodeid=dec(nodeX),l2=findNode(id),n=findNode(nodeid),ex=extraContracts[id]&&extraContracts[id][idx];
+ if(!ex||!n)return;
+ const on=!ex.sel.has(n.id);on?ex.sel.add(n.id):ex.sel.delete(n.id);
+ descendants(n).filter(z=>z.level<=4).forEach(z=>on?ex.sel.add(z.id):ex.sel.delete(z.id));
+ render()
+}
+function renderExtraNode(n,l2,idx,ex,offset){
+ const on=ex.sel.has(n.id);
+ const pfx=dynamicCode(l2,offset);
+ let code='';
+ if(n.level===3){
+   const sib=(l2.children||[]).filter(x=>ex.sel.has(x.id));
+   code=pfx+String(Math.max(0,sib.findIndex(x=>x.id===n.id))+1).padStart(2,'0')
+ } else if(n.level===4){
+   const p=parentNode(n),sib3=(l2.children||[]).filter(x=>ex.sel.has(x.id));
+   const pcode=pfx+String(Math.max(0,sib3.findIndex(x=>x.id===p.id))+1).padStart(2,'0');
+   const sib=(p.children||[]).filter(x=>ex.sel.has(x.id));
+   code=pcode+'-'+String(Math.max(0,sib.findIndex(x=>x.id===n.id))+1)
+ }
+ const memo=(n.memo||[]).map(m=>'<div class="memo">💡 '+esc(m)+'</div>').join('');
+ const hasKids=(n.children||[]).length>0;
+ const isL3=n.level===3;
+ const key=extraL3Key(l2.id,idx,n.id);
+ const open=!isL3 || l3Expanded.has(key);
+ const kids=hasKids?`<div class="indent l3-children ${open?'open':''}">${n.children.map(c=>renderExtraNode(c,l2,idx,ex,offset)).join('')}</div>`:'';
+ const exp=(isL3&&hasKids)?`<button class="exp" onclick="toggleExtraL3('${enc(l2.id)}',${idx},'${enc(n.id)}')">${open?'▼':'▶'}</button>`:'';
+ return `<div class="node ${on?'':'off'}"><div class="node-row"><button class="check ${on?'on':''}" onclick="toggleExtra('${enc(l2.id)}',${idx},'${enc(n.id)}')">${on?'✓':''}</button>${exp}<div class="node-label">${esc(code+' '+plainName(n.label))}</div></div>${memo}${kids}</div>`
+}
+function deleteBaseContract(x){
+ const id=dec(x),l2=findNode(id);
+ instances[id]=[];drafts[id]='';
+ selected.delete(id);
+ descendants(l2).filter(z=>z.level<=4).forEach(z=>selected.delete(z.id));
+ render();
+ show('계약 항목을 제외했습니다. 다시 사용하려면 왼쪽 체크박스를 선택하세요.')
+}
+function toggleBaseContract(x){activateStep2();
+ const id=dec(x);expanded.has(id)?expanded.delete(id):expanded.add(id);render()
+}
+function toggleExtraExpand(x,idx){activateStep2();
+ const id=dec(x),key=extraKey(id,idx);
+ extraExpanded.has(key)?extraExpanded.delete(key):extraExpanded.add(key);render()
+}
+function renderNode(n){
+ const on=selected.has(n.id),
+ memo=(n.memo||[]).map(m=>'<div class="memo">💡 '+esc(m)+'</div>').join(''),
+ hasKids=(n.children||[]).length>0,
+ isL3=n.level===3,
+ open=!isL3 || l3Expanded.has(n.id),
+ kids=hasKids?`<div class="indent l3-children ${open?'open':''}">${n.children.map(renderNode).join('')}</div>`:'';
+ const exp=(isL3&&hasKids)?`<button class="exp" onclick="toggleL3('${enc(n.id)}')">${open?'▼':'▶'}</button>`:'';
+ return `<div class="node ${on?'':'off'}"><div class="node-row"><button class="check ${on?'on':''}" onclick="toggleNode('${enc(n.id)}')">${on?'✓':''}</button>${exp}<div class="node-label">${esc(dynamicLabel(n))}</div></div>${memo}${kids}</div>`
+}
+function addInstance(x,inputId,rerender=true){
+ const id=dec(x),el=document.getElementById(inputId),v=el?el.value.trim():'';
+ if(!v)return;
+ instances[id]=instances[id]||[];
+ if(!instances[id].includes(v))instances[id].push(v);
+ if(el)el.value='';
+ if(rerender)render();
+}
+function commitDraftInputs(){
+ document.querySelectorAll('.contractinput input[data-nodeid]').forEach(el=>{
+   const v=el.value.trim();if(!v)return;
+   const id=dec(el.dataset.nodeid);
+   instances[id]=instances[id]||[];
+   if(!instances[id].includes(v))instances[id].push(v);
+ });
+}
+function removeInstance(x,idx){const id=dec(x);(instances[id]||[]).splice(idx,1);render()}
+function toggleL1(x){
+ const id=dec(x);
+ l1Expanded.has(id)?l1Expanded.delete(id):l1Expanded.add(id);
+ render();
+}
+function toggleL3(x){
+ const id=dec(x);
+ l3Expanded.has(id)?l3Expanded.delete(id):l3Expanded.add(id);
+ render();
+}
+function extraL3Key(l2id,idx,nodeid){return 'XL3::'+l2id+'::'+idx+'::'+nodeid}
+function toggleExtraL3(l2x,idx,nodex){
+ const l2id=dec(l2x),nodeid=dec(nodex),key=extraL3Key(l2id,idx,nodeid);
+ l3Expanded.has(key)?l3Expanded.delete(key):l3Expanded.add(key);
+ render();
+}
+
+function render(){
+ types.innerHTML='<div class="type-section-title"><span>STEP 1</span><b>사업유형 선택</b><small>아래 3가지 중 현재 사업에 가장 가까운 유형을 선택합니다.</small></div>'+Object.entries(T).map(([k,v])=>`<button class="type ${k===current?'on':''}" onclick="choose('${k}')"><div class="type-top"><b>${v.name}</b>${k===current?'<span class="selected-badge">선택됨</span>':''}</div><small>${v.desc}</small></button>`).join('');
+ title.textContent=T[current].name;
+ desc.textContent=T[current].desc+' · 기준: '+T[current].source;
+ tree.innerHTML=T[current].tree.map((l1,i)=>{
+  const blocks=(l1.children||[]).map((l2,j)=>{
+   const on=selected.has(l2.id),ct=contractType(l2.label),arr=instances[l2.id]||[],isInfo=infoOnly(l2),open=expanded.has(l2.id);
+   const ph=l2.hint?`실제 ${ct}명 입력 (ex. ${l2.hint})`:`실제 ${ct}명 입력`;
+   const extras=extraContracts[l2.id]||[];
+   const baseName=((instances[l2.id]||[])[0]||'');
+   const baseOpen=expanded.has(l2.id);
+   const baseModule=ct?`<div class="contract-module base-contract">
+     <div class="contract-module-head">
+       <button class="exp" onclick="toggleBaseContract('${enc(l2.id)}')">${baseOpen?'▼':'▶'}</button>
+       <b>${esc(dynamicCode(l2,0))}</b>
+       <input data-nodeid="${enc(l2.id)}" id="nm_${i}_${j}" placeholder="${esc(ph)}" oninput="setDraft('${enc(l2.id)}',this.value)" onblur="autoCommitBaseContract('${enc(l2.id)}','nm_${i}_${j}')" onkeydown="if(event.key==='Enter'){event.preventDefault();commitBaseContract('${enc(l2.id)}','nm_${i}_${j}')}" value="${esc(drafts[l2.id]??baseName)}">
+       <button class="contract-confirm" onclick="commitBaseContract('${enc(l2.id)}','nm_${i}_${j}')">입력</button><button class="remove-contract" onclick="deleteBaseContract('${enc(l2.id)}')">이 계약 삭제</button>
+     </div>
+     <div class="hint">계약명은 <b>입력만 해도 자동 저장</b>됩니다. Enter 또는 「입력」 버튼은 선택사항입니다.${l2.hint?' 예: '+esc(l2.hint):''}</div>
+     <div class="children ${baseOpen?'open':''}">${(l2.children||[]).map(renderNode).join('')||'<span style="font-size:12px;color:#8792a2">하위 폴더 없음</span>'}</div>
+   </div>`:'';
+   const extraHtml=extras.map((ex,k)=>{const offset=1+k;const open=extraExpanded.has(extraKey(l2.id,k));return `<div class="contract-module extra-contract">
+     <div class="contract-module-head">
+       <button class="exp" onclick="toggleExtraExpand('${enc(l2.id)}',${k})">${open?'▼':'▶'}</button>
+       <b>${esc(dynamicCode(l2,offset))}</b>
+       <input value="${esc(ex.name)}" placeholder="추가 실제 ${ct}명 입력" oninput="setExtraName('${enc(l2.id)}',${k},this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmExtraName('${enc(l2.id)}',${k})}">
+       <button class="contract-confirm" onclick="confirmExtraName('${enc(l2.id)}',${k})">입력</button>
+       <button class="remove-contract" onclick="removeExtra('${enc(l2.id)}',${k})">이 계약 삭제</button>
+     </div>
+     <div class="hint">계약명은 <b>입력만 해도 자동 저장</b>됩니다. 이 계약의 하위 폴더는 다른 계약과 별도로 선택합니다.</div>
+     <div class="children ${open?'open':''}">${(l2.children||[]).map(n=>renderExtraNode(n,l2,k,ex,offset)).join('')||'<span style="font-size:12px;color:#8792a2">하위 폴더 없음</span>'}</div>
+   </div>`}).join('');
+   const box=ct?`<div class="contractbox"><div class="contract-separator-label">계약별 폴더 구성 <span class="autosave-badge">계약명 자동저장</span></div>${baseModule}${extraHtml}<button class="add-contract" onclick="addExtraContract('${enc(l2.id)}')">+ 계약 하나 더 추가</button></div>`:'';
+   const info=isInfo?`<div class="memo">💡 ${esc(l2.hint||'설계용역 계약서, 용역사 연락처 등 기존 설계용역 정보')}</div>`:'';
+   return ct
+ ? `<div class="l2"><div class="row ${on?'':'off'}"><button class="check ${on?'on':''}" onclick="toggleNode('${enc(l2.id)}')">${on?'✓':''}</button><span class="name">${esc(dynamicLabel(l2))}</span><span class="tag">계약별 독립 구성</span></div>${box}</div>`
+ : `<div class="l2"><div class="row ${on?'':'off'}"><button class="check ${on?'on':''}" onclick="toggleNode('${enc(l2.id)}')">${on?'✓':''}</button><button class="exp" onclick="expand('${enc(l2.id)}')">${open?'▼':'▶'}</button><span class="name">${esc(dynamicLabel(l2))}</span></div><div class="children ${open?'open':''}">${info}${(l2.children||[]).map(renderNode).join('')||(!info?'<span style="font-size:12px;color:#8792a2">하위 폴더 없음</span>':'')}</div></div>`
+  }).join('');
+  const l1open=l1Expanded.has(l1.id);
+  return `<section class="l1"><button class="l1h l1-toggle" onclick="toggleL1('${enc(l1.id)}')"><span class="l1-arrow">${l1open?'▼':'▶'}</span><span>${esc(l1.label)}</span></button><div class="l1-body ${l1open?'open':''}">${blocks}</div></section>`
+ }).join('')
+}
+function choose(k){
+ current=k;
+ resetTemplate();
+ step1Panel&&step1Panel.classList.remove('active');
+ step2Panel&&step2Panel.classList.add('active');
+}function expand(x){const id=dec(x);expanded.has(id)?expanded.delete(id):expanded.add(id);render()}
+function activateStep2(){
+ if(step1Panel)step1Panel.classList.remove('active');
+ if(step2Panel)step2Panel.classList.add('active');
+}
+function activateStep1(){
+ if(step1Panel)step1Panel.classList.add('active');
+ if(step2Panel)step2Panel.classList.remove('active');
+}
+function show(s){toast.textContent=s;toast.style.display='block';setTimeout(()=>toast.style.display='none',2200)}
+function selectedLines(){
+ const z=[];
+ T[current].tree.forEach(l1=>{
+  const l2s=(l1.children||[]).filter(x=>selected.has(x.id));if(!l2s.length)return;
+  z.push(l1.label);
+  l2s.forEach(l2=>{
+   if(contractType(l2.label)){
+    const base=((instances[l2.id]||[])[0]||drafts[l2.id]||'').trim();
+    z.push('  - '+dynamicCode(l2,0)+' '+(base||plainName(l2.label)));
+    (l2.children||[]).filter(x=>selected.has(x.id)).forEach(l3=>{z.push('      · '+dynamicLabel(l3));(l3.children||[]).filter(x=>selected.has(x.id)).forEach(l4=>z.push('          · '+dynamicLabel(l4)))});
+    (extraContracts[l2.id]||[]).forEach((ex,k)=>{
+      const offset=1+k,code=dynamicCode(l2,offset);
+      z.push('  - '+code+' '+ex.name.trim());
+      (l2.children||[]).filter(x=>ex.sel.has(x.id)).forEach(l3=>{
+       const sib=(l2.children||[]).filter(x=>ex.sel.has(x.id)),c3=code+String(sib.findIndex(x=>x.id===l3.id)+1).padStart(2,'0');
+       z.push('      · '+c3+' '+plainName(l3.label));
+       (l3.children||[]).filter(x=>ex.sel.has(x.id)).forEach(l4=>{const ss=(l3.children||[]).filter(x=>ex.sel.has(x.id));z.push('          · '+c3+'-'+(ss.findIndex(x=>x.id===l4.id)+1)+' '+plainName(l4.label))})
+      })
+    })
+   }else{
+    z.push('  - '+dynamicLabel(l2));
+    (l2.children||[]).filter(x=>selected.has(x.id)).forEach(l3=>{z.push('      · '+dynamicLabel(l3));(l3.children||[]).filter(x=>selected.has(x.id)).forEach(l4=>z.push('          · '+dynamicLabel(l4)))})
+   }
+  })
+ });
+ return z
+}
+function validateNames(){
+ let bad=null;
+ T[current].tree.forEach(l1=>(l1.children||[]).forEach(l2=>{
+  if(bad||!selected.has(l2.id)||!contractType(l2.label))return;
+  if(!(((instances[l2.id]||[])[0]||drafts[l2.id]||'').trim()))bad=l2;
+  (extraContracts[l2.id]||[]).forEach(ex=>{if(!ex.name.trim())bad=l2})
+ }));
+ if(bad){show('실제 계약명을 입력한 뒤 Enter 또는 「입력」을 눌러 확정해 주세요.');return false}
+ return true
+}
+function commitAllDrafts(){
+ Object.keys(drafts).forEach(id=>{
+   const v=(drafts[id]||'').trim();
+   if(v)instances[id]=[v];
+ });
+}
+async function copyForChatbot(){
+ commitAllDrafts();
+ if(!validateNames())return;
+ const text=[
+  '[공무착착 Tree Builder 선택결과]',
+  '사업유형: '+T[current].name,
+  '기준 템플릿: '+T[current].source,
+  '번호처리: 체크 해제 결과를 반영하여 Tree Builder에서 이미 순연 완료한 최종 번호임',
+  '',
+  '선택된 최종 구조:',
+  ...selectedLines(),
+  '',
+  '[실행 요청]',
+  '위 구조를 그대로 사용하여 Windows에서 실행 가능한 실제 .bat 파일을 생성해 첨부해 주세요.',
+  '설명이나 구조 요약만 하고 끝내지 말고 실제 .bat 파일 제공을 기본으로 하세요. 파일 첨부가 불가능한 경우에만 BAT 코드블록을 출력하세요.',
+  '위 번호는 이미 순연 완료된 최종 번호이므로 다시 원래 번호로 복원하거나 재번호하지 마세요.',
+  '숫자로 시작하지 않는 메모성 텍스트는 폴더로 만들지 마세요.',
+  '실제 계약명이 입력된 가변 항목은 해당 명칭으로 사용하고 그 하위 표준구조를 유지하세요.',
+  'BAT 파일은 반드시 한국어 Windows CMD 호환을 위해 CP949(ANSI) 인코딩으로 저장하고, @echo off, chcp 949 > nul, cd /d "%~dp0" 순으로 시작하세요.',
+  'BAT 파일이 저장된 위치에 "공사문서트리" 최상위 폴더를 생성하고 그 아래에 선택된 전체 구조를 생성하세요.',
+  'Tree Builder가 전달한 폴더명과 번호는 한 글자도 임의로 변경·보정·복원하지 마세요.',
+  '모든 md 경로는 큰따옴표로 감싸세요.',
+  'BAT 파일 자체는 UTF-8 또는 UTF-8 BOM으로 저장하지 말고 반드시 CP949(ANSI)로 저장하세요.',
+  '마지막에는 실제 생성 위치를 echo로 표시하고 pause를 넣으세요.'
+ ].join('\n');
+ try{await navigator.clipboard.writeText(text)}
+ catch(e){const q=document.createElement('textarea');q.value=text;document.body.appendChild(q);q.select();document.execCommand('copy');q.remove()}
+ show('복사 완료 — 공무착착에 붙여넣으면 BAT 생성으로 이어집니다.')
+}
+resetTemplate();</script></body></html>
