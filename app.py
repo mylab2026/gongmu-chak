@@ -8,6 +8,7 @@ import datetime
 import html
 import ctypes
 from ctypes import wintypes
+import functools
 import hashlib
 import io
 import json
@@ -595,7 +596,8 @@ def compact(text):
 
 def label_word(label):
     """'03 착공계' -> '착공계'. Folder numbers are ordering marks, not document words."""
-    return re.sub(r'^\d+(?:[-.]\d+)*[\s_]+', '', label).strip()
+    # '03 착공계', '3109-1 설계변경', and the common '2. 시공단계' / '1) 품의' numbering.
+    return re.sub(r'^\d+(?:[-.]\d+)*(?:[.)][\s_]*|[\s_]+)', '', label).strip()
 
 
 def normalize_stem(name):
@@ -660,7 +662,13 @@ def label_candidates(paths, text, anchors='', prefer=()):
 
 def semantic_label(label):
     """Remove ordering numbers/descriptions, not dates in custom event folders."""
-    value = label_word(str(label))
+    return _semantic_label(str(label))
+
+
+@functools.lru_cache(maxsize=200000)
+def _semantic_label(label):
+    # A pure function of the folder name; cached because large projects ask for the same names millions of times.
+    value = label_word(label)
     value = re.sub(r'\([^)]*\)|（[^）]*）', '', value)
     value = compact(value)
     if re.fullmatch(r'(?:도급공사|관급자재|.*용역)\d+',value):
@@ -1071,12 +1079,24 @@ def probable_contract_file(file):
         return False
     name=Path(file['name']).stem
     if is_employment_contract(file['relative']):return False
-    if re.search(r'양식|서식|견본|초안|대장|체크리스트',name):
+    if re.search(r'양식|서식|견본|초안|(?:계약|관리|노무|출역|출력|기록)\s*대장|체크리스트',name):
         return False
-    if re.search(r'계약서|변경계약|도급계약|공사계약|용역계약|물품계약|계약체결',name):
+    # 계약 일반조건·예규·특수조건은 계약 문서의 참고 자료이지 계약서가 아니다.
+    if re.search(r'일반\s*조건|특수\s*조건|계약\s*예규|계약내역서',name):
+        return False
+    # '계약변경 요청 공문', '계약금액 조정요청'은 계약서가 아니라 요청 공문이다.
+    if re.search(r'요청|공문|검토|조서',name) and not re.search(r'계약서',name):
+        return False
+    if re.search(r'계약서|변경계약|계약변경|도급계약|공사계약|용역계약|물품계약|계약체결',name):
         return True
-    if re.search(r'품의|공문|보고|도면|산출|내역|착공|회의|대금|청구|검사|세금계산|견적|사진|결의',name):return False
+    # 원인행위(변경) 문서에는 계약서가 함께 들어 있는 경우가 많다(서울대 실사용 확인). 품의·공문 단어보다 먼저 본다.
+    if re.match(r'^\s*(?:\d+[\s._-]*)?원인행위',name):
+        return True
     parent=PurePosixPath(file['relative']).parent.name
+    # 계약 폴더('2. 계약', '4. 계약서') 안에서는 '도면'처럼 계약 명칭에 흔한 단어로 후보에서 빼지 않는다.
+    contract_folder=bool(re.search(r'계약',semantic_label(parent))) and not re.search(r'근로|노무|내역',parent)
+    if re.search(r'품의|공문|보고|산출|내역|착공|회의|대금|청구|검사|세금계산|견적|사진|결의',name):return False
+    if re.search(r'도면',name) and not contract_folder:return False
     if '계약서' in parent:return True
     opaque=bool(re.fullmatch(r'[\d\s_.()-]+',name) or re.match(r'(?i)^(?:scan|스캔|문서|untitled)[\s_\d.-]*$',name))
     return opaque and (suffix=='.pdf' and bool(re.search(r'계약|기술지도|용역|도급|공사',parent)) or '계약서' in parent)
@@ -1627,10 +1647,275 @@ def round_target(paths,parts):
     return None,''
 
 
+# ---- 사용자가 직접 만든 사업 폴더: 단계 → 계약(도급공사·용역·관급자재) → 업무 폴더 순으로 범위를 좁혀 대응한다 ----
+STAGE_SOURCE=(('설계단계','설계단계'),('설계','설계단계'),('시공단계','시공단계'),('시공','시공단계'),('기획','기획'))
+# 원래 폴더 이름 → 같은 계약 가지 안의 표준 하위 폴더(semantic_label). 앞쪽이 우선이다.
+BRANCH_CHILD_WORDS=(
+    (r'변경품의|변경계약|계약변경|원인행위변경|계약금액조정|실정보고', ('설계변경',)),
+    (r'설계변경', ('설계변경',)),
+    (r'준공정산', ('준공정산',)),
+    (r'준공계|준공서류', ('준공계','완수계공문및검사조서','완수계')),
+    (r'완수', ('완수계공문및검사조서','완수계')),
+    (r'품의', ('품의서',)),
+    (r'계약|원인행위', ('계약서',)),
+    (r'보고회|설명회|간담회', ('회의및협의기록',)),
+    (r'착공|착수', ('착공계','착수계')),
+    (r'선금', ('선금',)),
+    (r'노무비', ('노무비',)),
+    (r'기성', ('기성',)),
+    (r'작업일보|작업일지', ('작업일보',)),
+    (r'안전관리비|안전보건관리비', ('안전관리비사용현황',)),
+    (r'하도급', ('하도급통보',)),
+    (r'자재공급원|자재승인|승인요청|시공계획', ('승인요청',)),
+    (r'작업지시', ('작업지시서',)),
+    (r'송부자료|제공자료|전달자료|추가도면', ('시공사에제공한자료','용역사에제공한자료','납품사에제공한자료')),
+    (r'성과품|성과물', ('최종성과품',)),
+    (r'회의|협의|kom|의사결정', ('회의및협의기록',)),
+    (r'공문', ('기타공문',)),
+)
+
+
+TOP_LEVEL_WORDS=((r'공사전사진|착공전사진','공사전'),(r'보도자료|경과보고|언론','주요보고자료'),(r'사용기관|타기관','타기관협의자료'))
+
+
+def stage_node(paths,word):
+    found=[p for p in paths if '/' not in p and (word in semantic_label(p) if word!='기획' else semantic_label(p).startswith('기획'))]
+    return found[0] if len(found)==1 else ''
+
+
+def unit_core(label):
+    """'2. 디자인 감리' / '3 디자인 감리 용역' -> '디자인감리': ordering numbers and the generic word 용역 removed."""
+    return semantic_label(label).replace('용역','')
+
+
+def unit_matches(part,branch):
+    a,b=unit_core(part),unit_core(PurePosixPath(branch).name)
+    if len(a)<2 or len(b)<2:
+        return False
+    word=service_word(part)
+    if word and word==service_word(PurePosixPath(branch).name):
+        return True
+    if (len(a)>=3 and a in b) or (len(b)>=3 and b in a):
+        return True
+    x,y={a[i:i+2] for i in range(len(a)-1)},{b[i:i+2] for i in range(len(b)-1)}
+    return bool(x and y) and len(x&y)/min(len(x),len(y))>=0.6
+
+
+def source_branch(paths,parts):
+    """(index of the unit heading or the stage, contract branch, status). status: 'ok', 'ambiguous' or ''."""
+    stage_at=None;stage=''
+    for i,part in enumerate(parts):
+        value=semantic_label(part)
+        word=next((w for k,w in STAGE_SOURCE if value.startswith(k) or value==k),None)
+        if word:
+            stage_at,stage=i,stage_node(paths,word);break
+    if stage_at is None or not stage:
+        return None,'',''
+    branches=[p for p in contract_branches(paths) if p.startswith(stage+'/')]
+    services=[b for b in branches if not re.search(r'도급공사|관급자재',PurePosixPath(b).name)]
+    if not branches:
+        return None,'',''
+    after=parts[stage_at+1:]
+    # 1) 명시된 용역·관급자재 (단계에 가까운 쪽 우선: '32 기술지도 용역/기술지도 회의'의 단위는 32). 하나로 정해질 때만.
+    service_like=False
+    for j in range(len(after)):
+        part=after[j]
+        value=semantic_label(part)
+        if value=='용역':
+            service_like=True;continue
+        if '관급' in value:
+            found=[b for b in branches if '관급자재' in semantic_label(PurePosixPath(b).name)]
+            if len(found)==1:return stage_at+1+j,found[0],'ok'
+        if '용역' in value or service_word(part) or (j>0 and semantic_label(after[j-1])=='용역'):
+            found=[b for b in services if unit_matches(part,b)]
+            if len(found)==1:return stage_at+1+j,found[0],'ok'
+            if j>0 and semantic_label(after[j-1])=='용역' or j==0:
+                return stage_at+1+j,'','ambiguous'
+    if service_like:
+        return stage_at,'','ambiguous'
+    # 2) 명시된 공사, 또는 단계의 주 계약(설계단계 → 설계 용역, 시공단계 → 도급공사)
+    main=[b for b in branches if '도급공사' in PurePosixPath(b).name] or [b for b in branches if '설계용역' in semantic_label(PurePosixPath(b).name)]
+    if len(main)==1:
+        return stage_at,main[0],'ok'
+    return stage_at,'','ambiguous'
+
+
+def round_label(siblings,n):
+    """Name a missing round like its siblings: '1 1차 설계변경' -> '3 3차 설계변경'."""
+    sample=next((label_word(PurePosixPath(s).name) for s in siblings if re.search(r'\d+차',PurePosixPath(s).name)),'설계변경 {}차')
+    return f'{n} '+re.sub(r'\d+차',f'{n}차',sample,count=1)
+
+
+def scoped_target(paths,parts,name=''):
+    """Inside one contract branch, map the user's own folders to the standard child. Returns (target, tail, why, status)."""
+    at,branch,status=source_branch(paths,parts)
+    if at is None:
+        # 단계 밖 맨 위 폴더: '4. 공사전 사진', '3. 보도자료', '7. 경과보고', '5. 사용기관 …'
+        if parts:
+            value=semantic_label(parts[0])
+            for pattern,label in TOP_LEVEL_WORDS:
+                if re.search(pattern,value):
+                    hit=[p for p in paths if semantic_label(PurePosixPath(p).name)==label]
+                    if len(hit)==1:
+                        return hit[0],'/'.join(parts[1:]),parts[0]+' → '+PurePosixPath(hit[0]).name,'ok'
+                    break
+        return '','','',''
+    if not branch:
+        return '','','',status
+    children=[p for p in paths if p.startswith(branch+'/')]
+    rest=parts[at+1:]
+    # 안쪽에 다른 큰 갈래(1 공통, 5 인수인계, 주요 보고자료 …)가 이름으로 들어 있으면 그 갈래를 따르도록 여기서 정하지 않는다.
+    upper=[p for p in paths if p.count('/')<=1 and not p.startswith(branch.split('/')[0]+'/') and p!=branch.split('/')[0]]
+    for j,part in enumerate(rest):
+        hit=[p for p in upper if same_folder_name(part,PurePosixPath(p).name)]
+        if not hit:
+            continue
+        top=hit[0]
+        if len(hit)==1 and '/' not in top:
+            # '2. 공사/24. 인수인계' → '5 인수인계/1 인수인계 도서': 큰 갈래 바로 아래 같은 말로 시작하는 폴더가 하나면 그곳.
+            same=[p for p in paths if str(PurePosixPath(p).parent)==top and semantic_label(PurePosixPath(p).name).startswith(semantic_label(top))]
+            if len(same)==1:
+                return same[0],'/'.join(rest[j+1:]),part+' → '+PurePosixPath(same[0]).name,'ok'
+        return '','','',''
+    # 차수: '설계변경 3차', '변경 품의/1차', '계약/변경2차' → 이 계약 가지의 N차 설계변경(없으면 같은 이름 규칙으로 새로 만든다)
+    for j in range(len(rest)-1,-1,-1):
+        value=semantic_label(rest[j])
+        # '[학관2차] 라운지 설계변경도면'의 '학관2차'는 사업 차수이지 설계변경 차수가 아니다.
+        if not re.search(r'(?:^|[\s(（\[_-]|변경|제)\s*\d{1,2}\s*차',label_word(rest[j])):
+            continue
+        key=round_key(rest[j],rest[:j])
+        if not key:
+            m=re.fullmatch(r'(?:변경|제)?(\d{1,2})차(?:변경)?(?:최종)?',value)
+            if m and any(re.search(r'변경|계약|품의',semantic_label(a)) for a in rest[:j]):
+                key=('설계변경',int(m.group(1)))
+        if key and key[0]!='설계변경':
+            return '','','',''  # 작업지시·기성 차수는 기존 차수 규칙(round_target)이 맡는다.
+        if not key:
+            continue
+        n=key[1]
+        rounds=[p for p in children if round_key(PurePosixPath(p).name,PurePosixPath(p).parts[:-1])==key]
+        inner='/'.join(rest[j+1:])
+        if len(rounds)==1:
+            return rounds[0],inner,rest[j]+' → '+PurePosixPath(rounds[0]).name,'round'
+        parent=[p for p in children if semantic_label(PurePosixPath(p).name)=='설계변경']
+        if len(parent)==1 and not rounds:
+            siblings=[p for p in children if str(PurePosixPath(p).parent)==parent[0]]
+            new=round_label(siblings,n)
+            return parent[0],'/'.join(x for x in (new,inner) if x),rest[j]+' → '+new+' (새 차수 폴더)','round'
+        return '','','','ambiguous'
+    # 사진: 공사 전·중·후
+    for j in range(len(rest)-1,-1,-1):
+        value=semantic_label(rest[j])
+        if '사진' not in value:
+            continue
+        photo=[p for p in children if semantic_label(PurePosixPath(p).name)=='사진']
+        if len(photo)!=1:
+            break
+        phase='공사전' if re.search(r'공사전|착공전',value) else '공사후' if re.search(r'준공|공사후|완료',value) else ''
+        if not phase:
+            later='/'.join(rest[j+1:])
+            phase='공사후' if re.search(r'준공|공사\s*후|완료',later) else '공사중'
+        sub=[p for p in children if str(PurePosixPath(p).parent)==photo[0] and semantic_label(PurePosixPath(p).name)==phase]
+        target=sub[0] if len(sub)==1 else photo[0]
+        return target,'/'.join(rest[j+1:]),rest[j]+' → '+PurePosixPath(target).name,'ok'
+    def child_for(part):
+        value=semantic_label(part)
+        if len(value)<2:
+            return ''
+        exact=[p for p in children if same_folder_name(part,PurePosixPath(p).name)]
+        if len(exact)!=1:
+            exact=[]
+            for pattern,labels in BRANCH_CHILD_WORDS:
+                if re.search(pattern,value):
+                    for label in labels:
+                        exact=[p for p in children if semantic_label(PurePosixPath(p).name)==label]
+                        if exact:break
+                    break
+        if not exact:
+            return ''
+        # 같은 이름이 여럿(최초 품의서·준공정산 품의서)이면 정산이라고 적힌 경우가 아니면 앞쪽(얕은) 폴더.
+        if len(exact)>1:
+            if '정산' in value:
+                exact=[p for p in exact if '정산' in p] or exact
+            exact=sorted(exact,key=lambda p:(p.count('/'),paths.index(p)))
+        return exact[0]
+    # 바깥(계약 가지에 가까운) 업무 폴더가 묶음의 성격을 정한다: '준공계 제출/09.자재승인서류'는 준공계.
+    # 다만 '공문', '회의' 같은 넓은 갈래는 안쪽에 더 구체적인 업무 폴더가 있으면 그쪽을 따른다('공문/노무비 신청').
+    found=None;broad=None
+    for j,part in enumerate(rest):
+        target=child_for(part)
+        if not target:
+            continue
+        if semantic_label(PurePosixPath(target).name) in ('기타공문','회의및협의기록'):
+            broad=broad or (target,j);continue
+        found=(target,j);break
+    found=found or broad
+    if found:
+        target,j=found
+        tail=rest[j+1:]
+        # '완수계' → '완수계 공문 및 검사 조서'처럼 같은 말로 시작하는 하위 폴더가 하나면 그 안으로.
+        kids=[p for p in children if str(PurePosixPath(p).parent)==target]
+        word=semantic_label(rest[j])
+        same=[p for p in kids if word and semantic_label(PurePosixPath(p).name).startswith(semantic_label(PurePosixPath(target).name))]
+        if len(same)==1 and not any(semantic_label(PurePosixPath(p).name) in ('품의서','계약서') for p in kids):
+            target=same[0]
+        kids={semantic_label(PurePosixPath(p).name):p for p in children if str(PurePosixPath(p).parent)==target}
+        if '품의서' in kids and '계약서' in kids:
+            # '최초 품의 및 최초 계약서' 같은 묶음 폴더: 안쪽 폴더나 파일 이름으로 품의서/계약서를 나눈다.
+            if tail and semantic_label(tail[0]) in ('품의서','계약서'):
+                target,tail=kids[semantic_label(tail[0])],tail[1:]
+            else:
+                contract=re.search(r'계약서|원인행위|계약변경|변경계약',name) and Path(name).suffix.lower() in CONTRACT_FORMATS
+                target=kids['계약서' if contract else '품의서']
+        return target,'/'.join(tail),rest[j]+' → '+PurePosixPath(target).name,'ok'
+    return '',branch,'','unmapped'
+
+
+WEAK_RULE=re.compile(r'^(?:파일명 규칙|파일명에 폴더 이름 포함|본문 첫머리 규칙|기존 폴더 이름 일치|첨부) · ')
+
+
+def map_scoped(project,rows,paths,inbox=INBOX):
+    """A user-made project folder (1. 설계단계/…, 2. 시공단계/2. 공사/…, 3. 용역/2. 디자인 감리/…).
+    Only files that are held, or that a single word sent to another contract or stage, are changed.
+    Round folders follow the round like the older round mapping does."""
+    branches=set(contract_branches(paths))
+    for row in rows:
+        row.pop('scopeMapped',None)
+        if row.get('done') or row.get('method')=='manual' or row.get('canonicalContract'):
+            continue
+        parts=source_parts(row,inbox)
+        target,tail,why,status=scoped_target(paths,parts,row['name'])
+        if not status:
+            continue
+        destination=row.get('destination') or ''
+        own='/'.join(PurePosixPath(target).parts[:2]) if target else (tail if status=='unmapped' else '')
+        elsewhere=bool(destination and own and '/'.join(PurePosixPath(destination).parts[:2]) in branches and not destination.startswith(own+'/') and destination!=own)
+        if target:
+            # 이미 정한 목적지(기존 표준 폴더 이름 일치, 계약서 분석 등)는 그대로 둔다. 비어 있거나, 한 단어 규칙이거나,
+            # 다른 계약(용역 자료가 도급공사 준공계로)으로 간 경우만 바꾼다. 차수 폴더는 항상 그 차수로.
+            # 단계 이름 폴더('5 인수인계') 하나만 정한 목적지는 너무 얕아 더 구체적인 대응으로 바꾼다.
+            if destination and '/' in destination and status!='round' and not WEAK_RULE.match(row.get('reason','')) and not elsewhere:
+                continue
+            row.pop('attachTo',None);row.pop('canonicalAttachment',None)
+            for key in ('proposedName','signedDate','nameReviewRequired'):
+                row.pop(key,None)
+            row.update(destination=target,method='rule',aiChecked=True,roleMapped=True,scopeMapped=True,contractReview=False,reviewRequired=False,
+                       secondaryFolders=[],reason='사업 폴더 구조 대응 · '+why+' (내부 구조 그대로)')
+            row.update(keepSub=tail,keepSubFor=target) if tail else (row.pop('keepSub',None),row.pop('keepSubFor',None))
+            continue
+        # 범위는 알지만 하위 폴더를 못 정한 경우: 한 단어 규칙이 다른 계약·단계로 보낸 것만 막는다.
+        branch=tail if status=='unmapped' else ''
+        if destination and (elsewhere or WEAK_RULE.match(row.get('reason','')) and (not branch or not destination.startswith(branch+'/'))):
+            row.pop('attachTo',None);row.pop('canonicalAttachment',None);row.pop('keepSub',None);row.pop('keepSubFor',None)
+            row.update(destination='',method='hold',reviewRequired=True,scopeMapped=True,
+                       reason='사업 폴더 구조 · '+(branch or '같은 단계의 계약')+' 자료로 보이지만 보관 위치를 정하지 못했습니다. 파일 이름의 한 단어로 다른 단계·계약에 보내지 않습니다.')
+
+
 def map_roles(project,rows,paths,inbox=INBOX):
     """Standard roles first: round folders, the confirmed service branch, then 품의/계약 split. Letters come later."""
+    map_scoped(project,rows,paths,inbox)
     for row in rows:
-        if row.get('done') or row.get('method')=='manual':
+        if row.get('done') or row.get('method')=='manual' or row.get('scopeMapped'):
             continue
         parts=source_parts(row,inbox)
         index,target=round_target(paths,parts)
