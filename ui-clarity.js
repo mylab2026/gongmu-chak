@@ -20,6 +20,10 @@ details.more p,details.more label{margin:6px 0}
 .ai-note b{color:#5a3c0b}.ai-note .row{margin-top:10px}
 #noContractLabel.choice-card{display:flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:14px 16px;margin:0 0 14px;font-weight:700;color:var(--ink)}
 #noContractLabel.choice-card:has(input:checked){border:2px solid var(--brand);background:var(--brand-soft);color:var(--brand-ink)}
+#pendingContracts [data-ci-discard]{border-color:#f0dca6;color:#92400e;background:#fffbeb;font-weight:700}
+#pendingContracts details.ci-replace{margin:6px 0 10px}#pendingContracts details.ci-replace>summary{color:var(--ink-3);font-size:var(--fs-meta)}
+#noContractLabel.choice-card{margin:14px 0 0}
+#pendingContracts .ci-card:not(:has(.ci-result)):not(:has(.error)){background:#f8fafc;border-style:dashed;padding-top:14px;padding-bottom:14px}#pendingContracts .ci-card:not(:has(.ci-result)):not(:has(.error)) .ci-options button{min-height:44px;padding:8px 12px;font-size:var(--fs-help)}
 #contractStep.no-ai .ci-card .error{background:var(--warn-soft);border-color:#f0dca6;color:#6b4a12}
 #typeChoices button{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 #typeChoices .type-desc{font-size:var(--fs-help);color:var(--ink-2);font-weight:400}
@@ -31,6 +35,8 @@ details.more p,details.more label{margin:6px 0}
 #checkPanel .check-hint{margin:8px 0 0}
 #reviewMap .map-group .map-parent{display:block;font-weight:400;font-size:var(--fs-meta);color:var(--ink-3)}
 #reviewStep .sticky{padding:12px 18px}
+/* 맨 아래쪽 파일을 ‘맞아요’로 확인하면 안내가 사라져 페이지가 짧아진다. 아래 여백이 없으면 브라우저가 보던 위치를 지키지 못하고 화면이 위로 끌려 올라간다. */
+#reviewStep{padding-bottom:40vh}
 #home .recommended{border:2px solid var(--brand)!important;background:#f8faff}
 #home .recommended b::after{content:'추천';font-size:var(--fs-tag);color:#fff;background:var(--brand);border-radius:99px;padding:1px 8px;margin-left:8px;vertical-align:2px}
 `;document.head.appendChild(style);
@@ -40,9 +46,9 @@ function fold(section,nodes,label){nodes=nodes.filter(Boolean);if(!nodes.length|
 
 /* 1. 단계별 '지금 할 일' */
 const leads={
- folderStep:()=>['전체 사업 폴더를 고른 뒤 ‘다음’을 누르세요','실제 폴더 없이 써 보려면 ‘예시 사업 폴더로 시연’을 누르세요.'],
+ folderStep:()=>['정리할 전체 사업 폴더를 고른 뒤 ‘다음’을 누르세요','고른 폴더의 문서는 4단계에서 확인하고 ‘파일 이동 실행’을 누를 때만 옮겨집니다.'],
  projectStep:()=>['정리할 사업을 고른 뒤 ‘다음’을 누르세요','새로 생긴 계약이 있을 때만 아래 칸을 체크하세요.'],
- contractStep:()=>S.mode==='ongoing'?['새로 생긴 계약서를 등록하세요','등록한 계약은 기존 사업에 더해집니다.']:S.status?.configured?['계약서를 등록하거나, 없으면 ‘계약서 없음’을 고르세요','계약서를 등록하면 사업 단계와 문서 분류가 더 정확해집니다.']:['먼저 AI를 연결해주세요','계약서 자동 읽기와 문서 분류에 학내 AI 연결이 필요합니다.'],
+ contractStep:()=>S.mode==='ongoing'?['새로 생긴 계약서를 등록하세요','등록한 계약은 기존 사업에 더해집니다.']:S.status?.configured?['사업 폴더에서 찾은 계약서를 확인하세요','내가 관리하지 않는 계약이나 중복된 계약은 ‘내 계약 아님 · 제외’로 빼고 ‘다음’을 누르세요. 아직 계약이 없으면 아래 ‘계약서 없음’을 고르세요.']:['먼저 AI를 연결해주세요','계약서 자동 읽기와 문서 분류에 학내 AI 연결이 필요합니다.'],
  treeStep:()=>['사업유형을 고르면 기본 폴더 구조가 자동으로 만들어집니다','폴더 이름은 필요할 때만 고치고 ‘다음’을 누르세요.'],
  reviewStep:()=>{const left=S.plan?S.plan.rows.filter(mapNeedsCheck).length:0;return left?['확인이 필요한 파일 '+left+'개를 차례로 확인한 뒤 ‘파일 이동 실행’을 누르세요','보류 파일은 원래 위치에 그대로 둡니다.']:['연결도를 훑어본 뒤 ‘파일 이동 실행’을 누르세요','목적지를 정한 파일만 이동하며, 보류 파일은 원래 위치에 그대로 둡니다.'];}
 };
@@ -50,9 +56,10 @@ for(const id of Object.keys(leads)){const section=$('#'+id);if(!section)continue
 function updateLead(){for(const [id,make] of Object.entries(leads)){const section=$('#'+id),lead=$('#lead-'+id);if(!section||!lead||section.hidden)continue;const [main,sub]=make();lead.innerHTML='<span class="lead-tag">지금 할 일</span><div>'+esc(main)+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>';}}
 
 /* 부가 설명 접기: 지우지 않고 '자세히 보기' 안으로 옮긴다. */
-fold($('#folderStep'),[$('#demoRootHint')]);
-fold($('#contractStep'),[...document.querySelectorAll('#contractStep > p.muted')]);
-fold($('#contractArea'),[...document.querySelectorAll('#contractArea > p.muted')]);
+fold($('#folderStep'),[document.querySelector('#folderStep > p:not(.muted)'),$('#demoRootHint')]);
+/* 2단계 설명은 ‘자세히 보기’ 하나로 모은다. */
+fold($('#contractArea'),[...document.querySelectorAll('#contractStep > p.muted, #contractArea > p.muted')]);
+document.querySelector('#contractArea details.more')?.insertAdjacentHTML('beforeend','<p>자동 입력된 값이 틀리면 해당 칸을 눌러 고치세요. 빠진 계약서는 아래 빈 칸에서 파일 또는 캡처로 추가할 수 있습니다.</p>');
 fold($('#treeStep'),[...document.querySelectorAll('#treeStep .card > p.muted')].filter(p=>p.id!=='typeSuggestion'));
 fold($('#reviewStep'),[...document.querySelectorAll('#reviewStep > p.muted')]);
 const bulkCard=$('#bulkAI')?.closest('.card');if(bulkCard)fold(bulkCard,[...bulkCard.querySelectorAll(':scope > p.muted, :scope > label.muted')]);
@@ -83,7 +90,7 @@ clearError=function(){baseClearError();unmark();errorBox.classList.remove('soft'
 const contractNote=document.createElement('div');contractNote.className='ai-note';contractNote.id='contractAINote';contractNote.hidden=true;
 contractNote.innerHTML='<b>AI가 연결되지 않았습니다.</b> 계약서를 읽으려면 AI 연결이 필요합니다. 연결한 뒤 ‘계약서 다시 찾기’를 누르세요. 예시 사업 폴더로 시연 중이라면 계약서 없이 진행해도 됩니다.<div class="row"><button class="primary" id="contractAIConnect">AI 연결 설정</button><button id="noContractQuick">계약서 없이 진행</button></div>';
 $('#lead-contractStep').after(contractNote);
-const noContractLabel=$('#noContractLabel');noContractLabel.classList.add('choice-card');contractNote.after(noContractLabel);
+const noContractLabel=$('#noContractLabel');noContractLabel.classList.add('choice-card');$('#contractArea').after(noContractLabel);
 $('#noContractQuick').onclick=()=>{const box=$('#noContracts');if(box.disabled)return;box.checked=true;box.onchange?.();updateContractNote();$('#contractNext').focus();};
 $('#contractAIConnect').onclick=()=>$('#settingsButton').click();
 function updateContractNote(){const off=!S.status?.configured&&S.mode==='initial';$('#contractStep').classList.toggle('no-ai',!S.status?.configured);const wasHidden=noContractLabel.dataset.hiddenByNote==='1';if(wasHidden){noContractLabel.hidden=false;delete noContractLabel.dataset.hiddenByNote;}contractNote.hidden=!off||$('#noContracts').checked||noContractLabel.hidden;if(!contractNote.hidden){noContractLabel.hidden=true;noContractLabel.dataset.hiddenByNote='1';}}
@@ -156,7 +163,7 @@ const themeStyle=document.createElement('style');themeStyle.textContent=`
 body{display:flex;align-items:stretch;min-height:100vh;background:var(--bg)}
 body>header{display:none!important}
 body>main{flex:1 1 auto;min-width:0;width:100%;max-width:1140px;margin:24px auto;padding:0 28px 70px;box-sizing:border-box}
-#appSide{flex:0 0 248px;box-sizing:border-box;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--side);color:#fff;display:flex;flex-direction:column;gap:20px;padding:22px 14px}
+#appSide{overflow-anchor:none;flex:0 0 248px;box-sizing:border-box;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--side);color:#fff;display:flex;flex-direction:column;gap:20px;padding:22px 14px}
 #appSide .side-brand{display:flex;align-items:center;gap:10px;padding:0 6px}
 #appSide .side-logo{display:flex;width:38px;height:38px;border-radius:10px;align-items:center;justify-content:center;background:var(--brand)}
 #appSide .side-brand b{display:block;font-size:18px;letter-spacing:-.01em}#appSide .side-brand small{display:block;font-size:12px;color:var(--side-muted)}
@@ -205,6 +212,11 @@ navButton('sideCollect','모아보기','grid',openFrom('#collectButton'));
 const help=$('#chatbotHelp');if(help){iconize(help,'help');nav.appendChild(help);}
 const usage=$('#usageBadge');iconize(usage,'ai');bottom.appendChild(usage);
 const settings=$('#settingsButton');iconize(settings,'gear');bottom.appendChild(settings);
+/* 시연은 업무 화면(1단계)에서 빼고 왼쪽 메뉴 아래 별도 진입점으로 둔다. 기존 #demoRoot 동작을 그대로 쓴다. */
+$('#demoRoot').hidden=true;
+const demoStart=document.createElement('button');demoStart.id='sideDemo';demoStart.textContent='예시 폴더로 시연';demoStart.title='실제 문서 없이 시연용 예시 사업 폴더로 처음 문서 정리를 해 봅니다.';iconize(demoStart,'grid');
+demoStart.onclick=()=>{if($('#wizard').hidden||$('#folderStep').hidden)$('#initialButton').click();$('#demoRoot').click();};
+bottom.prepend(demoStart);
 
 /* 단계 제목: 아이콘 타일 + ‘n / 4 · 처음 문서 정리’ + 제목 */
 const stepHead=document.createElement('div');stepHead.className='step-head';stepHead.innerHTML='<span class="step-ic" id="stepIcon"></span><div id="stepHeadText"></div>';
@@ -240,15 +252,16 @@ function currentProjectName(){const visible=id=>$(id)&&!$(id).hidden;
 let sideQueued=false;
 function updateSide(){sideQueued=false;
  const visible=id=>$(id)&&!$(id).hidden,inWizard=visible('#wizard');
- $('#sideProject').textContent=currentProjectName();
+ const setText=(el,v)=>{if(el.textContent!==v)el.textContent=v;},setHTML=(el,v)=>{if(el.dataset.html!==v){el.dataset.html=v;el.innerHTML=v;}};
+ setText($('#sideProject'),currentProjectName());
  const m=($('#progress').textContent||'').match(/(\d+)\s*\/\s*(\d+)/),wrap=$('#sideStepsWrap');
- wrap.hidden=!(inWizard&&m);
+ if(wrap.hidden!==!(inWizard&&m))wrap.hidden=!(inWizard&&m);
  if(inWizard&&m){const now=Number(m[1]),total=Number(m[2]),initial=S.mode==='initial';
   const names=initial?stepNames.initial:total>=3?stepNames.ongoing3:stepNames.ongoing2,icons=initial?stepNames.initialIcons:total>=3?stepNames.ongoingIcons3:stepNames.ongoingIcons2;
-  $('#sideStepsLabel').textContent=initial?'처음 문서 정리':'계속 문서 정리';
-  $('#sideSteps').innerHTML=names.map((name,i)=>{const n=i+1,state=n<now?'done':n===now?'now':'idle';return '<div class="side-step '+state+'" role="listitem"'+(state==='now'?' aria-current="step"':'')+'>'+svg(icons[i],20)+'<span>'+esc(name)+'</span>'+(state==='done'?svg('check',18):'<span class="n">'+n+'</span>')+'</div>';}).join('');}
+  setText($('#sideStepsLabel'),initial?'처음 문서 정리':'계속 문서 정리');
+  setHTML($('#sideSteps'),names.map((name,i)=>{const n=i+1,state=n<now?'done':n===now?'now':'idle';return '<div class="side-step '+state+'" role="listitem"'+(state==='now'?' aria-current="step"':'')+'>'+svg(icons[i],20)+'<span>'+esc(name)+'</span>'+(state==='done'?svg('check',18):'<span class="n">'+n+'</span>')+'</div>';}).join(''));}
  const section=['folderStep','projectStep','contractStep','treeStep','reviewStep'].find(id=>visible('#'+id));
- if(section)$('#stepIcon').innerHTML=svg(stepIcons[section],26);
+ if(section)setHTML($('#stepIcon'),svg(stepIcons[section],26));
  home.classList.toggle('on',visible('#home'));$('#sideFind').classList.toggle('on',visible('#finder'));$('#sideCollect').classList.toggle('on',visible('#collection'));}
 function queueSide(){if(!sideQueued){sideQueued=true;requestAnimationFrame(updateSide);}}
 new MutationObserver(queueSide).observe(document.querySelector('main'),{attributes:true,attributeFilter:['hidden'],subtree:true,childList:true,characterData:true});

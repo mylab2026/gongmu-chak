@@ -37,3 +37,23 @@ assert.equal(context.S.contracts[1].branchLabel,'none');
 assert.equal($('#treeNext').onclick(),'next');
 assert.equal(nextCalls,3);
 console.log('PASS: selected service proceeds through Next, missing selection blocks, each contract is independent, none completes input');
+
+// LIM 2026-11-21: only 재해예방 기술지도 용역 in 시공단계 is asked. 기획·설계단계 ‘용역1’ were asked too and got the
+// 시공 service template swapped in; 감리 등 other 부수 용역 must pass without a question.
+context.S.tree=structuredClone(templates.planning);context.S.contracts=[];
+const asked=vm.runInContext('serviceBranches()',context);
+assert.equal(asked.length,1,'only the 시공단계 slot is asked');
+assert(context.S.tree[Number(asked[0].key.split('.')[0])].label.includes('시공단계'));
+vm.runInContext('renderAncillary()',context);
+assert($('#ancillaryControls').innerHTML.includes('시공단계 · 재해예방 기술지도 용역'));
+assert.equal(($('#ancillaryControls').innerHTML.match(/data-service-node=/g)||[]).length,2,'one question (two choices)');
+const designSlot=context.S.tree.find(n=>n.label.includes('설계단계')).children.find(n=>/용역\s*\d*$/.test(n.label));
+const designBefore=JSON.stringify(designSlot);
+controls.find(c=>c.dataset.serviceNode&&c.value==='workOnly').onchange();
+assert.equal(JSON.stringify(designSlot),designBefore,'설계단계 용역 keeps its own folders');
+context.S.contracts=[{id:'super',analysis:{kind:'service',title:'가상관 증축공사 감리 용역'}}];
+vm.runInContext('renderAncillary()',context);
+assert.equal(context.S.contracts[0].management,'direct');
+assert(!$('#ancillaryControls').innerHTML.includes('감리'));
+assert.equal($('#treeNext').onclick(),'next');
+console.log('PASS: only 시공단계 재해예방 기술지도 is asked; 기획·설계 용역 untouched; 감리 passes as a direct contract');

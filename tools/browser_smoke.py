@@ -119,6 +119,9 @@ def main():
                     # Theme A: a fixed left menu keeps the header buttons (same ids) and shows the step in progress.
                     expect(page.locator('#appSide')).to_be_visible();assert page.locator('#appSide #homeButton').count()==1 and page.locator('#homeButton').count()==1
                     expect(page.locator('#sideSteps .side-step.now')).to_contain_text('폴더 선택')
+                    # 시연은 업무 화면(1단계)에 두지 않고 왼쪽 메뉴 아래에만 둔다.
+                    assert not page.locator('#demoRoot').is_visible() and page.locator('#sideDemo').is_visible()
+                    result['demo_only_in_side_menu']=True
                     page.locator('#folderNext').click()
                     assert page.evaluate("(()=>{const e=$('#error');return !e.hidden&&e.classList.contains('inline')&&e.nextElementSibling?.contains($('#chooseRoot'))})()")
                     result['inline_error_next_to_field']=True
@@ -157,6 +160,12 @@ def main():
                     skip=page.evaluate('rels=>rels.map(rel=>S.plan.rows.find(r=>r.relative===rel).id)',[held_relative,retarget_relative]);page.locator('#mapSources [data-map-review]'+''.join(':not([data-map-review="'+i+'"])' for i in skip)).first.click()  # file order differs by OS: confirm a moving file first; the held and retarget files are checked below
                     page.locator('.map-route-ok').wait_for(state='visible')
                     page.screenshot(path=str(output/'05a-inline-route-confirm.png'),full_page=True)
+                    # Worst case for keeping the place: the confirm button sits at the bottom edge of the window.
+                    # The page must still have room below, or it shrinks under the reader and the view jumps up.
+                    page.evaluate("$('.map-route-ok').scrollIntoView({block:'end'})")
+                    room=page.evaluate('document.documentElement.scrollHeight-innerHeight-scrollY')
+                    assert room>=150,room
+                    result['room_below_route_confirm']=room
                     page.locator('.map-route-ok').scroll_into_view_if_needed();before_y=page.evaluate('window.scrollY');page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
                     page.wait_for_function('y=>Math.abs(window.scrollY-y)<5',arg=before_y,timeout=5000)
                     result['route_confirm_scroll_preserved']=True
