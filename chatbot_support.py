@@ -4,6 +4,9 @@ import platform
 import re
 
 BUILD = '0.11.2-test / chatbot-support.1'
+# SNU AI Chat 공무착착 챗봇. ?prefill= 은 입력칸만 채우고 보내지 않는다(?q= 는 바로 보내므로 쓰지 않는다).
+CHATBOT_URL = 'https://aichat.snu.ac.kr/dashboard/chat/33601'
+BRIEF_ERROR_LIMIT = 300
 CATEGORIES = ('설치·실행', 'AI 연결', '계약서 등록', '폴더 구조', '파일 이동·보류', '찾기·모아보기', '되돌리기', '기타')
 
 
@@ -58,5 +61,22 @@ def make_report(payload, *, project=None, current=None, model='', configured=Fal
         lines += ['사업 파일 목록·계약 현황·이력은 포함하지 않았습니다.',
                   '필요하면 프로그램 시작 화면에서 누적 정리 이력 ZIP을 내려받아 해당 회차 TXT를 별도로 첨부하세요.']
     text = redact('\n'.join(lines)+'\n', roots=roots, secrets=secrets)
-    return {'name': '공무착착-챗봇상담-'+at[:19].replace(':','').replace('-','')+'.txt',
+    brief = make_brief(fields, category, project=project, model=model, configured=configured, roots=roots, secrets=secrets)
+    return {'brief': brief, 'chatUrl': CHATBOT_URL, 'name': '공무착착-챗봇상담-'+at[:19].replace(':','').replace('-','')+'.txt',
             'text': text, 'includesProjectState': current is not None, 'build': BUILD}
+
+
+def make_brief(fields, category, *, project=None, model='', configured=False, roots=(), secrets=()):
+    """챗봇 입력칸에 미리 채울 짧은 문의. 파일 목록·이력·문서 본문은 넣지 않는다(주소에 담기므로)."""
+    error = ' '.join(fields.get('error', '').split())
+    if len(error) > BRIEF_ERROR_LIMIT:
+        error = error[:BRIEF_ERROR_LIMIT] + '…(이하 생략)'
+    lines = [fields['question'], '', '[공무착착 상황]',
+             '- 화면: ' + (fields.get('screen') or '미확인') + ' / 문의 종류: ' + category,
+             '- 프로그램: ' + BUILD.split(' /')[0] + ' / AI 키 ' + ('등록됨' if configured else '미등록')
+             + (' / 모델 ' + model if model else '')]
+    if project:
+        lines.append('- 사업: ' + project.get('name', '이름 없음'))
+    if error:
+        lines.append('- 오류 문구: ' + error)
+    return redact('\n'.join(lines), roots=roots, secrets=secrets)

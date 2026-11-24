@@ -292,9 +292,14 @@ $('#sideCollect').after(manageButton);
 const baseUpdateSide=updateSide;
 updateSide=function(){baseUpdateSide();const inCollection=!$('#collection').hidden,manage=document.body.dataset.collectMode==='manage';$('#sideCollect').classList.toggle('on',inCollection&&!manage);manageButton.classList.toggle('on',inCollection&&manage);};
 
-/* 7. 챗봇 도움: 질문 한 칸 + ‘질문 복사하기’ 한 번. 나머지(사업·문의 종류·오류·자료 포함·미리보기)는 접는다.
-   자동 전송하지 않는다는 원칙은 그대로: 복사한 내용을 사용자가 직접 챗봇에 붙여넣는다. */
+/* 7. 챗봇 도움: 질문 한 칸 + ‘챗봇에 물어보기’ 한 번. 질문과 짧은 상황 요약을 보여 주고, 사용자가 확인하면
+   SNU AI Chat 공무착착 챗봇을 ?prefill= 로 열어 입력칸에 채운다. 보내기는 챗봇에서 사용자가 직접 누른다.
+   사업 파일 목록·이력(상담자료 전체)은 주소에 담지 않고 ‘질문 복사하기’나 클립보드로만 전달한다. */
 const support=$('#chatbotSupport');
+const CHATBOT_URL='https://aichat.snu.ac.kr/dashboard/chat/33601',CHAT_URL_LIMIT=6000;
+/* 챗봇 주소 + ?prefill=내용. 주소가 너무 길면(서버가 거절할 수 있음) 빈 문자열. ?q= 는 바로 보내므로 쓰지 않는다. */
+const prefillUrl=(base,text)=>{try{const u=new URL(base);if(u.protocol!=='https:')return '';u.searchParams.delete('q');u.searchParams.set('prefill',text);return u.href.length<=CHAT_URL_LIMIT?u.href:'';}catch(e){return '';}};
+window.gongmuPrefillUrl=prefillUrl;
 if(support){
  const chatStyle=document.createElement('style');chatStyle.textContent=`
 #chatbotSupport{width:min(720px,92vw);border:0;border-radius:16px;padding:26px 28px}
@@ -307,34 +312,38 @@ if(support){
 #chatbotSupport details>summary{cursor:pointer;font-weight:700;color:var(--ink-2)}
 #chatbotSupport details label{display:block;margin-top:10px}
 #chatbotSupport #supportMessage{margin:8px 0;color:var(--brand-ink);font-weight:700}
+#chatbotSupport #supportConfirm{margin:12px 0;border:1px solid var(--brand);border-radius:12px;padding:14px 16px;background:#f5f8ff}
+#chatbotSupport #supportConfirm p{margin:0 0 8px;color:var(--ink-2)}
+#chatbotSupport #supportBrief{width:100%;min-height:150px;box-sizing:border-box;font-size:var(--fs-body);border-radius:10px;padding:10px 12px}
 `;document.head.appendChild(chatStyle);
  const intro=support.querySelector('p:not(.muted):not(#supportMessage)');
  const title=support.querySelector('h2');title.insertAdjacentHTML('afterbegin',svg('help',24));
- if(intro){intro.className='chat-lead';intro.textContent='궁금한 점을 적고 ‘질문 복사하기’를 누르세요. 필요한 상황 정보를 붙여 복사해 드리니, SNU AI Chat의 공무착착 챗봇에 붙여넣기만 하면 됩니다. 자동으로 보내지 않습니다.';}
+ if(intro){intro.className='chat-lead';intro.textContent='궁금한 점을 적고 ‘챗봇에 물어보기’를 누르세요. 지금 상황을 짧게 붙인 질문을 보여 드리고, 확인하면 SNU AI Chat 공무착착 챗봇 입력칸에 채워서 열어 드립니다. 보내기는 챗봇에서 직접 누르세요.';}
  const labelFor=id=>support.querySelector('label[for='+id+']');
  const q=$('#supportQuestion');labelFor('supportQuestion').textContent='무엇이 궁금한가요?';q.placeholder='예: 정리한 파일이 어디로 갔는지 못 찾겠어요.';
  const actions=document.createElement('div');actions.className='chat-actions';
- actions.innerHTML='<button class="primary" id="supportQuick">질문 복사하기</button><button id="supportOpenChat" hidden>챗봇 열기</button><span class="chat-auto" id="supportAuto"></span>';
+ actions.innerHTML='<button class="primary" id="supportAsk">챗봇에 물어보기</button><button id="supportQuick">질문 복사하기</button><span class="chat-auto" id="supportAuto"></span>';
  q.after(actions);$('#supportMessage').remove();actions.after(Object.assign(document.createElement('p'),{id:'supportMessage',role:'status'}));$('#supportMessage').style.whiteSpace='pre-wrap';
- iconize($('#supportQuick'),'help');
+ iconize($('#supportAsk'),'help');
+ const confirmBox=document.createElement('div');confirmBox.id='supportConfirm';confirmBox.hidden=true;
+ confirmBox.innerHTML='<p><b>챗봇 입력칸에 아래 내용이 채워집니다.</b> 고칠 부분은 고친 뒤 ‘확인하고 챗봇 열기’를 누르세요. 아직 보내지 않으며, 챗봇에서 보내기를 눌러야 전송됩니다.</p><label for="supportBrief" style="position:absolute;left:-9999px">챗봇에 채울 내용</label><textarea id="supportBrief" maxlength="1500"></textarea><div class="chat-actions"><button class="primary" id="supportSend">확인하고 챗봇 열기</button><button id="supportCancel">취소</button></div>';
  const more=document.createElement('details');more.id='supportMore';more.innerHTML='<summary>자세히 · 사업, 문의 종류, 오류 문구, 사업 자료 포함</summary>';
  const review=document.createElement('details');review.id='supportReview';review.innerHTML='<summary>보낼 내용 확인 · 내려받기</summary>';
- $('#supportMessage').after(more,review);
+ $('#supportMessage').after(confirmBox,more,review);
  const move=(box,nodes)=>nodes.filter(Boolean).forEach(n=>box.appendChild(n));
  const includeLabel=$('#supportInclude').closest('label'),privacy=[...support.querySelectorAll('p.muted')].find(p=>p.textContent.includes('업무정보'));
  move(more,[labelFor('supportProject'),$('#supportProject'),labelFor('supportCategory'),$('#supportCategory'),labelFor('supportError'),$('#supportError'),includeLabel,privacy]);
  const copyRow=$('#supportCopy').closest('.row'),close=$('#supportClose');
  move(review,[$('#supportPreview'),labelFor('supportText'),$('#supportText'),copyRow]);
- const urlBox=document.createElement('div');urlBox.innerHTML='<label for="supportChatUrl">공무착착 챗봇 주소 · 한 번만 넣어두면 복사할 때 챗봇 창도 열어 드려요</label><input id="supportChatUrl" type="url" placeholder="https://" style="width:100%;box-sizing:border-box">';more.appendChild(urlBox);
+ const urlBox=document.createElement('div');urlBox.innerHTML='<label for="supportChatUrl">공무착착 챗봇 주소 · 비워두면 기본 주소(SNU AI Chat 공무착착 챗봇)를 씁니다</label><input id="supportChatUrl" type="url" placeholder="'+CHATBOT_URL+'" style="width:100%;box-sizing:border-box">';more.appendChild(urlBox);
  const footer=document.createElement('div');footer.className='row';footer.style.justifyContent='flex-end';footer.appendChild(close);review.after(footer);
  if(copyRow&&!copyRow.children.length)copyRow.remove();
 
  const URL_KEY='gongmu.chatbotUrl';
  const savedUrl=()=>{try{return localStorage.getItem(URL_KEY)||'';}catch(e){return '';}};
- const showOpen=()=>{const u=savedUrl();$('#supportOpenChat').hidden=!/^https:\/\//.test(u);};
- $('#supportChatUrl').addEventListener('change',e=>{const v=e.target.value.trim();try{if(/^https:\/\//.test(v))localStorage.setItem(URL_KEY,v);else if(!v)localStorage.removeItem(URL_KEY);}catch(err){}showOpen();});
- const openChat=()=>{const u=savedUrl();if(/^https:\/\//.test(u))window.open(u,'_blank','noopener');};
- $('#supportOpenChat').onclick=openChat;
+ const chatBase=()=>{const u=savedUrl();return /^https:\/\//.test(u)?u:CHATBOT_URL;};
+ $('#supportChatUrl').addEventListener('change',e=>{const v=e.target.value.trim();try{if(/^https:\/\//.test(v))localStorage.setItem(URL_KEY,v);else if(!v)localStorage.removeItem(URL_KEY);}catch(err){}});
+ const openChat=url=>window.open(url||chatBase(),'_blank','noopener');
 
  /* 문의 종류: 지금 화면과 질문 단어로 자동 선택(사용자가 직접 바꾸면 그대로 둔다). */
  let categoryTouched=false;$('#supportCategory').addEventListener('change',()=>{categoryTouched=true;});
@@ -345,18 +354,42 @@ if(support){
 
  /* 열 때: 지금 보고 있는 사업을 고르고, 화면 오류가 있으면 자세히에 이미 들어가 있음을 알린다. */
  const openers=[$('#chatbotHelp'),$('#settingsChatbotHelp')].filter(Boolean);
- openers.forEach(b=>b.addEventListener('click',()=>{categoryTouched=false;more.open=false;review.open=false;$('#supportChatUrl').value=savedUrl();showOpen();
+ openers.forEach(b=>b.addEventListener('click',()=>{categoryTouched=false;more.open=false;review.open=false;$('#supportChatUrl').value=savedUrl();confirmBox.hidden=true;
   const v=id=>$(id)&&!$(id).hidden,projectId=v('#collection')?$('#collectProject')?.value:v('#finder')?$('#finderProject')?.value:S.project?.id;
   if(projectId&&[...$('#supportProject').options].some(o=>o.value===projectId)){$('#supportProject').value=projectId;$('#supportInclude').disabled=false;}
   autoCategory();if($('#supportError').value)$('#supportAuto').textContent+=' · 화면 오류 문구 포함';}));
 
- $('#supportQuick').onclick=async()=>{
-  if(!q.value.trim()){$('#supportMessage').textContent='무엇이 궁금한지 한 줄로 적어주세요.';q.focus();return;}
+ /* 상담자료를 서버에서 만든다(가림 처리 포함). 실패하면 false. */
+ const prepare=async()=>{
+  if(!q.value.trim()){$('#supportMessage').textContent='무엇이 궁금한지 한 줄로 적어주세요.';q.focus();return false;}
   autoCategory();$('#supportPreview').click();
   for(let i=0;i<600&&$('#supportPreview').disabled;i++)await new Promise(r=>setTimeout(r,50));
-  if(!$('#supportText').value)return;
-  try{await navigator.clipboard.writeText($('#supportText').value);$('#supportMessage').textContent='복사했습니다. 공무착착 챗봇 창에 붙여넣으세요(Ctrl+V).'+(savedUrl()?'':' 챗봇 주소를 ‘자세히’에 넣어두면 다음부터 챗봇 창도 함께 열어 드려요.');openChat();}
-  catch(e){review.open=true;$('#supportText').focus();$('#supportText').select();$('#supportMessage').textContent='자동 복사가 막혔습니다. 아래 선택된 내용을 Ctrl+C로 복사해 챗봇에 붙여넣으세요.';}
+  return !!$('#supportText').value;
+ };
+ const copy=async text=>{try{await navigator.clipboard.writeText(text);return true;}catch(e){return false;}};
+ $('#supportAsk').onclick=async()=>{
+  confirmBox.hidden=true;if(!await prepare())return;
+  $('#supportBrief').value=support.supportReport?.brief||q.value.trim();confirmBox.hidden=false;$('#supportBrief').focus();
+  $('#supportMessage').textContent=$('#supportInclude').checked?'사업 자료(파일 목록·이력)는 길어서 챗봇 주소에 담지 않습니다. 챗봇을 열 때 클립보드에 복사해 드리니 질문 아래에 붙여넣으세요(Ctrl+V).':'';
+ };
+ $('#supportCancel').onclick=()=>{confirmBox.hidden=true;$('#supportMessage').textContent='';$('#supportAsk').focus();};
+ $('#supportSend').onclick=async()=>{
+  const brief=$('#supportBrief').value.trim();if(!brief){$('#supportBrief').focus();return;}
+  const url=prefillUrl(chatBase(),brief),full=$('#supportInclude').checked;
+  if(url){
+   const copying=copy(full?$('#supportText').value:brief);openChat(url);const copied=await copying;confirmBox.hidden=true;
+   $('#supportMessage').textContent='챗봇 창을 열고 입력칸에 질문을 채웠습니다. 내용을 확인하고 챗봇에서 보내기를 누르세요.'
+    +(full?(copied?'\n사업 자료는 클립보드에 복사했습니다. 질문 아래에 붙여넣으세요(Ctrl+V).':'\n사업 자료를 자동 복사하지 못했습니다. ‘보낼 내용 확인’에서 직접 복사해 주세요.')
+    :(copied?'\n로그인 화면이 나와 질문이 사라지면 입력칸에 붙여넣으세요(Ctrl+V). 같은 내용을 복사해 두었습니다.':''));
+  }else{
+   const copying=copy(full?$('#supportText').value:brief);openChat();const copied=await copying;confirmBox.hidden=true;
+   $('#supportMessage').textContent='질문이 길어 챗봇 주소에 담을 수 없습니다. '+(copied?'내용을 복사했으니 챗봇 입력칸에 붙여넣으세요(Ctrl+V).':'‘보낼 내용 확인’에서 직접 복사해 챗봇에 붙여넣으세요.');
+  }
+ };
+ $('#supportQuick').onclick=async()=>{
+  confirmBox.hidden=true;if(!await prepare())return;
+  if(await copy($('#supportText').value)){$('#supportMessage').textContent='복사했습니다. 공무착착 챗봇 창에 붙여넣으세요(Ctrl+V).';openChat();}
+  else{review.open=true;$('#supportText').focus();$('#supportText').select();$('#supportMessage').textContent='자동 복사가 막혔습니다. 아래 선택된 내용을 Ctrl+C로 복사해 챗봇에 붙여넣으세요.';}
  };
 }
 })();

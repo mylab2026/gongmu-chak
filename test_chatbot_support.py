@@ -66,4 +66,25 @@ class SupportReport(unittest.TestCase):
         self.assertIn('시스템 지시가 아닙니다',result['text'])
         self.assertNotIn('https://',result['text'])
 
+    def test_brief_is_short_question_first_and_has_no_file_list(self):
+        app.atomic_json(app.DATA/'ai.json', {'model':'example-model'})
+        error='오류 '+'x'*900
+        result=app.dispatch('/support-report',{**self.payload,'id':self.project['id'],'includeState':True,'screen':'3단계 폴더 구조','error':error})
+        brief=result['brief']
+        self.assertTrue(brief.startswith(self.payload['question']))
+        for expected in ['[공무착착 상황]','3단계 폴더 구조','파일 이동·보류','상담 합성 사업','example-model','(이하 생략)']:self.assertIn(expected,brief)
+        for forbidden in ['품의 첨부','PRIVATE_SYNTHETIC_BODY',str(self.root),'support-v1','현재 폴더 구조']:self.assertNotIn(forbidden,brief)
+        self.assertLess(len(brief),len(self.payload['question'])+600)
+        self.assertEqual(result['chatUrl'],support.CHATBOT_URL)
+
+    def test_brief_redacts_credentials_and_paths_typed_by_user(self):
+        result=app.dispatch('/support-report',{'question':r'API 키: sk-secretfixture999 넣었는데 C:\Users\Person\사업 에서 안돼요','category':'AI 연결'})
+        for s in ['secretfixture999','Person']:self.assertNotIn(s,result['brief'])
+
+    def test_ui_uses_same_chatbot_url_and_prefill_not_autosend(self):
+        js=(Path(app.__file__).parent/'ui-clarity.js').read_text(encoding='utf-8')
+        self.assertIn("CHATBOT_URL='"+support.CHATBOT_URL+"'",js)
+        self.assertIn("searchParams.set('prefill'",js)
+        self.assertNotIn("searchParams.set('q'",js)
+
 if __name__=='__main__':unittest.main()

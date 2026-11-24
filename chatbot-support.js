@@ -14,7 +14,7 @@
  document.body.appendChild(box);
  let report=null,screen='',busy=false;
  const msg=t=>$('#supportMessage').textContent=t;
- const invalidate=()=>{report=null;$('#supportText').value='';$('#supportText').disabled=true;$('#supportCopy').disabled=true;$('#supportDownload').disabled=true;};
+ const invalidate=()=>{report=null;box.supportReport=null;$('#supportText').value='';$('#supportText').disabled=true;$('#supportCopy').disabled=true;$('#supportDownload').disabled=true;};
  function open(){
   if(busy)return;invalidate();msg('');
   const ps=S.status?.projects||[];$('#supportProject').innerHTML='<option value="">사업 선택 안 함</option>'+ps.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('');
@@ -36,7 +36,7 @@
   invalidate();busy=true;$('#supportPreview').disabled=true;msg('상담자료 준비 중…');
   const fields=['supportProject','supportCategory','supportQuestion','supportError','supportInclude'];fields.forEach(id=>$('#'+id).disabled=true);
   try{report=await api('/support-report',{id:$('#supportProject').value,category:$('#supportCategory').value,question:$('#supportQuestion').value,error:$('#supportError').value,screen,includeState:$('#supportInclude').checked});
-   $('#supportText').value=report.text;$('#supportText').disabled=false;$('#supportCopy').disabled=false;$('#supportDownload').disabled=false;msg('내용을 확인한 뒤 복사하거나 내려받으세요. 과거 회차의 상세 내역은 시작 화면의 누적 정리 이력 ZIP을 이용하세요.');
+   box.supportReport=report;$('#supportText').value=report.text;$('#supportText').disabled=false;$('#supportCopy').disabled=false;$('#supportDownload').disabled=false;msg('내용을 확인한 뒤 복사하거나 내려받으세요. 과거 회차의 상세 내역은 시작 화면의 누적 정리 이력 ZIP을 이용하세요.');
   }catch(e){msg('상담자료를 준비하지 못했습니다. '+e.message+'\n프로그램 연결이 끊겼다면 다시 실행한 뒤 시도하거나 오류 화면만 챗봇에 첨부해주세요.');}
   finally{busy=false;$('#supportPreview').disabled=false;fields.forEach(id=>$('#'+id).disabled=false);$('#supportInclude').disabled=!$('#supportProject').value;}
  };

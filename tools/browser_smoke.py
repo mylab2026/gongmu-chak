@@ -86,6 +86,25 @@ def main():
                     # 챗봇 도움은 질문 한 칸 + ‘질문 복사하기’가 기본. 문의 종류는 질문 단어로 자동 선택되고 세부 항목은 접혀 있다.
                     assert page.locator('#supportQuick').is_visible() and not page.locator('#supportProject').is_visible()
                     assert page.evaluate("$('#supportCategory').value")=='찾기·모아보기'
+                    # 챗봇 창은 실제로 열지 않고 열려던 주소만 기록한다(외부 사이트 접속 없음).
+                    page.evaluate("window.__opened=[];window.open=(u)=>{window.__opened.push(String(u));return null;};0")
+                    assert page.locator('#supportAsk').is_visible() and not page.locator('#supportConfirm').is_visible()
+                    page.locator('#supportAsk').click();expect(page.locator('#supportConfirm')).to_be_visible()
+                    brief=page.locator('#supportBrief').input_value()
+                    assert brief.startswith('합성 상담: 첨부 자료 위치를 확인하고 싶어요') and '[공무착착 상황]' in brief and 'support-v1' not in brief
+                    assert page.evaluate("window.__opened.length")==0, page.evaluate("window.__opened")  # 확인 전에는 열지 않는다
+                    SUFFIX=chr(10)+'사용자 수정'
+                    page.locator('#supportBrief').fill(brief+SUFFIX)
+                    page.locator('#supportSend').click();expect(page.locator('#supportConfirm')).to_be_hidden()
+                    opened=page.evaluate("window.__opened")
+                    assert len(opened)==1 and opened[0].startswith('https://aichat.snu.ac.kr/dashboard/chat/33601?prefill='), opened
+                    from urllib.parse import urlsplit,parse_qs
+                    params=parse_qs(urlsplit(opened[0]).query)
+                    assert params['prefill']==[brief+SUFFIX] and 'q' not in params
+                    expect(page.locator('#supportMessage')).to_contain_text('챗봇에서 보내기를 누르세요')
+                    long_url=page.evaluate("gongmuPrefillUrl('https://aichat.snu.ac.kr/dashboard/chat/33601','가'.repeat(2000))")
+                    assert long_url==''  # 너무 길면 주소에 담지 않고 복사로 대신한다
+                    result['chatbot_prefill_link_after_confirm']=True
                     page.locator('#supportQuick').click();expect(page.locator('#supportText')).not_to_have_value('')
                     result['chatbot_quick_copy']=True
                     page.evaluate("$('#supportMore').open=true;$('#supportReview').open=true")
