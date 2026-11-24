@@ -63,7 +63,35 @@ def atomic_json(path, value):
         json.dump(value, stream, ensure_ascii=False, indent=2)
         stream.flush()
         os.fsync(stream.fileno())
-    os.replace(temp, path)
+    # Windows 백신·검색 색인이 방금 쓴 파일을 잠깐 잡으면 교체가 거부된다(WinError 5/32). 잠시 뒤 다시 시도한다.
+    for attempt in range(8):
+        try:
+            os.replace(temp, path)
+            return
+        except PermissionError:
+            if attempt == 7:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
+class JournalWriter:
+    """Write the run journal often enough to recover, not after every file.
+
+    Every entry is already on disk as 'prepared' before any file is touched, so after a crash
+    undo() can tell from the folder itself which files moved (source gone, destination present)."""
+
+    def __init__(self, path, journal, every=100, seconds=1.0):
+        self.path, self.journal, self.every, self.seconds = path, journal, every, seconds
+        self.pending, self.last = 0, time.monotonic()
+
+    def flush(self):
+        atomic_json(self.path, self.journal)
+        self.pending, self.last = 0, time.monotonic()
+
+    def step(self):
+        self.pending += 1
+        if self.pending >= self.every or time.monotonic() - self.last >= self.seconds:
+            self.flush()
 
 
 def read_json(path, default=None):
@@ -2808,7 +2836,16 @@ def move_no_replace(source, destination):
         if any(source.iterdir()):fail('빈 폴더에 새 내용이 생겼습니다. 목록을 다시 확인해주세요.')
         os.rename(source,destination)
     elif os.name == 'nt':
-        os.rename(source, destination)  # Same project root/volume; no copy-delete fallback.
+        # Same project root/volume; no copy-delete fallback. A file briefly opened by a virus scanner or
+        # Explorer preview refuses the rename (WinError 32/5); wait a moment and try the same no-replace rename.
+        for attempt in range(6):
+            try:
+                os.rename(source, destination)
+                break
+            except PermissionError:
+                if attempt == 5 or destination.exists():
+                    raise
+                time.sleep(0.1 * (attempt + 1))
     else:
         os.link(source, destination)
         source.unlink()
@@ -2844,6 +2881,7 @@ def execute(plan_id, choices):
                'root': str(root), 'entries': [], 'contextSummary':plan.get('contextSummary',[]),'folderRenames':plan.get('folderRenames',[]), 'holdCount': sum(not r['done'] for r in plan['rows']) - len(selected)}
     journal_path = DATA / 'history' / (journal['id'] + '.json')
     record_run_event('파일 이동 시작',plan=plan,journal=journal)
+    work = []
     for row, destination_folder in selected:
         name = names.get(row['id'], row.get('proposedName') or row['name'])
         eff = effective_folder(row, destination_folder)
@@ -2853,7 +2891,12 @@ def execute(plan_id, choices):
         if name != row['name']:
             entry['renamedFrom'] = row['name']
         journal['entries'].append(entry)
-        atomic_json(journal_path, journal)  # Write-ahead record before each filesystem mutation.
+        work.append((row, destination_folder, name, entry))
+    # Write-ahead: every planned move is recorded before the first file is touched. Progress is saved in
+    # batches (not after each file), which kept a 2,500-file run at minutes instead of quadratic rewrites.
+    writer = JournalWriter(journal_path, journal)
+    writer.flush()
+    for row, destination_folder, name, entry in work:
         try:
             source = safe_path(root, entry['source'])
             destination = safe_path(root, entry['destination'])
@@ -2881,7 +2924,8 @@ def execute(plan_id, choices):
             entry['error'] = str(error)
             row['executionError'] = str(error)
             row['reason'] = str(error)
-        atomic_json(journal_path, journal)
+        writer.step()
+    writer.flush()
     organize_context(plan['rows'],plan['paths'],inbox_of(project))
     for summary in journal.get('contextSummary',[]):
         for child in summary['children']:
@@ -3076,7 +3120,10 @@ def cleanup_empty_old_folders(project, plan, journal):
                 candidates.append(relative)
     journal['cleanupCandidates'] = candidates
     path = DATA / 'history' / (journal['id'] + '.json')
-    atomic_json(path, journal)
+    # Every candidate is on disk before any rmdir; undo recreates cleanupCandidates ∪ removedFolders,
+    # so the progress list can be saved in batches instead of after each folder.
+    writer = JournalWriter(path, journal)
+    writer.flush()
     for relative in sorted(candidates, key=lambda p: p.count('/'), reverse=True):
         try:
             folder = safe_path(root, relative)
@@ -3084,7 +3131,8 @@ def cleanup_empty_old_folders(project, plan, journal):
             journal['removedFolders'].append(relative)
         except (OSError, ValueError) as error:
             journal['keptFolders'].append({'path': relative, 'reason': str(error)})
-        atomic_json(path, journal)
+        writer.step()
+    writer.flush()
 
 
 def recheck(pid):
@@ -3171,6 +3219,9 @@ def undo(journal_id):
     record_run_event('되돌리기 시작',journal=journal)
     journal['folderRestoreErrors'] = []
     restored = []
+    # Undo is decided from the folder itself (source/destination present, fingerprint), so saving progress in
+    # batches is safe: a rerun after a crash finds already-restored files in place and marks them restored.
+    writer = JournalWriter(path, journal)
     for relative in sorted(set(journal.get('cleanupCandidates', [])) | set(journal.get('removedFolders', [])), key=lambda p: p.count('/')):
         try:
             safe_path(root, relative).mkdir(parents=True, exist_ok=True)
@@ -3195,7 +3246,8 @@ def undo(journal_id):
         except (OSError, ValueError) as error:
             entry['status'] = 'undo-blocked'
             entry['error'] = str(error)
-        atomic_json(path, journal)
+        writer.step()
+    writer.flush()
     carry_collection_marks(project['id'],restored)
     for entry in journal['entries']:
         if entry.get('shortcut') and entry['status'] == 'restored':
