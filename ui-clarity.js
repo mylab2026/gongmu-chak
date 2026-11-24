@@ -267,4 +267,96 @@ function queueSide(){if(!sideQueued){sideQueued=true;requestAnimationFrame(updat
 new MutationObserver(queueSide).observe(document.querySelector('main'),{attributes:true,attributeFilter:['hidden'],subtree:true,childList:true,characterData:true});
 document.addEventListener('change',queueSide);document.addEventListener('input',queueSide);
 updateSide();
+
+/* 6. 점검·인수인계를 모아보기에서 분리: 같은 화면(#collection)을 쓰되 메뉴별로 보이는 탭을 나눈다.
+   모아보기 = 사진·내 모아보기, 점검·인수인계 = 정리 결과 점검·준공·인수인계 내보내기. 기능과 서버 호출은 그대로. */
+const manageStyle=document.createElement('style');manageStyle.textContent=`
+body[data-collect-mode=collect] #collection [data-ctab=recheck],body[data-collect-mode=collect] #collection .export-tab{display:none}
+body[data-collect-mode=manage] #collection [data-ctab=photo],body[data-collect-mode=manage] #collection [data-ctab=saved],body[data-collect-mode=manage] #collection .collect-intro{display:none}
+#collection .export-tab{display:flex;flex-direction:column;max-width:36rem}#collection .export-tab>button{align-self:flex-start}#collection #exportUsageHint{margin-top:6px}
+`;document.head.appendChild(manageStyle);
+document.body.dataset.collectMode='collect';
+let pendingManage=false;
+const collectTitle=()=>document.querySelector('#collection h1, #collection h2');
+function applyCollectMode(){const manage=document.body.dataset.collectMode==='manage',title=collectTitle();if(title)title.textContent=manage?'점검·인수인계':'모아보기';
+ const intro=[...document.querySelectorAll('#collection p.muted')].find(p=>p.textContent.includes('내 모아보기에 문장을 입력하면'));if(intro)intro.classList.add('collect-intro');}
+$('#collectButton').addEventListener('click',()=>{document.body.dataset.collectMode=pendingManage?'manage':'collect';pendingManage=false;applyCollectMode();},true);
+const baseCollectRender=collectRender;
+collectRender=function(...args){const manage=document.body.dataset.collectMode==='manage';
+ if(manage&&(Collect.tab==='photo'||Collect.tab==='saved'))Collect.tab='recheck';
+ if(!manage&&(Collect.tab==='recheck'||Collect.tab==='export'))Collect.tab='photo';
+ const result=baseCollectRender(...args);applyCollectMode();queueSide();return result;};
+const manageButton=document.createElement('button');manageButton.id='sideManage';manageButton.textContent='점검·인수인계';iconize(manageButton,'check');
+manageButton.onclick=()=>{for(const sel of ['#finder','#collection'])if($(sel))$(sel).hidden=true;pendingManage=true;$('#collectButton').click();};
+$('#sideCollect').after(manageButton);
+const baseUpdateSide=updateSide;
+updateSide=function(){baseUpdateSide();const inCollection=!$('#collection').hidden,manage=document.body.dataset.collectMode==='manage';$('#sideCollect').classList.toggle('on',inCollection&&!manage);manageButton.classList.toggle('on',inCollection&&manage);};
+
+/* 7. 챗봇 도움: 질문 한 칸 + ‘질문 복사하기’ 한 번. 나머지(사업·문의 종류·오류·자료 포함·미리보기)는 접는다.
+   자동 전송하지 않는다는 원칙은 그대로: 복사한 내용을 사용자가 직접 챗봇에 붙여넣는다. */
+const support=$('#chatbotSupport');
+if(support){
+ const chatStyle=document.createElement('style');chatStyle.textContent=`
+#chatbotSupport{width:min(720px,92vw);border:0;border-radius:16px;padding:26px 28px}
+#chatbotSupport h2{display:flex;align-items:center;gap:10px;margin:0 0 6px}#chatbotSupport h2 svg{color:var(--brand)}
+#chatbotSupport .chat-lead{margin:0 0 16px;color:var(--ink-2)}
+#chatbotSupport #supportQuestion{min-height:96px;font-size:16px;border-radius:12px;padding:12px 14px;box-sizing:border-box}
+#chatbotSupport .chat-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0 4px}
+#chatbotSupport .chat-auto{font-size:var(--fs-meta);color:var(--ink-3)}
+#chatbotSupport details{margin:10px 0;border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:#f8fafc}
+#chatbotSupport details>summary{cursor:pointer;font-weight:700;color:var(--ink-2)}
+#chatbotSupport details label{display:block;margin-top:10px}
+#chatbotSupport #supportMessage{margin:8px 0;color:var(--brand-ink);font-weight:700}
+`;document.head.appendChild(chatStyle);
+ const intro=support.querySelector('p:not(.muted):not(#supportMessage)');
+ const title=support.querySelector('h2');title.insertAdjacentHTML('afterbegin',svg('help',24));
+ if(intro){intro.className='chat-lead';intro.textContent='궁금한 점을 적고 ‘질문 복사하기’를 누르세요. 필요한 상황 정보를 붙여 복사해 드리니, SNU AI Chat의 공무착착 챗봇에 붙여넣기만 하면 됩니다. 자동으로 보내지 않습니다.';}
+ const labelFor=id=>support.querySelector('label[for='+id+']');
+ const q=$('#supportQuestion');labelFor('supportQuestion').textContent='무엇이 궁금한가요?';q.placeholder='예: 정리한 파일이 어디로 갔는지 못 찾겠어요.';
+ const actions=document.createElement('div');actions.className='chat-actions';
+ actions.innerHTML='<button class="primary" id="supportQuick">질문 복사하기</button><button id="supportOpenChat" hidden>챗봇 열기</button><span class="chat-auto" id="supportAuto"></span>';
+ q.after(actions);$('#supportMessage').remove();actions.after(Object.assign(document.createElement('p'),{id:'supportMessage',role:'status'}));$('#supportMessage').style.whiteSpace='pre-wrap';
+ iconize($('#supportQuick'),'help');
+ const more=document.createElement('details');more.id='supportMore';more.innerHTML='<summary>자세히 · 사업, 문의 종류, 오류 문구, 사업 자료 포함</summary>';
+ const review=document.createElement('details');review.id='supportReview';review.innerHTML='<summary>보낼 내용 확인 · 내려받기</summary>';
+ $('#supportMessage').after(more,review);
+ const move=(box,nodes)=>nodes.filter(Boolean).forEach(n=>box.appendChild(n));
+ const includeLabel=$('#supportInclude').closest('label'),privacy=[...support.querySelectorAll('p.muted')].find(p=>p.textContent.includes('업무정보'));
+ move(more,[labelFor('supportProject'),$('#supportProject'),labelFor('supportCategory'),$('#supportCategory'),labelFor('supportError'),$('#supportError'),includeLabel,privacy]);
+ const copyRow=$('#supportCopy').closest('.row'),close=$('#supportClose');
+ move(review,[$('#supportPreview'),labelFor('supportText'),$('#supportText'),copyRow]);
+ const urlBox=document.createElement('div');urlBox.innerHTML='<label for="supportChatUrl">공무착착 챗봇 주소 · 한 번만 넣어두면 복사할 때 챗봇 창도 열어 드려요</label><input id="supportChatUrl" type="url" placeholder="https://" style="width:100%;box-sizing:border-box">';more.appendChild(urlBox);
+ const footer=document.createElement('div');footer.className='row';footer.style.justifyContent='flex-end';footer.appendChild(close);review.after(footer);
+ if(copyRow&&!copyRow.children.length)copyRow.remove();
+
+ const URL_KEY='gongmu.chatbotUrl';
+ const savedUrl=()=>{try{return localStorage.getItem(URL_KEY)||'';}catch(e){return '';}};
+ const showOpen=()=>{const u=savedUrl();$('#supportOpenChat').hidden=!/^https:\/\//.test(u);};
+ $('#supportChatUrl').addEventListener('change',e=>{const v=e.target.value.trim();try{if(/^https:\/\//.test(v))localStorage.setItem(URL_KEY,v);else if(!v)localStorage.removeItem(URL_KEY);}catch(err){}showOpen();});
+ const openChat=()=>{const u=savedUrl();if(/^https:\/\//.test(u))window.open(u,'_blank','noopener');};
+ $('#supportOpenChat').onclick=openChat;
+
+ /* 문의 종류: 지금 화면과 질문 단어로 자동 선택(사용자가 직접 바꾸면 그대로 둔다). */
+ let categoryTouched=false;$('#supportCategory').addEventListener('change',()=>{categoryTouched=true;});
+ const byScreen=()=>{const v=id=>$(id)&&!$(id).hidden;if($('#settings').open)return 'AI 연결';if(v('#collection')||v('#finder'))return '찾기·모아보기';if(v('#contractStep'))return '계약서 등록';if(v('#treeStep'))return '폴더 구조';if(v('#reviewStep'))return '파일 이동·보류';return '';};
+ const byWords=t=>[[/되돌|원래대로|취소/,'되돌리기'],[/찾|어디|위치|안 보|모아/,'찾기·모아보기'],[/설치|실행|안 켜|안 열|차단/,'설치·실행'],[/연결|키|모델|401|404|429|API/i,'AI 연결'],[/계약/,'계약서 등록'],[/구조|폴더 이름|트리/,'폴더 구조'],[/이동|보류|옮/,'파일 이동·보류']].find(([re])=>re.test(t))?.[1]||'';
+ const autoCategory=()=>{if(categoryTouched)return;const c=byWords(q.value)||byScreen()||'기타';$('#supportCategory').value=c;$('#supportAuto').textContent='문의 종류: '+c+(document.querySelector('#supportProject')?.value?' · 사업: '+$('#supportProject').selectedOptions[0].textContent:'');};
+ q.addEventListener('input',autoCategory);$('#supportProject').addEventListener('change',autoCategory);
+
+ /* 열 때: 지금 보고 있는 사업을 고르고, 화면 오류가 있으면 자세히에 이미 들어가 있음을 알린다. */
+ const openers=[$('#chatbotHelp'),$('#settingsChatbotHelp')].filter(Boolean);
+ openers.forEach(b=>b.addEventListener('click',()=>{categoryTouched=false;more.open=false;review.open=false;$('#supportChatUrl').value=savedUrl();showOpen();
+  const v=id=>$(id)&&!$(id).hidden,projectId=v('#collection')?$('#collectProject')?.value:v('#finder')?$('#finderProject')?.value:S.project?.id;
+  if(projectId&&[...$('#supportProject').options].some(o=>o.value===projectId)){$('#supportProject').value=projectId;$('#supportInclude').disabled=false;}
+  autoCategory();if($('#supportError').value)$('#supportAuto').textContent+=' · 화면 오류 문구 포함';}));
+
+ $('#supportQuick').onclick=async()=>{
+  if(!q.value.trim()){$('#supportMessage').textContent='무엇이 궁금한지 한 줄로 적어주세요.';q.focus();return;}
+  autoCategory();$('#supportPreview').click();
+  for(let i=0;i<600&&$('#supportPreview').disabled;i++)await new Promise(r=>setTimeout(r,50));
+  if(!$('#supportText').value)return;
+  try{await navigator.clipboard.writeText($('#supportText').value);$('#supportMessage').textContent='복사했습니다. 공무착착 챗봇 창에 붙여넣으세요(Ctrl+V).'+(savedUrl()?'':' 챗봇 주소를 ‘자세히’에 넣어두면 다음부터 챗봇 창도 함께 열어 드려요.');openChat();}
+  catch(e){review.open=true;$('#supportText').focus();$('#supportText').select();$('#supportMessage').textContent='자동 복사가 막혔습니다. 아래 선택된 내용을 Ctrl+C로 복사해 챗봇에 붙여넣으세요.';}
+ };
+}
 })();

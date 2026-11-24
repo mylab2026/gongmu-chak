@@ -83,6 +83,12 @@ def main():
                     page.locator('#chatbotHelp').click()
                     expect(page.locator('#chatbotSupport')).to_be_visible()
                     page.locator('#supportQuestion').fill('합성 상담: 첨부 자료 위치를 확인하고 싶어요')
+                    # 챗봇 도움은 질문 한 칸 + ‘질문 복사하기’가 기본. 문의 종류는 질문 단어로 자동 선택되고 세부 항목은 접혀 있다.
+                    assert page.locator('#supportQuick').is_visible() and not page.locator('#supportProject').is_visible()
+                    assert page.evaluate("$('#supportCategory').value")=='찾기·모아보기'
+                    page.locator('#supportQuick').click();expect(page.locator('#supportText')).not_to_have_value('')
+                    result['chatbot_quick_copy']=True
+                    page.evaluate("$('#supportMore').open=true;$('#supportReview').open=true")
                     page.locator('#supportProject').select_option(move_project['id'])
                     assert not page.locator('#supportInclude').is_checked()
                     page.locator('#supportPreview').click()
@@ -127,6 +133,8 @@ def main():
                     result['inline_error_next_to_field']=True
                     page.locator('#wizardBack').click();expect(page.locator('#home')).to_be_visible()
                     page.locator('#collectButton').click();page.locator('.photo-card').first.wait_for(state='visible')
+                    # 모아보기에는 사진·내 모아보기만. 점검·인수인계는 왼쪽 메뉴의 별도 화면.
+                    assert not page.locator('[data-ctab="recheck"]').is_visible() and not page.locator('[data-ctab="export"]').is_visible()
                     expect(page.locator('#downloadHistory')).to_be_hidden()
                     assert page.locator('#collection #downloadHistory').count()==0
                     result['photos']=page.locator('.photo-card').count();assert result['photos']==3
@@ -213,6 +221,12 @@ def main():
                         statuses=[item['status'] for e in snapshots[0]['events'] for item in e.get('journal',{}).get('entries',[])]
                         assert 'moved' in statuses and 'restored' in statuses
                     result['cumulative_zip_preserves_move_and_undo']=True
+                    page.locator('#sideManage').click();page.locator('#recheckRun').wait_for(state='visible')
+                    expect(page.locator('#collection h1')).to_have_text('점검·인수인계')
+                    assert page.locator('[data-ctab="export"]').is_visible() and not page.locator('[data-ctab="photo"]').is_visible()
+                    page.locator('#sideCollect').click();page.locator('.photo-card').first.wait_for(state='visible')
+                    assert not page.locator('[data-ctab="recheck"]').is_visible()
+                    result['review_handover_separate_menu']=True
                     result.update(original_files=len(before),move_content_preserved=True,undo_restored_paths_and_bytes=True,page_errors=errors)
                     assert not errors
                     browser.close()
