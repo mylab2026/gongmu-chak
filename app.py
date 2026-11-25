@@ -1812,6 +1812,9 @@ def apply_folder_names(project,plan):
     """Material bundles moving into a category get a, b, c...; standard category numbers never change."""
     root=Path(plan.get('root') or project['root']);groups={}
     for row in plan['rows']:
+        # 지난번에 같은 원래 폴더 이름으로 맞춘 행은 원래 하위 경로로 돌려놓고 다시 맞춘다(글자가 바뀌어도 따라가게).
+        if 'renamedFrom' in row:row['keepSub']=row.pop('renamedFrom')
+    for row in plan['rows']:
         if row.get('done') or not row.get('destination') or row.get('roleMapped'):continue
         sub=row.get('keepSub') if row.get('keepSubFor')==row.get('destination') else ''
         if 'originalKeepSub' in row and row.get('folderNormalized')==sub and row.get('folderNormalizedFor')==row.get('destination'):
@@ -1853,6 +1856,16 @@ def apply_folder_names(project,plan):
                            folderSource=source,folderNameFrom=first,folderNameTo=new_name)
                 if not row.get('folderGroup'):
                     row.update(folderGroup=source,groupLabel=new_name,bundleGroup=True)
+    # 63동 시험(2026-11-25): 같은 원래 폴더(6. 석면관련)인데 일부(질문 답·묶음·역할 대응으로 따로 정한 17개)만
+    # 이름 바꾸기에서 빠져 'A 석면관련'과 '6. 석면관련' 두 폴더로 나뉘었다. 같은 목적지·같은 원래 폴더면 같은 이름을 쓴다.
+    for m in mapping:
+        prefix=m['source']+'/'
+        for row in plan['rows']:
+            sub=row.get('keepSub') or ''
+            if row.get('done') or row.get('destination')!=m['destination'] or row.get('keepSubFor')!=m['destination'] or not sub or row['id'] in m['rows']:continue
+            first=sub.split('/')[0]
+            if first==m['oldName'] and row.get('current',row['relative']).startswith(prefix):
+                row['renamedFrom']=sub;row['keepSub']=m['newName']+sub[len(first):];m['rows'].append(row['id'])
     plan['folderRenames']=mapping
     for row in plan['rows']:
         if row.get('secondaryFolders'):

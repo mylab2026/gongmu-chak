@@ -143,6 +143,23 @@ class Round3(unittest.TestCase):
         with self.assertRaises(ValueError):
             app.dispatch('/hold-rows', {'plan': self.plan['id'], 'rows': []})
 
+    def test_same_source_folder_gets_one_name_even_when_some_rows_were_set_separately(self):
+        # 63동: '6. 석면관련' 849개는 'A 석면관련', 따로 정한 17개는 '6. 석면관련'으로 나뉘던 결함
+        dest = '4 시공단계/1 도급공사/9 승인요청'
+        src = '6. 석면관련'
+        rows = [{'id': 'a%d' % i, 'relative': src + '/1. 경과/%d.hwp' % i, 'name': '%d.hwp' % i, 'destination': dest,
+                 'keepSub': src + '/1. 경과', 'keepSubFor': dest, 'size': 1} for i in range(3)]
+        rows.append({'id': 'odd', 'relative': src + '/2. 관계서류/usb/신고서.pdf', 'name': '신고서.pdf', 'destination': dest,
+                     'keepSub': src + '/2. 관계서류/usb', 'keepSubFor': dest, 'roleMapped': True, 'size': 1})
+        plan = {'root': str(self.root), 'rows': rows}
+        for _ in range(2):  # 여러 번 다시 맞춰도 같은 결과
+            app.apply_folder_names(self.project, plan)
+            firsts = {r['keepSub'].split('/')[0] for r in rows}
+            self.assertEqual(len(firsts), 1, [r['keepSub'] for r in rows])
+            self.assertRegex(firsts.pop(), r'^[A-Z] 석면관련$')
+        self.assertEqual(rows[-1]['keepSub'].split('/', 1)[1], '2. 관계서류/usb')
+        self.assertIn('odd', plan['folderRenames'][0]['rows'])
+
     def test_ai_new_folder_suggestion_is_validated(self):
         folders = {'d1': PLAN_PARENT}
         self.assertIsNone(app.folder_suggestion({'new_folder': {'parent_id': 'd9', 'name': '내부검토'}}, folders))
