@@ -126,6 +126,58 @@ class AnalysisAndNames(unittest.TestCase):
         self.assertEqual([c.get('temperature') for c in calls], [0, 0])
         self.assertIn('발주자', app.CONTRACT_PROMPT); self.assertIn('total_amount', app.CONTRACT_PROMPT)
 
+    def test_numbers_and_bundles_from_ai_do_not_block_next(self):
+        # 이미 숫자로 저장된 캐시(이전 판)도 '다음'에서 통과해야 한다.
+        cached = {'title': '가상 공사', 'kind': 'construction', 'amount': 1200, 'total_amount': 3500000000,
+                  'annual_amount': 1200000000.5, 'total_period': {'start': '2026-01-02', 'end': '2027-12-31'},
+                  'annual_period': ['2026-01-02', '2026-12-31'], 'party': True, 'short_name': 'x' * 1500}
+        rec = app.read_json(app.DATA / 'staging' / 'cid.json'); rec['analysis'] = dict(cached)
+        app.atomic_json(app.DATA / 'staging' / 'cid.json', rec)
+        updated = app.update_contract('cid', {'stage': '시공'})['analysis']
+        self.assertEqual(updated['total_amount'], '3500000000')
+        self.assertEqual(updated['annual_amount'], '1200000000.5')
+        self.assertEqual(updated['amount'], '1200')
+        self.assertEqual(updated['total_period'], '2026-01-02 ~ 2027-12-31')
+        self.assertEqual(updated['annual_period'], '2026-01-02, 2026-12-31')
+        self.assertIsNone(updated['party'])
+        self.assertEqual(len(updated['short_name']), 1000)
+        self.assertEqual(updated['stage'], '시공')
+        # AI 분석 결과도 받을 때 같은 정리를 해서 남긴다.
+        with patch.object(app, 'gateway', return_value=dict(cached, kind='goods', stage='착공')):
+            analysed = app.analyze_contract('cid')['analysis']
+        self.assertEqual(analysed['total_amount'], '3500000000')
+        self.assertEqual(analysed['kind'], 'unknown'); self.assertIsNone(analysed['stage'])
+        self.assertEqual(app.read_json(app.DATA / 'contract-cache' / 'h.json')['analysis']['total_period'], '2026-01-02 ~ 2027-12-31')
+        with self.assertRaises(Exception):
+            app.update_contract('cid', {'stage': '착공'})
+
+    def test_user_chosen_kind_wins_over_title_and_survives_merging(self):
+        rec = app.read_json(app.DATA / 'staging' / 'cid.json')
+        rec['analysis'] = {'title': '가상관 재해예방 기술지도 용역', 'kind': 'service', 'signed_date': '2026-01-02'}
+        app.atomic_json(app.DATA / 'staging' / 'cid.json', rec)
+        self.assertEqual(app.contract_category(rec['analysis']), 'service')
+        saved = app.update_contract('cid', {'kind': 'material', 'kind_confirmed': True})['analysis']
+        self.assertTrue(saved['kind_confirmed'])
+        self.assertEqual(app.contract_category(saved), 'material')  # 건명의 '기술지도 용역'보다 사용자가 고른 값
+        older = record('old', '가상관 재해예방 기술지도 용역', '가상기술원', '2025-12-01', kind='service')
+        newer = record('new', '가상관 재해예방 기술지도 용역 변경계약서', '가상기술원', '2026-02-01', kind='service')
+        older['analysis'].update(kind='material', kind_confirmed=True)
+        merged = app.resolve_contract_versions([older, newer])['current'][0]['analysis']
+        self.assertEqual((merged['kind'], merged.get('kind_confirmed')), ('material', True))
+        unknown = app.update_contract('cid', {'kind': 'unknown', 'kind_confirmed': True})['analysis']
+        self.assertNotIn('kind_confirmed', unknown)
+
+    def test_plan_progress_estimates_remaining_time_after_ten_seconds(self):
+        with patch.object(app, 'PROGRESS', {}):
+            app.plan_progress('scan', started=1000.0)
+            with patch.object(app.time, 'time', return_value=1005.0):
+                app.plan_progress('classify', 0, 100)
+            self.assertIsNone(app.PROGRESS['plan']['remaining'])  # 10초 전에는 추정하지 않는다
+            with patch.object(app.time, 'time', return_value=1060.0):
+                app.plan_progress('content', 50, 100)  # 35~90% 구간의 절반 = 62.5%
+            state = app.PROGRESS['plan']
+            self.assertEqual((state['percent'], state['elapsed'], state['remaining']), (62, 60, 36))
+
     def test_contract_file_names_are_left_unchanged_by_default(self):
         self.assertFalse(app.CONTRACT_RENAME)
         rec = record('x', '가상관 건축공사', '가상건설', '2026-01-02', kind='construction')

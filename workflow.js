@@ -259,7 +259,7 @@ $('#projectName').addEventListener?.('input',markRequired);
 const baseRenderAncillaryReq=renderAncillary;renderAncillary=function(){baseRenderAncillaryReq();markRequired();};
 
 // 0.9: 계약 종류 보정, 계약명 표시, 단계 간 끌어 옮기기
-function normalizeKinds(){(S.contracts||[]).forEach(c=>{const t=String(c.analysis?.title||'');if(!c.analysis)return;if(/용역/.test(t)&&/재해|기술지도|감리|석면|안전점검|안전진단/.test(t))c.analysis.kind='service';else if(/설계/.test(t)&&/용역/.test(t))c.analysis.kind='design';});}
+function normalizeKinds(){(S.contracts||[]).forEach(c=>{const t=String(c.analysis?.title||'');if(!c.analysis||c.analysis.kind_confirmed)return;if(/용역/.test(t)&&/재해|기술지도|감리|석면|안전점검|안전진단/.test(t))c.analysis.kind='service';else if(/설계/.test(t)&&/용역/.test(t))c.analysis.kind='design';});}
 function annotateContracts(){const all=[];const walk=l=>l.forEach(n=>{delete n.contractTitle;all.push(n);walk(n.children||[]);});walk(S.tree||[]);
  (S.contracts||[]).forEach(c=>{const t=c.analysis?.title;if(!t)return;const k=c.analysis.kind;let test=null;
   if(c.branchLabel&&c.branchLabel!=='none')test=n=>n.label===c.branchLabel;else if(k==='construction')test=n=>/^도급공사/.test(baseName(n.label));else if(k==='design')test=n=>/설계\s*용역/.test(baseName(n.label));
@@ -282,7 +282,11 @@ const baseRenderAncillary09=renderAncillary;renderAncillary=function(...a){norma
 const baseAutoTemplate09=autoTemplate;autoTemplate=function(...a){normalizeKinds();return baseAutoTemplate09(...a);};
 const baseTreeNext09=$('#treeNext').onclick;$('#treeNext').onclick=(...a)=>{normalizeKinds();return baseTreeNext09(...a);};
 // 분류 진행 표시
-const baseOpenPlan09=openPlan;openPlan=async function(...a){const start=Date.now();const timer=setInterval(async()=>{try{const p=await api('/plan-progress',{});if(p&&p.stage)$('#busyText').textContent=p.stage+(p.total?' · '+p.done+' / '+p.total+'개':'')+' · '+Math.round((Date.now()-start)/1000)+'초 경과 · 파일이 많으면 몇 분 걸릴 수 있어요';}catch(e){}},700);try{return await baseOpenPlan09(...a);}finally{clearInterval(timer);}};
+const baseOpenPlan09=openPlan;openPlan=async function(...a){const start=Date.now();
+ const tick=async()=>{try{const p=await api('/plan-progress',{});if(!p||!p.stage)return;const elapsed=(Date.now()-start)/1000;
+  busyProgress({text:'정리 계획 만드는 중 · '+p.stage+(p.total?' '+p.done+' / '+p.total+'개':''),percent:typeof p.percent==='number'?p.percent:undefined,elapsed,
+   remaining:typeof p.remaining==='number'?p.remaining:undefined,note:'파일이 많으면 몇 분 걸릴 수 있습니다. 끝날 때까지 다른 버튼은 잠깁니다.'});}catch(e){}};
+ const timer=setInterval(tick,1000);try{return await baseOpenPlan09(...a);}finally{clearInterval(timer);busyProgress(null);}};
 // 다중 선택: 누르면 선택, Shift로 범위 선택, 선택한 파일을 함께 끌어 옮기기
 const selBar=document.createElement('div');selBar.id='selBar';selBar.hidden=true;$('#reviewMap').before(selBar);
 function renderSelBar(){const n=S.selected.size;selBar.hidden=!n;selBar.innerHTML=n?'<b>'+n+'개 파일 선택됨</b> · 선택한 파일 중 하나를 오른쪽 폴더로 끌어 놓으면 함께 옮겨집니다. 원래 하위 폴더 구조는 유지됩니다. <button id="selClear">선택 해제</button>':'';if(n)$('#selClear').onclick=()=>{S.selected.clear();renderReview();};}
