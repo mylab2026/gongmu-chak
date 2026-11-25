@@ -48,7 +48,7 @@ summary{cursor:pointer}.warn{background:var(--warn-soft);border:1px solid #f0dca
 html{scroll-padding-bottom:120px}.sticky{position:sticky;bottom:10px;box-shadow:0 6px 24px #24364d26;z-index:1}
 .tabs button.on{background:var(--brand);border-color:var(--brand);color:#fff}
 .file-name{overflow-wrap:anywhere}
-#busy{position:fixed;inset:0;background:#ffffffd9;z-index:20;display:grid;place-items:center}#busy div{background:var(--surface);padding:28px 32px;border:1px solid var(--line);border-radius:16px;font-weight:600;box-shadow:0 10px 30px #0f1d3a1f}
+#busy{position:fixed;inset:0;background:#ffffffd9;z-index:20;display:grid;place-items:center}#busy .busy-box{background:var(--surface);padding:28px 32px;border:1px solid var(--line);border-radius:16px;font-weight:600;box-shadow:0 10px 30px #0f1d3a1f;max-width:min(560px,calc(100vw - 32px));display:grid;gap:10px}#busyBar{width:100%;height:10px;accent-color:#345fe2}#busyDetail{margin:0;font-weight:400;color:var(--muted,#5b6b82);font-size:var(--fs-meta,13px);overflow-wrap:anywhere;white-space:pre-line}
 label{cursor:pointer}#rootPath{word-break:break-all}
 #wizard>.row:first-child{gap:14px}#wizardBack{min-height:36px;padding:6px 14px}
 @media(max-width:650px){header{padding:12px}header span{display:none}.choices{grid-template-columns:1fr}.card{padding:16px}main{padding:0 12px}:root{--fs-title:22px;--fs-section:18px}}
@@ -77,7 +77,7 @@ label{cursor:pointer}#rootPath{word-break:break-all}
 <p id="settingsStatus" class="muted" style="white-space:pre-wrap" role="status"></p><div class="actions"><button id="forgetKey">저장된 키 삭제</button><button id="closeSettings">뒤로가기</button><button class="primary" id="saveKey">연결 확인·저장</button></div></dialog>
 <dialog id="confirm"><h2 id="confirmTitle"></h2><p id="confirmText"></p><div class="actions"><button id="confirmNo">아니오</button><button class="primary" id="confirmYes">예</button></div></dialog>
 <dialog id="history"><h2>정리 이력·되돌리기</h2><div id="historyRows"></div><button id="closeHistory">닫기</button></dialog>
-<div id="busy" hidden><div role="status" id="busyText">처리 중입니다…</div></div>
+<div id="busy" hidden><div class="busy-box"><div role="status" aria-live="polite" id="busyText">처리 중입니다…</div><progress id="busyBar" max="100" hidden></progress><p id="busyDetail" hidden></p></div></div>
 <script>
 'use strict';
 const TOKEN='__SESSION_TOKEN__', $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -92,7 +92,25 @@ function clearError(){$('#error').hidden=true;}
 const OFFLINE_MESSAGE='공무착착 실행 창이 닫혀 연결이 끊겼습니다. 바탕화면 ‘공무착착 시험판’으로 다시 실행한 뒤 새로 열린 화면에서 이어서 해주세요.';
 function markOffline(){S.offline=true;let bar=document.getElementById('offlineBanner');if(!bar){bar=document.createElement('div');bar.id='offlineBanner';bar.setAttribute('role','alert');bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:#b42318;color:#fff;padding:12px 18px;font-weight:700;text-align:center';document.body.appendChild(bar);}bar.textContent=OFFLINE_MESSAGE;bar.hidden=false;}
 async function api(action,data={}){let response;try{response=await fetch(action,{method:'POST',headers:{'Content-Type':'application/json','X-App-Token':TOKEN},body:JSON.stringify(data)});}catch(e){markOffline();throw Error(OFFLINE_MESSAGE);}if(S.offline){S.offline=false;const bar=document.getElementById('offlineBanner');if(bar)bar.hidden=true;}const value=await response.json();if(!response.ok)throw Error(value.error||'처리하지 못했습니다.');return value;}
-async function task(text,fn){clearError();$('#busyText').textContent=text;$('#busy').hidden=false;try{return await fn();}catch(e){error(e.message);if($('#settings').open)$('#settingsStatus').textContent=e.message;return null;}finally{$('#busy').hidden=true;}}
+/* 작업 중 가림막: 화면 전체를 덮고, 뒤쪽 화면은 inert로 잠가 클릭·Tab·Enter·Esc가 닿지 않게 한다. 겹쳐 불러도 마지막 작업이 끝나야 풀린다. */
+const Busy={depth:0};
+/* 대화 상자는 잠그지 않는다: 작업 중 ask()로 묻는 확인 창이 맨 위에 떠야 한다. */
+function busyLock(on){const body=document.body;if(!body||!body.children)return;for(const el of [...body.children]){if(el.id==='busy'||el.tagName==='DIALOG')continue;if(on){if(el.dataset&&!el.inert){el.dataset.busyInert='1';el.inert=true;}}else if(el.dataset?.busyInert){delete el.dataset.busyInert;el.inert=false;}}}
+function busyOn(text){Busy.depth++;if(text)$('#busyText').textContent=text;$('#busy').hidden=false;busyLock(true);if(document.activeElement?.blur)document.activeElement.blur();}
+function busyOff(){Busy.depth=Math.max(0,Busy.depth-1);if(Busy.depth)return;$('#busy').hidden=true;busyLock(false);busyProgress(null);}
+function busyTime(sec){sec=Math.max(0,Math.round(sec));return sec<60?sec+'초':Math.floor(sec/60)+'분'+(sec%60?' '+sec%60+'초':'');}
+/* 진행 막대와 설명. 1분 이상 걸릴 작업이면 남은 시간 추정도 보여 준다. p: {text, percent, detail, elapsed, remaining}(초) */
+function busyProgress(p){const bar=$('#busyBar'),detail=$('#busyDetail');if(!bar||!detail)return;
+ if(!p){bar.hidden=true;detail.hidden=true;detail.textContent='';return;}
+ if(p.text)$('#busyText').textContent=p.text;
+ bar.hidden=typeof p.percent!=='number';if(!bar.hidden)bar.value=Math.max(0,Math.min(100,p.percent));
+ const lines=[];if(p.detail)lines.push(p.detail);
+ const elapsed=p.elapsed||0,remaining=p.remaining;
+ if(typeof remaining==='number'&&elapsed+remaining>=60)lines.push('남은 시간 약 '+busyTime(remaining)+' · '+busyTime(elapsed)+' 경과');
+ else if(elapsed>=10)lines.push(busyTime(elapsed)+' 경과'+(typeof remaining==='number'?'':' · 남은 시간 계산 중'));
+ if(p.note)lines.push(p.note);
+ detail.textContent=lines.join(String.fromCharCode(10));detail.hidden=!lines.length;}
+async function task(text,fn){clearError();busyOn(text);try{return await fn();}catch(e){error(e.message);if($('#settings').open)$('#settingsStatus').textContent=e.message;return null;}finally{busyOff();}}
 function ask(title,text=''){return new Promise(resolve=>{$('#confirmTitle').textContent=title;$('#confirmText').textContent=text;$('#confirmText').hidden=!text;$('#confirm').showModal();$('#confirmNo').focus();const finish=value=>{$('#confirm').close();resolve(value);};$('#confirmYes').onclick=()=>finish(true);$('#confirmNo').onclick=()=>finish(false);$('#confirm').oncancel=e=>{e.preventDefault();finish(false);};});}
 function renderHistoryProjects(){const list=S.status?.projects||[],select=$('#historyProject'),previous=select.value;select.innerHTML=list.length?list.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join(''):'<option value="">등록된 사업이 없습니다</option>';select.value=list.some(p=>p.id===previous)?previous:list[0]?.id||'';select.disabled=!list.length;$('#downloadHistory').disabled=!list.length;}
 $('#downloadHistory').onclick=()=>task('정리 이력 파일 준비 중…',async()=>{const id=$('#historyProject').value;if(!id)throw Error('사업을 먼저 선택해주세요.');const result=await api('/history-archive',{id});const bytes=Uint8Array.from(atob(result.data),c=>c.charCodeAt(0));const url=URL.createObjectURL(new Blob([bytes],{type:'application/zip'}));const link=document.createElement('a');link.href=url;link.download=result.name;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);});

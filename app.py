@@ -688,6 +688,12 @@ def update_contract(cid, analysis):
             fail('계약 종류를 확인해주세요.')
         record['analysis'][key] = contract_text(analysis.get(key, record['analysis'].get(key)))
     clean_contract_analysis(record['analysis'])
+    # 2단계 목록에서 사용자가 고른 계약 종류·단계: 건명·AI 판단보다 먼저 쓴다(contract_category, 화면 contractKindOf).
+    for flag in ('kind_confirmed', 'stage_confirmed'):
+        if flag in analysis:
+            record['analysis'][flag] = bool(analysis[flag])
+    if record['analysis'].get('kind') not in ('construction', 'design', 'service', 'material'):
+        record['analysis'].pop('kind_confirmed', None)
     record['confirmedAt'] = now()
     if record.get('sourceHash'):
         atomic_json(DATA / 'contract-cache' / (record['sourceHash'] + '.json'), record)
@@ -755,9 +761,16 @@ STOPWORDS = {'파일', '문서', '어디', '있지', '있나', '어디있지', '
 
 
 def compact(text):
-    return re.sub(r'[\s_\-·.,()\[\]{}]+', '', str(text)).casefold()
+    return _compact(str(text))
 
 
+@functools.lru_cache(maxsize=200000)
+def _compact(text):
+    # 같은 폴더 이름을 큰 사업에서 수백만 번 다시 정리하므로 결과를 기억한다(순수 함수).
+    return re.sub(r'[\s_\-·.,()\[\]{}]+', '', text).casefold()
+
+
+@functools.lru_cache(maxsize=200000)
 def label_word(label):
     """'03 착공계' -> '착공계'. Folder numbers are ordering marks, not document words."""
     # '03 착공계', '3109-1 설계변경', and the common '2. 시공단계' / '1) 품의' numbering.
@@ -887,28 +900,40 @@ def upgrade_project_tree(project):
     return project
 
 
+@functools.lru_cache(maxsize=8)
+def _structure_index(paths):
+    """승인 트리 경로별 (폴더 이름 의미어, 상위 폴더 의미어들)과 하위 폴더가 있는 경로. 파일마다 다시 계산하지 않는다."""
+    by_word={}
+    for path in paths:
+        parts=PurePosixPath(path).parts
+        by_word.setdefault(semantic_label(parts[-1]) if parts else '',[]).append((path,[semantic_label(p) for p in parts[:-1]]))
+    parents={str(PurePosixPath(path).parent) for path in paths}
+    return by_word,parents
+
+
 def source_structure_target(paths,relative):
     """Map legacy headings to the approved tree, using the whole branch for ties."""
+    by_word,parents=_structure_index(tuple(paths))
     parts=list(PurePosixPath(relative).parent.parts)
+    labels=[semantic_label(p) for p in parts]
     for pos in range(len(parts)-1,-1,-1):
-        word=semantic_label(parts[pos])
+        word=labels[pos]
         old_site=re.fullmatch(r'현장(\d+)',word)
-        if old_site and any(semantic_label(p)=='작업지시서' for p in parts[:pos]):
+        if old_site and '작업지시서' in labels[:pos]:
             word='작업지시'+old_site.group(1)+'차'
         if len(word)<2 or word in GENERIC_LABELS or DATE_FOLDER.match(parts[pos]):
             continue
-        matches=[p for p in paths if semantic_label(PurePosixPath(p).name)==word]
+        matches=by_word.get(word)
         if not matches:
             continue
-        def score(path):
-            ancestors=[semantic_label(p) for p in PurePosixPath(path).parts[:-1]]
-            return sum(1 for a in ancestors if a and any(semantic_label(p)==a for p in parts[:pos]))
-        best=max(map(score,matches))
-        matches=[p for p in matches if score(p)==best]
+        above=set(labels[:pos])
+        scored=[(sum(1 for a in ancestors if a and a in above),path) for path,ancestors in matches]
+        best=max(score for score,_ in scored)
+        matches=[path for score,path in scored if score==best]
         if len(matches)==1:
             # A stage/contract root alone cannot classify an arbitrary nested document.
             target=matches[0]
-            if target.count('/')<2 and any(p.startswith(target+'/') for p in paths) and pos<len(parts)-1:
+            if target.count('/')<2 and target in parents and pos<len(parts)-1:
                 continue
             return target
         return ''
@@ -1384,6 +1409,8 @@ def contract_ledger(project):
 
 
 def contract_category(analysis):
+    if analysis.get('kind_confirmed') and analysis.get('kind') in ('construction','design','service','material'):
+        return analysis['kind']
     title=str(analysis.get('title') or '')
     if re.search(r'재해|기술지도|감리|안전진단|석면',title) and '용역' in title:
         return 'service'
@@ -2365,11 +2392,27 @@ def register_user_folders(pid, folders):
     return {'added': added}
 
 
+# 정리 계획 만들기 진행률: 단계마다 전체에서 차지하는 비율(실측: 63동 4,600여 개 기준 '첫머리 읽기'가 가장 오래 걸린다).
+PLAN_STAGES = {'scan': ('파일 목록 읽는 중', 0, 10), 'classify': ('파일 이름·폴더로 분류 중', 10, 35),
+               'content': ('문서 첫머리 읽는 중', 35, 90), 'finish': ('묶음·차수 폴더 맞추는 중', 90, 100)}
+
+
+def plan_progress(stage, done=0, total=0, started=None):
+    """/plan-progress가 돌려줄 값. 전체 진행률과, 10초 이상 걸리면 남은 시간(초) 추정을 함께 남긴다."""
+    label, low, high = PLAN_STAGES[stage]
+    started = started or (PROGRESS.get('plan') or {}).get('startedAt') or time.time()
+    percent = low + (high - low) * (min(done, total) / total if total else 0)
+    elapsed = time.time() - started
+    remaining = round(elapsed * (100 - percent) / percent) if percent >= 3 and elapsed >= 10 else None
+    PROGRESS['plan'] = {'stage': label, 'done': done, 'total': total, 'percent': round(percent),
+                        'startedAt': started, 'elapsed': round(elapsed), 'remaining': remaining}
+
+
 def make_plan(pid, ongoing, virtual=None):
     project = get_project(pid)
     root = root_available(project)
     inbox = inbox_of(project)
-    PROGRESS['plan'] = {'stage': '파일 목록 읽는 중', 'done': 0, 'total': 0}
+    plan_progress('scan', started=time.time())
     files = scan(root, ongoing, inbox) if virtual is None else virtual
     paths = work_paths(project)
     # PC에서 직접 만든 폴더(등록 전)의 파일은 사용자가 정리해 둔 것으로 보고 옮기지 않는다.
@@ -2377,10 +2420,12 @@ def make_plan(pid, ongoing, virtual=None):
     if user_folders:
         prefixes = tuple(f['path'] + '/' for f in user_folders)
         files = [f for f in files if not f['relative'].startswith(prefixes)]
-    PROGRESS['plan'] = {'stage': '파일 이름·폴더로 분류 중', 'done': 0, 'total': len(files)}
+    plan_progress('classify', 0, len(files))
     rows = []
     history = project.get('rules', [])
-    for file in files:
+    for count, file in enumerate(files):
+        if count % 200 == 0:
+            plan_progress('classify', count, len(files))
         destination, reason = '', '목적지를 확정할 정보가 부족합니다. 직접 선택하거나 AI 검토를 요청해주세요.'
         source_hint=source_structure_target(paths,file['relative'])
         if source_hint and source_hint.count('/')>=2:
@@ -2408,17 +2453,19 @@ def make_plan(pid, ongoing, virtual=None):
                          'scope': 'inbox' if ongoing else 'whole'}}
     cache = project.get('classificationCache', {})
     indexed = text_cache(pid).get('files', {})
-    checked = 0
+    reading = []
     for row in rows:
         saved = cache.get(cache_key(plan, row))
         if saved and (saved.get('method')=='manual' or row['method']=='hold') and (not saved.get('destination') or saved['destination'] in paths):
             row.update(saved)
-        elif row['method'] == 'hold' and row['size'] and checked < 400:
-            checked += 1
-            PROGRESS['plan'] = {'stage': '문서 첫머리 읽는 중', 'done': checked, 'total': sum(1 for r in rows if r['method'] == 'hold')}
-            found = content_rule(project, paths, row, root / row.get('current', row['relative']), indexed)
-            if found:
-                row.update(found)
+        elif row['method'] == 'hold' and row['size'] and len(reading) < 400:
+            reading.append(row)
+    for checked, row in enumerate(reading, 1):
+        plan_progress('content', checked - 1, len(reading))
+        found = content_rule(project, paths, row, root / row.get('current', row['relative']), indexed)
+        if found:
+            row.update(found)
+    plan_progress('finish', 0, 1)
     apply_contract_routes(project,rows,paths)
     map_roles(project,rows,paths,inbox)
     organize_context(rows, paths, inbox)
@@ -3826,6 +3873,10 @@ def resolve_contract_versions(records):
             if totals:
                 if totals[0].get('total_amount'): merged['amount'] = totals[0]['total_amount']
                 if totals[0].get('total_period'): merged['period'] = totals[0]['total_period']
+        # 사용자가 고른 종류는 같은 계약의 다른 판(최초·변경)이 덮지 않는다.
+        chosen = [r['analysis'] for r in reversed(ordered) if r['analysis'].get('kind_confirmed')]
+        if chosen:
+            merged['kind'], merged['kind_confirmed'] = chosen[0]['kind'], True
         if any(r.get('contractDoubt') for r in group) and not all(r.get('contractDoubt') for r in group):
             latest.pop('contractDoubt', None)
         latest['analysis'] = merged

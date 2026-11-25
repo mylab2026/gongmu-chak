@@ -212,6 +212,38 @@ def main():
                     assert all(kids>0 for l,k,c,kids in listed['build'] if c) and any(c=='k2' for _,c in listed['design']), listed
                     numbers=[l.split(' ',1)[0] for l,_,_,_ in listed['build']];assert len(numbers)==len(set(numbers)), numbers  # 계약 폴더 번호가 겹치지 않음
                     result['contract_list_and_tree']=listed
+                    # 2차 시험 2번: 계약 종류를 사용자가 고르면 미리보기·3단계 가지·서버 분류가 그 종류를 따른다.
+                    kinded=page.evaluate("""()=>{const savedSlots=ContractInput.slots,savedContracts=S.contracts,savedTree=S.tree,savedType=S.type;
+                      const r={id:'q1',name:'q1.pdf',supersededIds:[],analysis:{title:'가상관 미디어월 설치 용역',party:'가상상사',kind:'service',signed_date:'2026-01-02'}};
+                      try{ContractInput.slots=[{number:1,status:'ready',record:r,pasteOpen:false,error:''}];const wasHidden=$('#contractStep').hidden;$('#contractStep').hidden=false;renderContractInput();
+                        const sel=document.querySelector('[data-ci-kind="1"]'),first=sel.value;sel.value='material';sel.dispatchEvent(new Event('change'));
+                        const preview=document.querySelector('#contractList').innerText,now=document.querySelector('[data-ci-kind="1"]').value;
+                        $('#noContracts').checked=false;syncContractRecords();normalizeKinds();S.type='planning';autoTemplate();
+                        const stage=S.tree.find(n=>/시공단계/.test(n.label)),branch=stage.children.find(n=>n.contractId==='q1');
+                        $('#contractStep').hidden=wasHidden;
+                        return {first,now,preview:preview.includes('관급자재'),kind:branch&&branch.contractKind,label:branch&&branch.label,saved:S.contracts[0].analysis.kind,confirmed:S.contracts[0].analysis.kind_confirmed};}
+                      finally{ContractInput.slots=savedSlots;S.contracts=savedContracts;S.tree=savedTree;S.type=savedType;renderContractInput();renderTree();}}""")
+                    assert kinded['first']=='service' and kinded['now']=='material' and kinded['preview'] and kinded['kind']=='material' and kinded['saved']=='material' and kinded['confirmed'], kinded
+                    result['contract_kind_choice']=kinded
+                    # 2차 시험 1번: 계약서 자동 찾기 동안 화면 전체를 가리고 뒤 화면(메뉴·뒤로가기·다음)을 잠근다. 끝나면 풀린다.
+                    locked=page.evaluate("""async()=>{const savedApi=api,savedSlots=ContractInput.slots,savedScope=AutoContract.scope,savedSel=S.selection,savedProject=S.project;
+                      let mid=null;
+                      api=async(path,body)=>{if(path==='/contract-candidates')return {candidates:[{candidate:'c1',name:'a.pdf',relative:'가상/a.pdf'},{candidate:'c2',name:'b.pdf',relative:'가상/b.pdf'}]};
+                        if(path==='/auto-contract'){await new Promise(r=>setTimeout(r,150));if(!mid){const home=$('#homeButton');home.focus();
+                          mid={busy:!$('#busy').hidden,mainInert:document.querySelector('main').inert,headerInert:document.querySelector('header').inert,focusBlocked:document.activeElement!==home,text:$('#busyText').textContent,bar:!$('#busyBar').hidden,file:$('#busyDetail').textContent.includes('a.pdf')};}
+                          return {name:body.candidate+'.pdf',ignored:true,cached:true,exclusionReason:'가상'};}
+                        return savedApi(path,body);};
+                      try{S.project=null;S.selection={selection:'smoke-lock'};AutoContract.scope=null;await discoverContracts();
+                        return {mid,after:{busy:!$('#busy').hidden,mainInert:!!document.querySelector('main').inert,headerInert:!!document.querySelector('header').inert,depth:Busy.depth}};}
+                      finally{api=savedApi;ContractInput.slots=savedSlots;AutoContract.scope=savedScope;S.selection=savedSel;S.project=savedProject;renderContractInput();}}""")
+                    assert locked['mid'] and all(locked['mid'][k] for k in ('busy','mainInert','headerInert','focusBlocked','bar','file')) and '계약서 확인 중' in locked['mid']['text'], locked
+                    assert locked['after']=={'busy':False,'mainInert':False,'headerInert':False,'depth':0}, locked
+                    result['contract_discovery_locks_screen']=locked
+                    # 1분 이상 걸릴 작업은 남은 시간 추정을 보여 준다(짧은 작업은 경과만).
+                    times=page.evaluate("""()=>{busyOn('x');busyProgress({text:'정리 계획 만드는 중',percent:40,elapsed:50,remaining:75});const long=$('#busyDetail').textContent;
+                      busyProgress({text:'y',percent:80,elapsed:12,remaining:3});const short=$('#busyDetail').textContent;busyOff();return {long,short,hidden:$('#busy').hidden};}""")
+                    assert '남은 시간 약 1분 15초' in times['long'] and '남은 시간' not in times['short'] and times['hidden'], times
+                    result['remaining_time_shown_for_long_work']=times
                     assert page.locator('#doubtToggle').count()==0
                     assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
