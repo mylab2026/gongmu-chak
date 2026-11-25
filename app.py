@@ -3318,6 +3318,23 @@ def reconnect(pid, selection):
     return project
 
 
+def delete_project(pid):
+    """Remove a project from the registered list only.
+
+    The user's project folder and files are never touched. The record is appended to
+    deleted-projects.json (not shown in the app) and history journals/archives stay on disk,
+    so nothing is lost; the folder must be connected again to use it.
+    """
+    project = get_project(pid)
+    archive = read_json(DATA / 'deleted-projects.json', []) or []
+    atomic_json(DATA / 'deleted-projects.json', archive + [{**project, 'deletedAt': now()}])
+    atomic_json(DATA / 'projects.json', [p for p in read_json(DATA / 'projects.json', []) if p.get('id') != pid])
+    for plan_id in list(PLANS):
+        if PLANS[plan_id].get('projectId') == pid:
+            del PLANS[plan_id]
+    return {'ok': True, 'id': pid, 'name': project.get('name', '')}
+
+
 # Contract discovery is confined to the selected project. Cache contains no API keys.
 CONTRACT_CANDIDATES = {}
 CONTRACT_DISCOVERY_LOCK = threading.Lock()
@@ -4386,6 +4403,8 @@ def dispatch(action, payload):
         return save_project(payload, bool(payload.get('createFolders', False)))
     if action == '/reconnect':
         return reconnect(payload['id'], payload['selection'])
+    if action == '/delete-project':
+        return delete_project(payload.get('id', ''))
     if action == '/connection-status':
         project = get_project(payload['id'])
         return {'exists': Path(project['root']).is_dir(), 'root': project['root']}
