@@ -126,6 +126,31 @@ class AnalysisAndNames(unittest.TestCase):
         self.assertEqual([c.get('temperature') for c in calls], [0, 0])
         self.assertIn('발주자', app.CONTRACT_PROMPT); self.assertIn('total_amount', app.CONTRACT_PROMPT)
 
+    def test_numbers_and_bundles_from_ai_do_not_block_next(self):
+        # 이미 숫자로 저장된 캐시(이전 판)도 '다음'에서 통과해야 한다.
+        cached = {'title': '가상 공사', 'kind': 'construction', 'amount': 1200, 'total_amount': 3500000000,
+                  'annual_amount': 1200000000.5, 'total_period': {'start': '2026-01-02', 'end': '2027-12-31'},
+                  'annual_period': ['2026-01-02', '2026-12-31'], 'party': True, 'short_name': 'x' * 1500}
+        rec = app.read_json(app.DATA / 'staging' / 'cid.json'); rec['analysis'] = dict(cached)
+        app.atomic_json(app.DATA / 'staging' / 'cid.json', rec)
+        updated = app.update_contract('cid', {'stage': '시공'})['analysis']
+        self.assertEqual(updated['total_amount'], '3500000000')
+        self.assertEqual(updated['annual_amount'], '1200000000.5')
+        self.assertEqual(updated['amount'], '1200')
+        self.assertEqual(updated['total_period'], '2026-01-02 ~ 2027-12-31')
+        self.assertEqual(updated['annual_period'], '2026-01-02, 2026-12-31')
+        self.assertIsNone(updated['party'])
+        self.assertEqual(len(updated['short_name']), 1000)
+        self.assertEqual(updated['stage'], '시공')
+        # AI 분석 결과도 받을 때 같은 정리를 해서 남긴다.
+        with patch.object(app, 'gateway', return_value=dict(cached, kind='goods', stage='착공')):
+            analysed = app.analyze_contract('cid')['analysis']
+        self.assertEqual(analysed['total_amount'], '3500000000')
+        self.assertEqual(analysed['kind'], 'unknown'); self.assertIsNone(analysed['stage'])
+        self.assertEqual(app.read_json(app.DATA / 'contract-cache' / 'h.json')['analysis']['total_period'], '2026-01-02 ~ 2027-12-31')
+        with self.assertRaises(Exception):
+            app.update_contract('cid', {'stage': '착공'})
+
     def test_contract_file_names_are_left_unchanged_by_default(self):
         self.assertFalse(app.CONTRACT_RENAME)
         rec = record('x', '가상관 건축공사', '가상건설', '2026-01-02', kind='construction')

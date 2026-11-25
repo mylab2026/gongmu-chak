@@ -610,6 +610,39 @@ CONTRACT_PROMPT = ('이 계약서 발췌(여러 쪽일 수 있음)를 읽고 JSO
                    '근로계약서는 사업 계약에서 제외하므로 is_contract=false로 표시하라. 사업유형과 직접 계약 관리 여부는 사용자 확인 대상이며 확정하지 마라.')
 
 
+CONTRACT_TEXT_KEYS = ('title', 'party', 'period', 'project_name', 'kind', 'signed_date', 'contract_number', 'original_contract_number', 'amount',
+                      'short_name', 'total_amount', 'total_period', 'annual_amount', 'annual_period', 'stage')
+
+
+def contract_text(value):
+    """AI가 숫자·묶음·목록으로 준 계약 항목을 1,000자 이내 글자로 맞춘다. 못 쓰는 값은 None."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        value = str(value)
+    elif isinstance(value, dict):
+        value = ' ~ '.join(str(v) for v in value.values() if v not in (None, ''))
+    elif isinstance(value, (list, tuple)):
+        value = ', '.join(str(v) for v in value if v not in (None, ''))
+    if not isinstance(value, str):
+        return None
+    value = value.strip()[:1000]
+    return value or None
+
+
+def clean_contract_analysis(analysis):
+    if not isinstance(analysis, dict):
+        return analysis
+    for key in CONTRACT_TEXT_KEYS:
+        if key in analysis:
+            analysis[key] = contract_text(analysis[key])
+    if analysis.get('kind') not in (None, 'construction', 'design', 'service', 'material', 'unknown'):
+        analysis['kind'] = 'unknown'
+    if analysis.get('stage') not in (None, '기획', '설계', '시공'):
+        analysis['stage'] = None
+    return analysis
+
+
 def contract_parts(record):
     parts, sent = excerpt(record['path'], 1)
     for extra in record.get('extraPaths', []):
@@ -633,7 +666,7 @@ def analyze_contract(cid):
         if 'AI가 올바른 결과' not in str(error) and 'AI 응답 형식' not in str(error):
             raise
         answer = gateway(messages, temperature=0)
-    record.update({'analysis': answer, 'sent': sent})
+    record.update({'analysis': clean_contract_analysis(answer), 'sent': sent})
     if record.get('sourceHash'):
         atomic_json(DATA / 'contract-cache' / (record['sourceHash'] + '.json'), record)
     atomic_json(DATA / 'staging' / (cid + '.json'), record)
@@ -647,18 +680,14 @@ def update_contract(cid, analysis):
         fail('자동 추출이 끝난 계약서를 확인해주세요.')
     if not isinstance(analysis, dict):
         fail('계약 정보 형식을 확인해주세요.')
-    for key in ('title', 'party', 'period', 'project_name', 'kind', 'signed_date', 'contract_number', 'original_contract_number', 'amount',
-                'short_name', 'total_amount', 'total_period', 'annual_amount', 'annual_period', 'stage'):
-        value = analysis.get(key, record['analysis'].get(key))
-        if key == 'amount' and isinstance(value, (int, float)):
-            value = str(value)
-        if value is not None and (not isinstance(value, str) or len(value) > 1000):
-            fail('계약 정보는 1,000자 이내의 문자로 입력해주세요.')
-        if key == 'stage' and value not in (None, '기획', '설계', '시공'):
+    # 저장된 AI 값이 숫자·묶음이어도 '다음'을 막지 않는다. 사용자가 고른 단계·종류만 확인한다.
+    for key in CONTRACT_TEXT_KEYS:
+        if key == 'stage' and analysis.get(key) not in (None, '기획', '설계', '시공'):
             fail('계약 단계를 확인해주세요.')
-        if key == 'kind' and value not in (None, 'construction', 'design', 'service', 'material', 'unknown'):
+        if key == 'kind' and analysis.get(key) not in (None, 'construction', 'design', 'service', 'material', 'unknown'):
             fail('계약 종류를 확인해주세요.')
-        record['analysis'][key] = value
+        record['analysis'][key] = contract_text(analysis.get(key, record['analysis'].get(key)))
+    clean_contract_analysis(record['analysis'])
     record['confirmedAt'] = now()
     if record.get('sourceHash'):
         atomic_json(DATA / 'contract-cache' / (record['sourceHash'] + '.json'), record)
