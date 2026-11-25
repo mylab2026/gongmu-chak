@@ -34,7 +34,7 @@ def make_report(payload, *, project=None, current=None, model='', configured=Fal
     if category not in CATEGORIES:
         raise ValueError('문의 종류를 선택해주세요.')
     fields = {}
-    for name, limit in [('question', 4000), ('error', 4000), ('screen', 160)]:
+    for name, limit in [('question', 4000), ('error', 4000), ('screen', 160), ('blocked', 600)]:
         value = payload.get(name, '')
         if not isinstance(value, str) or len(value) > limit:
             raise ValueError('문의 내용이 너무 깁니다. 질문과 오류는 각각 4,000자 이내로 적어주세요.')
@@ -45,6 +45,7 @@ def make_report(payload, *, project=None, current=None, model='', configured=Fal
     lines = ['공무착착 챗봇 상담자료', '자료 형식: support-v1', '생성: '+at,
              '프로그램: '+BUILD, '환경: '+platform.system()+' / Python '+platform.python_version(),
              '문의 종류: '+category, '화면: '+(fields['screen'] or '미확인'),
+             '화면 진행 상태: '+(fields['blocked'] or '확인된 막힘 없음'),
              'AI 키 등록 여부: '+('등록됨 (연결 성공을 뜻하지 않음)' if configured else '미등록'),
              '선택 모델: '+(model or '미선택'),
              '사업: '+(project.get('name', '이름 없음') if project else '사업 미선택'),
@@ -75,6 +76,8 @@ def make_brief(fields, category, *, project=None, model='', configured=False, ro
              '- 화면: ' + (fields.get('screen') or '미확인') + ' / 문의 종류: ' + category,
              '- 프로그램: ' + BUILD.split(' /')[0] + ' / AI 키 ' + ('등록됨' if configured else '미등록')
              + (' / 모델 ' + model if model else '')]
+    if fields.get('blocked'):
+        lines.append('- 화면 진행 상태: ' + fields['blocked'])
     if project:
         lines.append('- 사업: ' + project.get('name', '이름 없음'))
     if error:
