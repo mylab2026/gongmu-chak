@@ -8,6 +8,7 @@ import datetime
 import html
 import ctypes
 from ctypes import wintypes
+import copy
 import functools
 import hashlib
 import io
@@ -2042,6 +2043,88 @@ def map_roles(project,rows,paths,inbox=INBOX):
         row.update(keepSub=inner,keepSubFor=target) if inner else (row.pop('keepSub',None),row.pop('keepSubFor',None))
 
 
+def user_made_folders(project, root, paths):
+    """Folders the user created on the PC after the first organization, outside the registered tree.
+
+    Only after at least one move run (before that, every old folder is unorganized material). A folder
+    counts when it is not in the tree, was not created by a move run (journal destinations and their
+    parents), is not the export or inbox folder, holds something other than shortcuts, and was created
+    after the first run. Only the top-most such folder is returned; its contents stay where they are."""
+    journals = [j for p in (DATA / 'history').glob('*.json') for j in [read_json(p)]
+                if j and j.get('projectId') == project['id'] and j.get('entries')]
+    if not journals or not root.is_dir():
+        return []
+    try:
+        first = time.mktime(time.strptime(min(j['at'] for j in journals), '%Y-%m-%d %H:%M:%S'))
+    except (KeyError, ValueError):
+        return []
+    made = set()
+    for journal in journals:
+        for entry in journal['entries']:
+            for value in [entry.get('destination', '')] + list(entry.get('madeDirs', [])):
+                part = PurePosixPath(value)
+                while str(part) not in ('', '.'):
+                    made.add(str(part)); part = part.parent
+    known = set(paths) | made
+    inbox = inbox_of(project)
+    registered = set(project.get('registeredFolders', []))
+    known.update(str(PurePosixPath(p).parent) for p in paths)
+    found = []
+    for folder, dirs, files in os.walk(root, followlinks=False):
+        relative = Path(folder).relative_to(root).as_posix()
+        dirs[:] = sorted(d for d in dirs if d not in ('.gongmu-chak', '$RECYCLE.BIN', 'System Volume Information', EXPORT_DIR, inbox)
+                         and not (Path(folder) / d).is_symlink())
+        if relative == '.':
+            continue
+        if relative in registered:
+            dirs[:] = []  # a folder the user registered keeps its own inner structure
+            continue
+        if relative in known:
+            continue
+        parent = str(PurePosixPath(relative).parent)
+        dirs[:] = []  # top-most only
+        if parent != '.' and parent not in paths:
+            continue
+        here = Path(folder)
+        try:
+            if here.stat().st_ctime < first:
+                continue
+        except OSError:
+            continue
+        contents = [p for p in here.rglob('*') if p.is_file()]
+        if contents and all(p.suffix.lower() == '.lnk' for p in contents):
+            continue
+        found.append({'path': relative, 'parent': '' if parent == '.' else parent, 'label': PurePosixPath(relative).name, 'files': len(contents)})
+    return found
+
+
+def register_user_folders(pid, folders):
+    """Add PC-made folders to the project tree as they are (no files move)."""
+    project = get_project(pid)
+    root = root_available(project)
+    candidates = {f['path']: f for f in user_made_folders(project, root, work_paths(project))}
+    tree = copy.deepcopy(project['tree'])
+    added = []
+    for path in folders:
+        item = candidates.get(path)
+        if not item:
+            fail('추가할 수 없는 폴더입니다: ' + str(path))
+        siblings = tree
+        for part in PurePosixPath(item['parent']).parts if item['parent'] else ():
+            node = next((n for n in siblings if n['label'] == part), None)
+            if node is None:
+                fail('상위 폴더를 폴더 구조에서 찾을 수 없습니다: ' + item['parent'])
+            siblings = node.setdefault('children', [])
+        if not any(n['label'] == item['label'] for n in siblings):
+            siblings.append({'label': item['label']})
+        added.append(path)
+    saved = save_project({'id': pid, 'name': project['name'], 'type': project.get('type', ''), 'tree': tree}, False)
+    saved['registeredFolders'] = sorted(set(saved.get('registeredFolders', [])) | set(added))
+    projects = read_json(DATA / 'projects.json', [])
+    atomic_json(DATA / 'projects.json', [saved if p.get('id') == pid else p for p in projects])
+    return {'added': added}
+
+
 def make_plan(pid, ongoing, virtual=None):
     project = get_project(pid)
     root = root_available(project)
@@ -2049,6 +2132,11 @@ def make_plan(pid, ongoing, virtual=None):
     PROGRESS['plan'] = {'stage': '파일 목록 읽는 중', 'done': 0, 'total': 0}
     files = scan(root, ongoing, inbox) if virtual is None else virtual
     paths = work_paths(project)
+    # PC에서 직접 만든 폴더(등록 전)의 파일은 사용자가 정리해 둔 것으로 보고 옮기지 않는다.
+    user_folders = user_made_folders(project, root, paths) if virtual is None else []
+    if user_folders:
+        prefixes = tuple(f['path'] + '/' for f in user_folders)
+        files = [f for f in files if not f['relative'].startswith(prefixes)]
     PROGRESS['plan'] = {'stage': '파일 이름·폴더로 분류 중', 'done': 0, 'total': len(files)}
     rows = []
     history = project.get('rules', [])
@@ -2106,7 +2194,8 @@ def make_plan(pid, ongoing, virtual=None):
     if virtual is None:rows.extend(add_empty_bundle_folders(root,rows,ongoing,inbox))
     plan['contextSummary']=meeting_coverage(project,plan)
     rows[:] = [r for r in rows if not r.get('destination') or str(PurePosixPath(effective_folder(r,r['destination']))/(r.get('proposedName') or r['name'])) != r.get('current',r['relative'])]
-    plan['scanInfo']['alreadyInPlaceCount']=max(0,len(files)-sum(r.get('kind')!='directory' for r in rows))
+    plan['scanInfo']['alreadyInPlaceCount']=max(0,len(files)-sum(r.get('kind')!='directory' for r in rows))+sum(f['files'] for f in user_folders)
+    plan['userFolders']=user_folders
     PROGRESS.pop('plan', None)
     plan['localCount'] = sum(1 for r in rows if r['method'] in ('rule', 'attach'))
     PLANS[plan['id']] = plan
@@ -4408,6 +4497,8 @@ def dispatch(action, payload):
         return save_project(payload, bool(payload.get('createFolders', False)))
     if action == '/reconnect':
         return reconnect(payload['id'], payload['selection'])
+    if action == '/register-folders':
+        return register_user_folders(payload.get('id', ''), list(payload.get('folders', [])))
     if action == '/delete-project':
         return delete_project(payload.get('id', ''))
     if action == '/connection-status':
