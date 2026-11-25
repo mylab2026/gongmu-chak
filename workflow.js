@@ -67,7 +67,7 @@ $('#mapSelectGroup').onclick=()=>{S.plan.rows.filter(r=>parentFolder(r)===MapRev
 window.addEventListener('pointermove',event=>{if(!MapReview.pointerDrag)return;const target=findDropTarget(event.clientX,event.clientY);showRouteHover(target,routeSelection(MapReview.pointerDrag.id).length);});
 $('#routeHelp').textContent='왼쪽에서 여러 파일을 체크한 뒤 함께 끌어 놓거나 선택 파일 목적지 변경을 누르세요. 목적지 행 전체가 드롭 영역입니다.';
 
-const aiPrefs=document.createElement('div');aiPrefs.innerHTML='<label><input type="checkbox" id="autoClassify">파일 이동 단계에서 PC 규칙으로 못 정한 파일만 AI가 자동 분류</label><p class="muted">끄면 AI는 “AI 다시 분류”·“AI 발췌 검토”·“AI로 더 정확히 찾기”를 누를 때만 사용합니다.</p>';$('#settingsStatus').before(aiPrefs);
+const aiPrefs=document.createElement('div');aiPrefs.innerHTML='<label><input type="checkbox" id="autoClassify">파일 이동 단계에서 PC 규칙으로 못 정한 파일만 AI가 자동 분류</label>';$('#settingsStatus').before(aiPrefs);
 $('#autoClassify').onchange=()=>task('설정 저장 중…',async()=>{S.status.prefs=await api('/prefs',{autoClassify:$('#autoClassify').checked});});
 // AI 연결 설정: 등록 후에는 현재 모델·이번 달 호출을 먼저 보여주고, 키 입력은 변경할 때만 엽니다.
 const DEFAULT_MODEL='gemini-3.1-flash-lite';
@@ -77,7 +77,8 @@ function showModelWarning(){const id=chosenModel(),tier=id?modelTier(id):'light'
 function ensureModelOption(id,label){if(id&&!$('#aiModel').innerHTML.includes('value="'+esc(id)+'"'))$('#aiModel').innerHTML=$('#aiModel').innerHTML.replace('<option value="__manual__">','<option value="'+esc(id)+'">'+esc(label||id)+'</option><option value="__manual__">');}
 function updateUsageBadge(){const u=S.status?.usage;$('#usageBadge').classList[S.status?.configured?'remove':'add']('needs-setup');$('#usageBadge').textContent=S.status?.configured?(S.status.model||'모델 미선택')+' · 이번 달 AI '+(u?u.calls:0)+'회':'AI 미연결 · 설정 필요';}
 function prepareSettings(){const configured=Boolean(S.status?.configured);$('#apiKey').value='';$('#currentAI').hidden=!configured;$('#keyArea').hidden=configured;$('#changeKey').hidden=!configured;$('#changeKey').textContent='API 키 변경';$('#forgetKey').hidden=!configured;$('#modelHeading').textContent=configured?'모델 변경 (바꾸려면 선택 후 연결 확인·저장)':'사용할 모델';
- if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash-Lite ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;$('#settingsStatus').textContent='학내 API 키를 입력하고 연결 확인·저장을 눌러주세요. 모델은 Gemini 3.1 Flash-Lite가 기본으로 선택돼 있습니다.';}
+ if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash-Lite ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;}
+ $('#settingsStatus').textContent='';
  $('#manualModelArea').hidden=true;showModelWarning();$('#autoClassify').checked=S.status?.prefs?.autoClassify!==false;
  $('#monthCalls').textContent='확인 중…';api('/usage').then(u=>{$('#monthCalls').textContent=u.calls+'회 · 토큰 '+Number(u.tokens).toLocaleString()+'개 ('+u.month+')';if(S.status){S.status.usage=u;updateUsageBadge();}}).catch(()=>{$('#monthCalls').textContent='확인하지 못했습니다';});}
 const settingsDialog=$('#settings'),baseShowSettings=settingsDialog.showModal.bind(settingsDialog);settingsDialog.showModal=()=>{prepareSettings();baseShowSettings();};
