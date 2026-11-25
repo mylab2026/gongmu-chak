@@ -197,23 +197,24 @@ function checkGroups(){const map=new Map();for(const r of S.plan.rows){const kin
 function checkGroupRow(g,i){const many=g.rows.length>1;
  return '<tr data-check-group="'+i+'"><td class="path">'+esc(g.unit||'(사업 폴더 바로 아래)')+'<br><small class="muted">파일 '+g.rows.length+'개</small></td><td class="path">'+(g.destination?esc(g.destination):'<b>보류</b>')+'</td><td><small>'+esc(checkLabel[g.kind]||'')+'</small></td>'
   +'<td><div class="row" style="gap:6px"><button data-check-confirm="'+i+'">'+(g.destination?'이대로 확정':'보류로 두기')+'</button><select data-check-target="'+i+'" aria-label="묶음 목적지 선택"><option value="">'+(many?'묶음 목적지 바꾸기…':'목적지 바꾸기…')+'</option></select><button data-check-show="'+i+'">보기</button></div></td></tr>';}
+const checkGroupsBox=document.createElement('div');checkGroupsBox.id='checkGroupsBox';checkPanel.after(checkGroupsBox);
 function renderCheckPanel(){if(!S.plan)return;const groups=checkGroups(),count=groups.reduce((n,g)=>n+g.rows.length,0);
  undoBar.hidden=!S.lastJournal;
- if(!count){checkPanel.innerHTML='<p class="success" style="margin:0">확인이 필요한 경로가 없습니다. 연결도를 확인한 뒤 파일 이동 실행을 누르세요.</p>';return;}
+ if(!count){checkPanel.innerHTML='<p class="success" style="margin:0">확인이 필요한 경로가 없습니다. 연결도를 확인한 뒤 파일 이동 실행을 누르세요.</p>';checkGroupsBox.innerHTML='';checkShown=[];return;}
  const shown=groups.slice(0,60);
- checkPanel.innerHTML='<p class="warn" style="margin:0;background:#fff1f0;color:#a4262c"><b>'+count+'개 파일</b>('+groups.length+'개 묶음)의 경로를 확신하지 못했습니다. 아래 화살표와 <b>!</b>를 보고, 묶음별로 확정하거나 목적지를 고르세요. 같은 폴더라도 목적지가 다르면 묶음이 나뉩니다.</p>'
-  +'<details id="checkGroups" open><summary>묶음별로 확인하기</summary><table><tr><th>원래 폴더</th><th>지금 제안</th><th>확인할 점</th><th></th></tr>'+shown.map(checkGroupRow).join('')+'</table>'
+ checkPanel.innerHTML='<p class="warn" style="margin:0;background:#fff1f0;color:#a4262c"><b>'+count+'개 파일</b>('+groups.length+'개 묶음)의 경로를 확신하지 못했습니다. 아래 화살표와 <b>!</b>를 보고, 묶음별로 확정하거나 목적지를 고르세요. 같은 폴더라도 목적지가 다르면 묶음이 나뉩니다.</p>';
+ checkGroupsBox.innerHTML='<details id="checkGroups" open><summary><b>확인할 묶음 '+groups.length+'개</b> · 파일 '+count+'개 · 같은 폴더라도 목적지가 다르면 묶음이 나뉩니다</summary><table><tr><th>원래 폴더</th><th>지금 제안</th><th>확인할 점</th><th></th></tr>'+shown.map(checkGroupRow).join('')+'</table>'
   +(groups.length>shown.length?'<p class="muted">나머지 '+(groups.length-shown.length)+'개 묶음은 위 묶음을 확인하면 이어서 보입니다.</p>':'')+'</details>';
  checkShown=shown;
 }
 let checkShown=[];
 const checkIds=i=>(checkShown[i]?.rows||[]).map(r=>r.id);
 const fillCheckTargets=e=>{const sel=e.target;if(!sel?.dataset?.checkTarget||sel.options.length>1)return;sel.insertAdjacentHTML('beforeend',(S.plan.paths||[]).map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join(''));};
-checkPanel.addEventListener('focusin',fillCheckTargets);checkPanel.addEventListener('mousedown',fillCheckTargets);
-checkPanel.onclick=e=>{const b=e.target?.closest?.('[data-check-confirm],[data-check-show]');if(!b)return;
+checkGroupsBox.addEventListener('focusin',fillCheckTargets);checkGroupsBox.addEventListener('mousedown',fillCheckTargets);
+checkGroupsBox.onclick=e=>{const b=e.target?.closest?.('[data-check-confirm],[data-check-show]');if(!b)return;
  if(b.dataset.checkShow!==undefined){const first=checkShown[+b.dataset.checkShow]?.rows[0];if(first&&typeof mapFocusFile==='function')mapFocusFile(first.id);return;}
  task('묶음 확정 중…',async()=>{const result=await api('/confirm-route',{plan:S.plan.id,rows:checkIds(+b.dataset.checkConfirm)});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u));renderReview();});};
-checkPanel.onchange=e=>{const sel=e.target;if(!sel?.dataset?.checkTarget||!sel.value)return;const i=+sel.dataset.checkTarget,g=checkShown[i],destination=sel.value;
+checkGroupsBox.onchange=e=>{const sel=e.target;if(!sel?.dataset?.checkTarget||!sel.value)return;const i=+sel.dataset.checkTarget,g=checkShown[i],destination=sel.value;
  task('묶음 목적지 바꾸는 중…',async()=>{const result=await api('/retarget-many',{plan:S.plan.id,rows:checkIds(i),destination,keepFolder:g.unit});if(result.folderRenames)S.plan.folderRenames=result.folderRenames;result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u));renderReview();});};
 const baseRenderReviewTidy=renderReview;
 renderReview=function(...args){const result=baseRenderReviewTidy(...args);if(!S.plan)return result;const info=S.plan.scanInfo,unassigned=S.plan.rows.some(r=>!r.done&&!r.destination),failed=S.plan.rows.some(r=>r.executionError);
