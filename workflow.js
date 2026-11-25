@@ -194,8 +194,15 @@ function attachSuggestions(){const groups=new Map();S.plan.rows.filter(r=>!r.don
   if(atts.length)out.push({main,atts,folder});}
  return out;}
 function needsCheck(r){if(r.done||(!r.destination&&r.holdConfirmed))return false;if(!r.destination)return r.historyReview?'history':r.contractReview?'contract':'hold';if(r.historyReview)return 'history';if(r.folderDateReview)return 'folderDate';if(r.reviewed)return false;if(r.contractReview)return 'contract';if(r.nameReviewRequired)return 'date';if(r.reviewRequired)return 'folder';if(r.unitReview)return 'unit';if(r.attachTo&&!r.canonicalAttachment)return false;if(r.method==='ai'&&(r.confidence??1)<.85)return 'ai';
- const same=S.plan.rows.filter(o=>!o.done&&folderOf(o)===folderOf(r)&&o.destination);if(same.length>=3){const count=new Map();same.forEach(o=>count.set(o.destination,(count.get(o.destination)||0)+1));const top=[...count.entries()].sort((a,b)=>b[1]-a[1])[0];if(top[0]!==r.destination&&top[1]/same.length>=.6)return 'split';}
+ const stat=folderDestinationStats().get(folderOf(r));if(stat&&stat.total>=3&&stat.top!==r.destination&&stat.topCount/stat.total>=.6)return 'split';
  return false;}
+/* 4차 3번(63동 4단계 느림): 파일마다 전체 파일을 다시 훑던 '같은 폴더 목적지' 계산(4,680개면 약 2천만 번)을
+   폴더별로 한 번만 세어 둔다. 같은 동기 실행(한 번 그리기) 안에서만 쓰고, 다음 작업(await) 전에 비운다. */
+let folderStatsCache=null;
+function folderDestinationStats(){if(folderStatsCache&&folderStatsCache.plan===S.plan)return folderStatsCache.map;
+ const counts=new Map();for(const o of S.plan.rows){if(o.done||!o.destination)continue;const f=folderOf(o);let m=counts.get(f);if(!m)counts.set(f,m=new Map());m.set(o.destination,(m.get(o.destination)||0)+1);}
+ const map=new Map();for(const [f,m] of counts){let total=0,top='',topCount=0;for(const [d,n] of m){total+=n;if(n>topCount){top=d;topCount=n;}}map.set(f,{total,top,topCount});}
+ folderStatsCache={plan:S.plan,map};Promise.resolve().then(()=>{folderStatsCache=null;});return map;}
 const checkLabel={history:'이전 협의기록의 이동 이력이 있습니다. 내용을 확인해주세요',folderDate:'자료 폴더의 날짜를 선택해주세요',contract:'계약서의 소속과 계약 종류를 확인해주세요',date:'계약 체결일 확인이 필요합니다. 현재 파일명은 유지합니다.',folder:'폴더 묶음의 보관 위치를 확인해주세요',hold:'목적지를 정하지 못했어요',ai:'AI가 확신하지 못했어요',split:'같은 폴더의 다른 파일들과 다른 곳으로 가요',unit:'같은 폴더의 다른 파일은 보류됐는데 이 파일만 파일 이름으로 정했어요'};
 /* ! 확인은 파일 하나씩이 아니라 묶음으로: 원래 폴더 단위(checkUnit, 서버가 정함) 안에서 확인 이유·제안 목적지가 같은 파일끼리 묶는다.
    같은 폴더라도 목적지가 갈리면 묶음이 나뉘어 흩어지는 경로가 그대로 보인다. */
@@ -437,6 +444,8 @@ const round3Style=document.createElement('style');round3Style.textContent=`
 #projectNameHint{margin:6px 0 0}#projectNameHint.long{color:#a4262c}
 #mapStageChips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}#mapStageChips button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px);border-radius:999px}
 #mapStageChips button.drop-target{background:#e8efff;border-color:#345fe2}
+#mapTargets.pick-mode .map-target{cursor:copy}#mapTargets.pick-mode .map-target:hover{outline:2px dashed #345fe2;outline-offset:1px;background:#eef3ff}
+.map-pick-hint{display:block;margin-top:4px;color:#345fe2;font-weight:bold}
 .map-group-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px 8px;font-size:var(--fs-meta,13px)}.map-group-actions button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px)}
 .map-group[draggable=true]{cursor:grab}
 #folderSuggest{margin:12px 0}#folderSuggest li{margin:6px 0}#folderSuggest .row{gap:6px;margin-top:4px}
@@ -523,7 +532,9 @@ function renderFolderSuggest(){if(!S.plan){suggestBox.hidden=true;return;}const 
 function applyFolderResult(result){if(result.tree&&S.project)S.project.tree=result.tree;if(result.paths)S.plan.paths=result.paths;if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;
  for(const u of result.rows||[])Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);}
 
-const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();renderFolderSuggest();}catch(e){console.error(e);}}return r;};
+function renderPickHint(){const file=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done),pane=$('#mapTargets');pane?.classList?.toggle('pick-mode',Boolean(file));
+ const caption=$('#mapCaption');if(file&&caption?.insertAdjacentHTML&&!caption.querySelector?.('.map-pick-hint'))caption.insertAdjacentHTML('beforeend','<span class="map-pick-hint">오른쪽 새 폴더 구조에서 폴더를 누르면 그 폴더로 화살표가 바로 연결됩니다. 체크한 파일이 있으면 함께 옮깁니다.</span>');}
+const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();renderFolderSuggest();renderPickHint();}catch(e){console.error(e);}}return r;};
 
 // 10. 분류 못한 파일이 많으면 보류가 가장 많은 폴더 3곳을 묻고, 답을 반영해 AI 분류를 다시 돌린다(자동 2회까지). 'AI 다시 분류'는 질문 1회 후 분류.
 const questionDialog=document.createElement('dialog');questionDialog.id='questionDialog';document.body.appendChild(questionDialog);

@@ -281,6 +281,15 @@ def main():
                     assert mapped['scrolled']>0 and len(mapped['chips'])>=3 and mapped['groups'], mapped
                     assert mapped['call'] and mapped['call']['keep']==mapped['name'] and mapped['call']['ids']==mapped['expected']>0, mapped
                     result['map_scroll_chips_folder_drag']=mapped
+                    # 4차 4번: 왼쪽 파일을 누른 뒤 오른쪽 폴더를 누르면 그 폴더로 화살표가 바뀐다(끌지 않음). 확인 후 원래대로 돌린다.
+                    clicked=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup);const original=row.destination;
+                      MapReview.group=parentFolder(row);mapFocusFile(row.id);await new Promise(r=>requestAnimationFrame(()=>r()));
+                      const pick=$('#mapTargets').classList.contains('pick-mode'),hint=$('#mapCaption').innerText.includes('폴더를 누르면');
+                      const target=$$('[data-map-target]').find(b=>S.plan.paths.includes(b.dataset.mapTarget)&&b.dataset.mapTarget!==original);const dest=target.dataset.mapTarget;
+                      target.click();for(let i=0;i<50&&row.destination!==dest;i++)await new Promise(r=>setTimeout(r,100));const moved=row.destination===dest;
+                      await changeRoute(row.id,original);return {pick,hint,moved,restored:row.destination===original};}""")
+                    assert clicked['pick'] and clicked['hint'] and clicked['moved'] and clicked['restored'], clicked
+                    result['click_file_then_folder_routes']=clicked
                     # 3차 6번: 새 폴더 제안 카드(규칙·AI 제안). 만들기는 서버 검사(test_round3)에서 확인한다.
                     suggested=page.evaluate("""()=>{const row=S.plan.rows.find(r=>!r.done&&r.method!=='manual');const parent=S.plan.paths[0];row.folderSuggestion={parent,name:'내부검토',reason:'가상 근거'};
                       try{renderReview();const box=$('#folderSuggest');return {shown:!box.hidden,text:box.innerText,make:!!document.querySelector('[data-suggest-make]')};}
