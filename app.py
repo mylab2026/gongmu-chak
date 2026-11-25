@@ -1808,14 +1808,37 @@ def used_letters(root,destination):
     return {m.group(1).upper() for child in folder.iterdir() if child.is_dir() for m in [LETTER_PREFIX.match(child.name)] if m}
 
 
+OUTGOING_OFFICIAL=re.compile(r'발송|발신|통보|회신|알림|안내|지시|시행')
+
+
+def route_official_inbox(plan):
+    """63동 시험(2026-11-25): 공문 폴더 중 착공계·준공계 같은 역할이 없는 묶음('7. 구조검토 결과제출', '8. 공사기간 연장')과
+    낱장 공문이 '기타공문' 바로 아래에 원래 이름으로 쌓였다. 기타공문에 '수신'·'발신'이 있으면 그 아래로 보내고,
+    묶음 이름은 다른 묶음처럼 A·B·C로 맞춘다(letterBundle). 이름에 발송·통보·회신·알림·안내·지시가 있으면 발신, 아니면 수신.
+    사용자가 직접 정한 목적지는 건드리지 않는다."""
+    paths=set(plan.get('paths',[]))
+    for row in plan['rows']:
+        destination=row.get('destination') or ''
+        if row.get('done') or not destination or row.get('method')=='manual' or semantic_label(destination.split('/')[-1])!='기타공문':continue
+        inbox,outbox=[next((p for p in paths if p.startswith(destination+'/') and p.count('/')==destination.count('/')+1 and semantic_label(p.split('/')[-1])==w),'') for w in ('수신','발신')]
+        if not inbox or not outbox:continue
+        sub=row.get('keepSub') if row.get('keepSubFor')==destination else ''
+        text=(sub or '')+' '+row['name']
+        target=outbox if OUTGOING_OFFICIAL.search(text) else inbox
+        row['destination']=target
+        if sub:row.update(keepSub=sub,keepSubFor=target,letterBundle=True)
+        row['reason']=(row.get('reason') or '')+' · 기타공문 '+target.split('/')[-1]+' 폴더로 정리'
+
+
 def apply_folder_names(project,plan):
     """Material bundles moving into a category get a, b, c...; standard category numbers never change."""
+    route_official_inbox(plan)
     root=Path(plan.get('root') or project['root']);groups={}
     for row in plan['rows']:
         # 지난번에 같은 원래 폴더 이름으로 맞춘 행은 원래 하위 경로로 돌려놓고 다시 맞춘다(글자가 바뀌어도 따라가게).
         if 'renamedFrom' in row:row['keepSub']=row.pop('renamedFrom')
     for row in plan['rows']:
-        if row.get('done') or not row.get('destination') or row.get('roleMapped'):continue
+        if row.get('done') or not row.get('destination') or (row.get('roleMapped') and not row.get('letterBundle')):continue
         sub=row.get('keepSub') if row.get('keepSubFor')==row.get('destination') else ''
         if 'originalKeepSub' in row and row.get('folderNormalized')==sub and row.get('folderNormalizedFor')==row.get('destination'):
             sub=row['originalKeepSub']
@@ -3724,6 +3747,65 @@ def execute_all(plan_id, choices, auto_rename=False):
     return journal
 
 
+LEFTOVER_FOLDER = '정리 후 남은 파일'
+LEFTOVER_DIRS = ('System Volume Information', '$RECYCLE.BIN')
+LEFTOVER_NAMES = ('desktop.ini', 'thumbs.db', '.ds_store')
+
+
+def leftover_file(path):
+    """정리 대상이 아니라 옮기지 않은 찌꺼기: 오피스 임시(잠금) 파일 ~$, 남은 바로가기, 윈도우 시스템 폴더·썸네일 파일."""
+    return (path.name.startswith('~$') or path.suffix.lower() == '.lnk' or path.name.casefold() in LEFTOVER_NAMES
+            or any(part in LEFTOVER_DIRS for part in path.parts))
+
+
+def gather_leftovers(project, root, candidates, journal, writer):
+    """63동 시험(2026-11-25): 파일을 다 옮긴 기존 폴더에 임시 파일(~$)·바로가기·시스템 폴더만 남아 폴더가 지워지지 않았다.
+    그런 폴더(하위 포함)에 찌꺼기만 있으면 '정리할 문서 모음/정리 후 남은 파일/원래 경로'로 옮겨(지우지 않음) 폴더를 비운다.
+    일반 문서가 하나라도 남은 폴더는 건드리지 않는다. 되돌리기는 leftoverMoves로 제자리에 돌려놓는다."""
+    chosen = set(candidates)
+    tops = [c for c in candidates if not any(c.startswith(o + '/') for o in chosen if o != c)]
+    base = inbox_of(project) + '/' + LEFTOVER_FOLDER
+    journal.setdefault('leftoverMoves', []); journal.setdefault('leftoverDirs', [])
+    for top in sorted(tops):
+        folder = safe_path(root, top)
+        files, clean = [], True
+        for parent, dirs, names in os.walk(folder, followlinks=False):
+            if any((Path(parent) / d).is_symlink() for d in dirs):
+                clean = False; break
+            for name in names:
+                item = Path(parent) / name
+                if item.is_symlink() or not leftover_file(item.relative_to(root)):
+                    clean = False; break
+                files.append(item)
+            if not clean:
+                break
+        if not clean or not files:
+            continue
+        for item in files:
+            relative = item.relative_to(root).as_posix()
+            target = safe_path(root, base + '/' + relative)
+            made = [p.relative_to(root).as_posix() for p in reversed(target.parents) if p != root and root in p.parents and not p.exists()]
+            try:
+                stat = item.stat()
+                move_no_replace(item, target)
+            except (OSError, ValueError) as error:
+                journal['keptFolders'].append({'path': top, 'reason': '남은 파일을 옮기지 못했습니다: ' + str(error)})
+                continue
+            journal['leftoverDirs'].extend(made)
+            journal['leftoverMoves'].append({'source': relative, 'destination': base + '/' + relative,
+                                             'fingerprint': f'{stat.st_size}:{stat.st_mtime_ns}', 'status': 'moved'})
+            writer.step()
+        # 시스템 폴더(System Volume Information 등)는 폴더 정리 대상 목록에 없으므로 여기서 비운 뒤 지운다(되돌리기 때 다시 만든다).
+        for parent, dirs, _ in os.walk(folder, topdown=False, followlinks=False):
+            for name in dirs:
+                if name in LEFTOVER_DIRS:
+                    junk = Path(parent) / name
+                    try:
+                        junk.rmdir(); journal['removedFolders'].append(junk.relative_to(root).as_posix())
+                    except OSError:
+                        pass
+
+
 def cleanup_empty_old_folders(project, plan, journal):
     """Use rmdir ONLY: a folder containing even one hidden/unlisted file is retained."""
     root = root_available(project)
@@ -3763,6 +3845,8 @@ def cleanup_empty_old_folders(project, plan, journal):
     # Every candidate is on disk before any rmdir; undo recreates cleanupCandidates ∪ removedFolders,
     # so the progress list can be saved in batches instead of after each folder.
     writer = JournalWriter(path, journal)
+    writer.flush()
+    gather_leftovers(project, root, candidates, journal, writer)
     writer.flush()
     for relative in sorted(candidates, key=lambda p: p.count('/'), reverse=True):
         try:
@@ -3867,6 +3951,15 @@ def undo(journal_id):
             safe_path(root, relative).mkdir(parents=True, exist_ok=True)
         except (OSError, ValueError) as error:
             journal['folderRestoreErrors'].append({'path': relative, 'reason': str(error)})
+    for item in reversed(journal.get('leftoverMoves', [])):
+        if item.get('status') != 'moved':
+            continue
+        try:
+            source, destination = safe_path(root, item['source']), safe_path(root, item['destination'])
+            if not source.exists() and destination.exists():
+                move_no_replace(destination, source); item['status'] = 'restored'
+        except (OSError, ValueError) as error:
+            item['status'] = 'undo-blocked'; item['error'] = str(error)
     for entry in reversed(journal['entries']):
         if entry['status'] not in ('moved', 'prepared', 'undo-blocked'):
             continue
@@ -3926,7 +4019,7 @@ def undo(journal_id):
     if journal.get('folderShortcuts') or journal.get('referenceRepairs'):
         atomic_json(index_path,link_index)
     made = [d for e in journal['entries'] if e['status'] == 'restored' for d in e.get('madeDirs', [])]
-    for relative in sorted(set(journal.get('createdFolders', [])) | set(made) | set(journal.get('referenceDirs', [])), key=lambda p: p.count('/'), reverse=True):
+    for relative in sorted(set(journal.get('createdFolders', [])) | set(made) | set(journal.get('referenceDirs', [])) | set(journal.get('leftoverDirs', [])), key=lambda p: p.count('/'), reverse=True):
         try:
             safe_path(root, relative).rmdir()  # Only folders this run created, and only if still empty.
         except (OSError, ValueError):

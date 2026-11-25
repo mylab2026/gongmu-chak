@@ -160,6 +160,46 @@ class Round3(unittest.TestCase):
         self.assertEqual(rows[-1]['keepSub'].split('/', 1)[1], '2. 관계서류/usb')
         self.assertIn('odd', plan['folderRenames'][0]['rows'])
 
+    def test_unmatched_official_letters_go_under_inbox_or_outbox_with_letters(self):
+        # 63동: '4. 공문/7. 구조검토 결과제출' 등이 기타공문 바로 아래 원래 이름으로 쌓이던 결함
+        base = '2. 시공단계/2. 공사/4. 공문/'
+        for rel in ('7. 구조검토 결과제출/구조검토서.pdf', '7. 구조검토 결과제출/공문.pdf', '8. 공사기간 연장/공문.pdf',
+                    '9. 하자 통보/통보 공문.pdf', '신고증명서.pdf', '1. 착공계/착공계.pdf'):
+            path = self.root / (base + rel); path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'SYNTHETIC')
+        plan = app.make_plan(self.project['id'], False)
+        got = {r['relative'][len(base):]: (r['destination'], r.get('keepSub', '')) for r in plan['rows'] if r['relative'].startswith(base)}
+        other = '4 시공단계/1 도급공사/14 기타공문'
+        self.assertEqual(got['1. 착공계/착공계.pdf'][0], '4 시공단계/1 도급공사/3 착공계')
+        self.assertEqual(got['신고증명서.pdf'], (other + '/1 수신', ''))
+        names = {got[k][1] for k in ('7. 구조검토 결과제출/구조검토서.pdf', '7. 구조검토 결과제출/공문.pdf')}
+        self.assertEqual(len(names), 1); self.assertRegex(names.pop(), r'^[A-Z] 구조검토 결과제출$')
+        self.assertEqual(got['7. 구조검토 결과제출/공문.pdf'][0], other + '/1 수신')
+        self.assertRegex(got['8. 공사기간 연장/공문.pdf'][1], r'^[A-Z] 공사기간 연장$')
+        self.assertEqual(got['9. 하자 통보/통보 공문.pdf'][0], other + '/2 발신')
+
+    def test_old_folder_with_only_temp_files_is_tidied_and_undo_restores(self):
+        # 63동: 파일을 다 옮긴 기존 폴더에 ~$ 임시 파일·바로가기·System Volume Information만 남아 폴더가 지워지지 않던 문제
+        junk = ['5. 기존/~$작업일보.xlsx', '5. 기존/하위/~$메모.docx', '5. 기존/USB/바로가기.lnk', '5. 기존/USB/System Volume Information/WPSettings.dat']
+        for rel in junk + ['5. 기존/보고서.pdf', '7. 남김/~$임시.xlsx', '7. 남김/보류할 문서.hwp']:
+            path = self.root / rel; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'SYNTHETIC')
+        plan = app.make_plan(self.project['id'], False)
+        choices = {r['id']: (r['destination'] or '') for r in plan['rows']}
+        for r in plan['rows']:
+            if r['relative'] == '5. 기존/보고서.pdf': choices[r['id']] = '1 공통'
+            elif r['relative'] == '7. 남김/보류할 문서.hwp': choices[r['id']] = ''
+        before = {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        ready = [{'id': k, 'destination': v} for k, v in choices.items() if v]
+        journal = app.execute_all(plan['id'], ready)
+        left = self.root / app.INBOX / app.LEFTOVER_FOLDER
+        self.assertFalse((self.root / '5. 기존').exists())  # 찌꺼기만 남은 기존 폴더는 비우고 지움
+        self.assertTrue(all((left / rel).is_file() for rel in junk))  # 지우지 않고 원래 경로째 모아 둠
+        self.assertTrue((self.root / '7. 남김/보류할 문서.hwp').is_file() and (self.root / '7. 남김/~$임시.xlsx').is_file())  # 문서가 남은 폴더는 그대로
+        self.assertEqual(len(journal['leftoverMoves']), len(junk))
+        app.undo(journal['id'])
+        after = {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob('*') if p.is_file() and '.gongmu-chak' not in p.parts}
+        self.assertEqual({k: v for k, v in before.items() if '.gongmu-chak' not in k}, after)
+        self.assertFalse((self.root / app.INBOX / app.LEFTOVER_FOLDER).exists())
+
     def test_ai_new_folder_suggestion_is_validated(self):
         folders = {'d1': PLAN_PARENT}
         self.assertIsNone(app.folder_suggestion({'new_folder': {'parent_id': 'd9', 'name': '내부검토'}}, folders))
