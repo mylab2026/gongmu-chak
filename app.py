@@ -167,6 +167,32 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+def cached_file_hash(path, cache=None):
+    """Reuse hashes only within one bulk job, while the file identity/stat is unchanged.
+
+    This cache is never persisted or used by move/undo integrity checks. Each new
+    job starts empty; another path or an observed edit always requires a new read.
+    """
+    if cache is None:
+        return file_hash(path)
+    path = Path(path)
+    def stamp():
+        stat = path.stat()
+        return stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns
+    key = str(path.resolve())
+    before = stamp()
+    saved = cache.get(key)
+    if saved and saved[0] == before:
+        return saved[1]
+    digest = file_hash(path)
+    if stamp() == before:
+        cache[key] = (before, digest)
+    else:
+        cache.pop(key, None)
+        fail('계약서 확인 중 파일이 변경됐습니다. 정리안을 다시 만들어주세요.')
+    return digest
+
+
 def fingerprint(path):
     """Size + modification time: detects edits without reading whole files."""
     stat = Path(path).stat()
@@ -437,7 +463,8 @@ def excerpt(path, image_pages=1):
         with Image.open(path) as image:
             return [image_part(image)], '이미지 첫 장 · 최대 1800px'
     if suffix in ('.txt', '.csv', '.md'):
-        text = path.read_bytes()[:12000].decode('utf-8', errors='replace')[:6000]
+        with path.open('rb') as stream:
+            text = stream.read(12000).decode('utf-8', errors='replace')[:6000]
         return [{'type': 'text', 'text': text}], '본문 앞부분 최대 6,000자'
     fail('AI 검토는 PDF·이미지·텍스트를 지원합니다. HWP/HWPX는 PDF 또는 화면 캡처로 등록하거나 목적지를 직접 선택해주세요.')
 
@@ -981,18 +1008,23 @@ def local_text(path):
         return ''
 
 
-def cached_text(project, relative, path, files=None):
+def cached_text(project, relative, path, files=None, updates=None):
     record = (files if files is not None else text_cache(project['id']).get('files', {})).get(relative)
     current = fingerprint(path)
     if record and record.get('fp') == current:
         return record.get('text', '')
-    return local_text(path)
+    text = local_text(path)
+    # Share successfully extracted text with collections. Empty/failed reads
+    # must remain retryable, and an edit during extraction must not be cached.
+    if updates is not None and text and fingerprint(path) == current:
+        updates[relative] = {'fp': current, 'text': text}
+    return text
 
 
-def content_rule(project, paths, row, path=None, files=None):
+def content_rule(project, paths, row, path=None, files=None, updates=None):
     """Read the start of the document on this PC and look for a single folder name in its title area."""
     path = path or safe_path(project['root'], row['relative'])
-    text = cached_text(project, row['relative'], path, files)[:300]
+    text = cached_text(project, row.get('current', row['relative']), path, files, updates)[:300]
     if not text:
         return None
     matches = label_candidates(paths, text, str(PurePosixPath(row['relative']).parent), contract_preference(project))
@@ -1376,7 +1408,7 @@ def probable_contract_file(file):
     return opaque and (suffix=='.pdf' and bool(re.search(r'계약|기술지도|용역|도급|공사',parent)) or '계약서' in parent)
 
 
-def contract_ledger(project):
+def contract_ledger(project, file_hashes=None):
     """Keep revision dates and file hashes, with the active family used to bind the branch."""
     result={}
     root=Path(project['root'])
@@ -1397,10 +1429,14 @@ def contract_ledger(project):
             if not digest and record.get('sourcePath'):
                 source=Path(record['sourcePath'])
                 try:
-                    if source.resolve().is_relative_to(root.resolve()) and source.is_file():
-                        digest=file_hash(source)
+                    inside=source.resolve().is_relative_to(root.resolve()) and source.is_file()
                 except (OSError,ValueError):
-                    pass
+                    inside=False
+                if inside:
+                    try:
+                        digest=cached_file_hash(source,file_hashes)
+                    except OSError:
+                        pass
             if digest:
                 bucket=result.setdefault(digest,[])
                 if not any(r['id']==record['id'] and r['_familyId']==family for r in bucket):
@@ -1480,8 +1516,8 @@ def proposed_contract_name(record,original):
     return valid_name(value)
 
 
-def apply_contract_routes(project,rows,paths):
-    ledger=contract_ledger(project)
+def apply_contract_routes(project,rows,paths,file_hashes=None):
+    ledger=contract_ledger(project,file_hashes)
     for row in rows:
         if row.get('done') or Path(row['name']).suffix.lower() not in CONTRACT_FORMATS:
             continue
@@ -1490,7 +1526,7 @@ def apply_contract_routes(project,rows,paths):
         candidates=[]
         registered_name=any(r.get('name')==row['name'] or r.get('sourceRelative')==row['relative'] for values in ledger.values() for r in values)
         if probable or registered_name:
-            digest=file_hash(source)
+            digest=cached_file_hash(source,file_hashes)
             candidates=ledger.get(digest,[])
             negative=read_json(DATA/'contract-cache'/(digest+'.json'),{}) or {}
             if not candidates and (negative.get('analysis') or {}).get('is_contract') is False:
@@ -2453,8 +2489,14 @@ def make_plan(pid, ongoing, virtual=None):
                          'scope': 'inbox' if ongoing else 'whole'}}
     cache = project.get('classificationCache', {})
     indexed = text_cache(pid).get('files', {})
+    local_index = collection_text_index(pid)
+    text_updates = {}
     reading = []
     for row in rows:
+        relative = row.get('current', row['relative'])
+        record = local_index.get(relative)
+        if record and record.get('fp') == row['fingerprint']:
+            indexed[relative] = record
         saved = cache.get(cache_key(plan, row))
         if saved and (saved.get('method')=='manual' or row['method']=='hold') and (not saved.get('destination') or saved['destination'] in paths):
             row.update(saved)
@@ -2462,9 +2504,10 @@ def make_plan(pid, ongoing, virtual=None):
             reading.append(row)
     for checked, row in enumerate(reading, 1):
         plan_progress('content', checked - 1, len(reading))
-        found = content_rule(project, paths, row, root / row.get('current', row['relative']), indexed)
+        found = content_rule(project, paths, row, root / row.get('current', row['relative']), indexed, text_updates)
         if found:
             row.update(found)
+    store_collection_texts(pid, text_updates)
     plan_progress('finish', 0, 1)
     apply_contract_routes(project,rows,paths)
     map_roles(project,rows,paths,inbox)
@@ -2972,6 +3015,7 @@ def validate_bulk(answer, rows, folder_ids):
 
 def run_bulk(job_id):
     job = JOBS[job_id]
+    file_hashes = {}
     try:
         with LOCK:
             plan = get_plan(job['planId'])
@@ -3018,7 +3062,7 @@ def run_bulk(job_id):
                     row.update(changes[row['id']])
                     cache[cache_key(plan, row)] = changes[row['id']]
                     follow_main(plan, row)
-                apply_contract_routes(project,plan['rows'],plan['paths'])
+                apply_contract_routes(project,plan['rows'],plan['paths'],file_hashes)
                 map_roles(project,plan['rows'],plan['paths'],inbox_of(project))
                 detect_bundles(plan['rows'], inbox_of(project))
                 keep_subfolders(plan['rows'], inbox_of(project))
