@@ -138,12 +138,18 @@ def main():
                         assert '[현재 파일 위치]' in history_text and move_project['name'] in history_text
                     result['home_history_zip_selected_project_verified']=True
                     # First step's Back returns home; later Back/Next preserves the same plan.
+                    # 왼쪽 메뉴는 어느 화면에서나 같은 버튼·같은 순서·같은 자리여야 한다(정리 단계가 메뉴를 밀어내지 않음).
+                    NAV_JS="()=>[...document.querySelectorAll('#sideNav > button')].map(b=>[b.id,b.textContent.trim(),Math.round(b.getBoundingClientRect().top),b.offsetParent!==null])"
+                    home_nav=page.evaluate(NAV_JS);assert [n[0] for n in home_nav]==['homeButton','sideFind','sideCollect','sideManage','chatbotHelp'] and all(n[3] for n in home_nav),home_nav
                     page.locator('#initialButton').click();expect(page.locator('#folderBack')).to_be_visible()
                     # Each step leads with one '지금 할 일' line; errors appear next to the control to fix.
                     expect(page.locator('#lead-folderStep')).to_contain_text('지금 할 일')
                     # Theme A: a fixed left menu keeps the header buttons (same ids) and shows the step in progress.
                     expect(page.locator('#appSide')).to_be_visible();assert page.locator('#appSide #homeButton').count()==1 and page.locator('#homeButton').count()==1
                     expect(page.locator('#sideSteps .side-step.now')).to_contain_text('폴더 선택')
+                    assert page.evaluate(NAV_JS)==home_nav,(home_nav,page.evaluate(NAV_JS))
+                    assert page.evaluate("()=>document.querySelector('#sideNav').compareDocumentPosition(document.querySelector('#sideSteps'))&Node.DOCUMENT_POSITION_FOLLOWING")
+                    result['side_menu_fixed_across_screens']=True
                     # 시연은 업무 화면(1단계)에 두지 않고 왼쪽 메뉴 아래에만 둔다.
                     assert not page.locator('#demoRoot').is_visible() and page.locator('#sideDemo').is_visible()
                     result['demo_only_in_side_menu']=True
