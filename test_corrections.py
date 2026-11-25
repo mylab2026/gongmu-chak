@@ -56,6 +56,7 @@ class ScreenshotCorrections(unittest.TestCase):
         tech['serviceManagement']='direct';before=copy.deepcopy(tech['children'])
         app.upgrade_project_tree(project);self.assertEqual(tech['children'],before)
 
+    @patch.object(app, 'CONTRACT_RENAME', True)  # 이름 바꾸기 보류 중: 켜졌을 때의 동작을 계속 검사한다
     def test_construction_contract_in_technical_service_routes_by_content_identity(self):
         original=self.write(self.tech_root+'/1. 계약서.pdf',b'construction original')
         self.register('cons',original,'construction','13동 및 힌지 보수공사','2026-07-09')
@@ -92,6 +93,7 @@ class ScreenshotCorrections(unittest.TestCase):
         row=next(r for r in self.plan()['rows'] if r['name']=='20260801.pdf')
         self.assertEqual(row['destination'],self.tech_root+'/2 작업지시서/1 작업지시서 1차 및 계약서')
 
+    @patch.object(app, 'CONTRACT_RENAME', True)  # 이름 바꾸기 보류 중: 켜졌을 때의 동작을 계속 검사한다
     def test_each_revision_uses_its_own_signed_date_and_rename_can_be_undone(self):
         old=self.write(self.tech_root+'/1. 계약서.pdf',b'original cons')
         new=self.write(self.tech_root+'/1. 변경 계약서.pdf',b'changed cons')
@@ -111,6 +113,7 @@ class ScreenshotCorrections(unittest.TestCase):
         app.apply_contract_routes(app.get_project(self.project['id']),plan['rows'],plan['paths'])
         self.assertEqual(row['destination'],'');self.assertFalse(row['reviewed'])
 
+    @patch.object(app, 'CONTRACT_RENAME', True)  # 이름 바꾸기 보류 중: 켜졌을 때의 동작을 계속 검사한다
     def test_missing_signing_date_does_not_use_filesystem_date(self):
         source=self.write(self.tech_root+'/1. 계약서.pdf',b'dateless')
         self.register('cons',source,'construction','힌지 보수공사','')
@@ -118,6 +121,7 @@ class ScreenshotCorrections(unittest.TestCase):
         self.assertEqual(row['destination'],self.cons_folder);self.assertEqual(row['proposedName'],'')
         self.assertTrue(row['nameReviewRequired'])
 
+    @patch.object(app, 'CONTRACT_RENAME', True)  # 이름 바꾸기 보류 중: 켜졌을 때의 동작을 계속 검사한다
     def test_contract_already_in_right_folder_still_gets_name_proposal(self):
         source=self.write(self.cons_folder+'/1. 계약서.pdf',b'correct folder')
         self.register('cons',source,'construction','힌지 보수공사','2026-07-09')
@@ -156,6 +160,7 @@ class ScreenshotCorrections(unittest.TestCase):
         self.assertEqual(row['destination'],self.tech_root+'/2 작업지시서/1 작업지시서 1차 및 계약서')
         self.assertFalse(row.get('keepSub'));self.assertEqual(row.get('secondaryFolders'),[])
 
+    @patch.object(app, 'CONTRACT_RENAME', True)  # 이름 바꾸기 보류 중: 켜졌을 때의 동작을 계속 검사한다
     def test_contract_rename_collision_never_overwrites(self):
         original=self.write(self.tech_root+'/1. 계약서.pdf',b'new original')
         self.register('cons',original,'construction','힌지 보수공사','2026-07-09')

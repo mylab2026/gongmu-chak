@@ -171,11 +171,11 @@ class FileOperations(unittest.TestCase):
                 return os.stat_result(fields)
             return result
         preview = 'data:image/jpeg;base64,' + base64.b64encode(b'FIRST PAGE JPEG').decode()
-        with (patch.object(Path, 'stat', fake_stat), patch.object(app, 'excerpt', return_value=(
-                [{'type': 'image_url', 'image_url': {'url': preview}}], 'PDF 전체 200쪽 중 처음 1쪽 이미지')) as call,
+        with (patch.object(Path, 'stat', fake_stat), patch.object(app, 'contract_page_indexes', return_value=([0], 200)),
+                patch.object(app, 'render_pdf_pages', return_value=[{'type': 'image_url', 'image_url': {'url': preview}}]) as call,
                 patch.object(Path, 'read_bytes', side_effect=AssertionError('full-file read forbidden'))):
             record = app.stage_contract_file(source)
-            call.assert_called_once_with(source, 1)
+            call.assert_called_once_with(source, [0])
         self.assertEqual(record['originalSize'], 500 * 1024 * 1024)
         self.assertEqual(Path(record['path']).read_bytes(), b'FIRST PAGE JPEG')
         self.assertEqual(source.read_bytes(), b'ORIGINAL LARGE CONTRACT')
