@@ -129,21 +129,22 @@ async function discoverContracts(){
     AutoContract.message=(i+1)+' / '+candidates.length+' · '+candidate.relative;renderAutoContractNotice();
     try{
      const record=await api('/auto-contract',{candidate:candidate.candidate});if(generation!==AutoContract.generation)return;
-     if(record.cached)cached++;else read++;if(record.ignored){AutoContract.issues.push(record.name+' · 계약서가 아닌 자료로 판단되어 자동 입력에서 제외했습니다.');continue;}
+     if(record.cached)cached++;else read++;if(record.ignored){AutoContract.issues.push(record.name+' · '+(record.exclusionReason||'계약서가 아닌 자료로 판단되어 자동 입력에서 제외했습니다.'));continue;}
+     if(record.contractDoubt)AutoContract.issues.push(record.name+' · '+record.doubtReason);
      const known=S.project?.contracts?.some(c=>c.sourceHash&&c.sourceHash===record.sourceHash||(c.supersededIds||[]).includes(record.id)||(c.versions||[]).some(v=>v.sourceHash&&v.sourceHash===record.sourceHash));
      if(known)continue;
      let slot=ContractInput.slots.find(s=>s.record&&(s.record.id===record.id||s.record.sourceHash&&s.record.sourceHash===record.sourceHash));
      if(!slot){slot=ContractInput.slots.find(s=>!s.record)||newContractSlot(ContractInput.slots.length+1);if(!ContractInput.slots.includes(slot))ContractInput.slots.push(slot);}
      slot.record=record;slot.status=record.analysis?'ready':'error';slot.error=record.discoveryError||'';AutoContract.hasNew=true;
      $('#noContracts').checked=false;$('#contractArea').hidden=false;renderContractInput();
-    }catch(e){AutoContract.issues.push(candidate.relative+' · '+e.message);}
+    }catch(e){if(S.offline){AutoContract.issues.push(e.message);break;}AutoContract.issues.push(String(candidate.relative).split('/').pop()+' · '+e.message);}
    }
    const ready=ContractInput.slots.filter(s=>s.status==='ready').map(s=>s.record);
-   if(ready.length){
+   if(ready.length&&!S.offline){
     const resolved=await api('/resolve-contracts',{ids:[...new Set(ready.map(r=>r.id))]});if(generation!==AutoContract.generation)return;
     applyResolvedContracts(resolved);
    }
-   AutoContract.message=candidates.length?'사업 폴더에서 계약서 '+candidates.length+'건을 찾아 아래에 띄웠습니다.':'사업 폴더에서 계약서를 찾지 못했습니다. 아직 계약이 없으면 ‘계약서 없음’을 고르고, 빠진 계약서는 아래 빈 칸에서 추가하세요.';
+   AutoContract.message=S.offline?'자동 찾기가 중간에 멈췄습니다. 공무착착을 다시 실행한 뒤 ‘계약서 다시 찾기’를 누르면 이미 읽은 계약서는 다시 읽지 않고 이어서 찾습니다.':candidates.length?'사업 폴더에서 계약서 '+candidates.length+'건을 찾아 아래에 띄웠습니다.':'사업 폴더에서 계약서를 찾지 못했습니다. 아직 계약이 없으면 ‘계약서 없음’을 고르고, 빠진 계약서는 아래 빈 칸에서 추가하세요.';
    renderContractInput();
   }catch(e){if(generation===AutoContract.generation){AutoContract.message='자동 찾기를 완료하지 못했습니다.';AutoContract.issues.push(e.message);}}
   finally{if(generation===AutoContract.generation){AutoContract.running=false;renderContractInput();renderAutoContractNotice();}}

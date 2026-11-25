@@ -338,3 +338,24 @@ function renderUserFolders(){const list=(S.plan&&S.plan.userFolders)||[];userFol
    S.plan=await api('/plan',{id:S.project.id,ongoing:S.plan.ongoing});S.selected.clear();userFolderPanel.dataset.key='';renderReview(true);});};}
 const userFolderReview=renderReview;
 renderReview=function(...args){const result=userFolderReview(...args);renderUserFolders();return result;};
+
+/* 챗봇 도움에 넣을 '화면 진행 상태': 지금 단계, 다음 버튼이 막힌 이유 후보, 확인할 개수. 화면에서만 계산한다(서버 호출 없음). */
+window.gongmuBlockedReason=function(){
+ const v=id=>$(id)&&!$(id).hidden,parts=[];
+ if(S.offline)parts.push('프로그램 연결 끊김(실행 창 닫힘)');
+ if(v('#wizard')){
+  parts.push(($('#progress').textContent||'')+' '+($('#heading').textContent||''));
+  if(v('#contractStep')){
+   const auto=typeof AutoContract!=='undefined'?AutoContract:null,slots=typeof ContractInput!=='undefined'?ContractInput.slots.filter(s=>s.record):[];
+   if(auto?.running)parts.push('계약서 자동 찾기 진행 중');
+   parts.push('계약서 칸 '+slots.length+'개(준비 '+slots.filter(s=>s.status==='ready').length+' · 오류 '+slots.filter(s=>s.status==='error').length+')');
+   if($('#noContracts')?.checked)parts.push('‘계약서 없음’ 선택됨');
+   if(auto?.issues?.length)parts.push('자동 찾기 문제 '+auto.issues.length+'건');
+   if($('#contractNext')?.disabled)parts.push('다음 버튼 잠김');
+  }
+  if(v('#treeStep')){if(!S.type)parts.push('사업유형 미선택');if(!$('#projectName').value.trim())parts.push('사업 이름 비어 있음');}
+  if(v('#reviewStep')&&S.plan){const n=S.plan.rows.filter(r=>needsCheck(r)).length;parts.push('확인 필요 파일 '+n+'개 · 보류 '+S.plan.rows.filter(r=>!r.done&&!r.destination).length+'개');}
+ }
+ if(!$('#error').hidden&&$('#error').textContent)parts.push('화면 오류: '+$('#error').textContent.slice(0,160));
+ return parts.join(' · ').slice(0,580);
+};

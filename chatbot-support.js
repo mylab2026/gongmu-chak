@@ -35,9 +35,19 @@
   if(!$('#supportQuestion').value.trim()){msg('어떤 도움이 필요한지 한 줄로 적어주세요.');$('#supportQuestion').focus();return;}
   invalidate();busy=true;$('#supportPreview').disabled=true;msg('상담자료 준비 중…');
   const fields=['supportProject','supportCategory','supportQuestion','supportError','supportInclude'];fields.forEach(id=>$('#'+id).disabled=true);
-  try{report=await api('/support-report',{id:$('#supportProject').value,category:$('#supportCategory').value,question:$('#supportQuestion').value,error:$('#supportError').value,screen,includeState:$('#supportInclude').checked});
+  const blocked=typeof window.gongmuBlockedReason==='function'?window.gongmuBlockedReason():'';
+  try{report=await api('/support-report',{id:$('#supportProject').value,category:$('#supportCategory').value,question:$('#supportQuestion').value,error:$('#supportError').value,screen,blocked,includeState:$('#supportInclude').checked});
    box.supportReport=report;$('#supportText').value=report.text;$('#supportText').disabled=false;$('#supportCopy').disabled=false;$('#supportDownload').disabled=false;msg('내용을 확인한 뒤 복사하거나 내려받으세요. 과거 회차의 상세 내역은 시작 화면의 누적 정리 이력 ZIP을 이용하세요.');
-  }catch(e){msg('상담자료를 준비하지 못했습니다. '+e.message+'\n프로그램 연결이 끊겼다면 다시 실행한 뒤 시도하거나 오류 화면만 챗봇에 첨부해주세요.');}
+  }catch(e){
+   if(S.offline){
+    /* 프로그램(로컬 서버)이 꺼져 있으면 브라우저에서 짧은 상황 요약만 만든다. 경로는 가린다. */
+    const hide=t=>String(t||'').replace(/[A-Za-z]:\\[^\s·|]+/g,'[경로]').replace(/\s+/g,' ').trim().slice(0,300);
+    const brief=[$('#supportQuestion').value.trim(),'','[공무착착 상황]','- 화면: '+(screen||'미확인')+' / 문의 종류: '+$('#supportCategory').value,
+     '- 프로그램 연결: 끊김(공무착착 실행 창이 닫힌 것으로 보임)','- 화면 진행 상태: '+hide(blocked||'확인 못 함')].concat($('#supportError').value?['- 오류 문구: '+hide($('#supportError').value)]:[]).join('\n');
+    report={brief,text:brief,name:'공무착착-챗봇상담-연결끊김.txt',offline:true};box.supportReport=report;
+    $('#supportText').value=brief;$('#supportText').disabled=false;$('#supportCopy').disabled=false;$('#supportDownload').disabled=false;
+    msg('공무착착 실행 창이 닫혀 있어 짧은 상황만 담았습니다. 바탕화면 ‘공무착착 시험판’으로 다시 실행하면 이어서 쓸 수 있습니다.');
+   }else msg('상담자료를 준비하지 못했습니다. '+e.message+'\n프로그램 연결이 끊겼다면 다시 실행한 뒤 시도하거나 오류 화면만 챗봇에 첨부해주세요.');}
   finally{busy=false;$('#supportPreview').disabled=false;fields.forEach(id=>$('#'+id).disabled=false);$('#supportInclude').disabled=!$('#supportProject').value;}
  };
  $('#supportCopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#supportText').value);msg('복사했습니다. 공무착착 챗봇에 붙여넣어주세요.');}catch(e){$('#supportText').focus();$('#supportText').select();msg('자동 복사가 제한됐습니다. 선택된 내용을 Ctrl+C로 복사해주세요.');}};

@@ -4901,12 +4901,48 @@ class Handler(BaseHTTPRequestHandler):
             self.send(200, result)
         except Exception as error:
             # Do not expose upstream response bodies or secrets.
-            message = str(error) if isinstance(error, (ValueError, FileNotFoundError, PermissionError)) else '처리 중 오류가 발생했습니다. 파일 형식·접근 권한·API 연결을 확인해주세요.'
+            known = isinstance(error, (ValueError, FileNotFoundError, PermissionError))
+            if not known:
+                log_error('요청 ' + self.path)
+            message = str(error) if known else '처리 중 오류가 발생했습니다. 파일 형식·접근 권한·API 연결을 확인해주세요.'
             self.send(400, {'error': message})
+
+
+LOG_LIMIT = 1024 * 1024
+
+
+def log_path(name='error.log'):
+    folder = DATA / 'logs'
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / name
+
+
+def log_error(where, exc_info=None):
+    """실행 창이 닫혀도 원인을 볼 수 있도록 오류를 PC의 GongmuChakData/logs에 남긴다(외부 전송 없음, 1MB 넘으면 앞부분 정리)."""
+    import traceback
+    try:
+        path = log_path()
+        if path.exists() and path.stat().st_size > LOG_LIMIT:
+            path.write_bytes(path.read_bytes()[-LOG_LIMIT // 2:])
+        text = ''.join(traceback.format_exception(*(exc_info or sys.exc_info())))
+        with path.open('a', encoding='utf-8') as stream:
+            stream.write('[' + now() + '] ' + chatbot_support.BUILD + ' · ' + where + '\n' + text + '\n')
+    except Exception:
+        pass
+
+
+def install_crash_logging():
+    import faulthandler
+    import threading as _threading
+    # 파이썬 바깥(PDF 렌더러 등)에서 프로그램이 통째로 꺼질 때도 흔적을 남긴다.
+    faulthandler.enable(open(log_path('crash.log'), 'a', encoding='utf-8'))
+    sys.excepthook = lambda *info: log_error('프로그램', info)
+    _threading.excepthook = lambda args: log_error('작업 스레드 ' + str(args.thread and args.thread.name), (args.exc_type, args.exc_value, args.exc_traceback))
 
 
 def main():
     DATA.mkdir(parents=True, exist_ok=True)
+    install_crash_logging()
     lock_file = (DATA / 'app.lock').open('a+b')
     if os.name == 'nt':
         import msvcrt
@@ -4928,7 +4964,11 @@ def main():
     print('공무착착 실행 중입니다. 종료하려면 이 창을 닫으세요.', flush=True)
     if '--no-browser' not in sys.argv:
         webbrowser.open(url)
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except BaseException:
+        log_error('서버 종료')
+        raise
 
 
 if __name__ == '__main__':
