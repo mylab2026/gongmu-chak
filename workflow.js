@@ -359,3 +359,31 @@ window.gongmuBlockedReason=function(){
  if(!$('#error').hidden&&$('#error').textContent)parts.push('화면 오류: '+$('#error').textContent.slice(0,160));
  return parts.join(' · ').slice(0,580);
 };
+
+/* 폴더 구조: 계약 가지 추가(용역·시공·관급자재). 일반 폴더와 달리 그 종류의 표준 하위 폴더가 함께 생기고,
+   이름에 '용역'·'도급공사'·'관급자재'가 들어가 분류 규칙이 계약 가지로 알아본다. 빈 '용역1' 칸이 있으면 그 칸을 쓴다. */
+const CONTRACT_KINDS={service:{label:'용역',pattern:/용역\s*\d*$/,word:'용역'},construction:{label:'시공(도급공사)',pattern:/도급공사/,word:'도급공사'},material:{label:'관급자재(물품)',pattern:/관급자재/,word:'관급자재'}};
+function contractBranchTemplate(kind){for(const name of ['construction','planning']){const stage=(S.status?.templates?.[name]||[]).find(n=>/시공단계/.test(n.label));const node=stage?.children?.find(n=>CONTRACT_KINDS[kind].pattern.test(baseName(n.label)));if(node)return node;}return null;}
+function contractBranchLabel(kind,name){name=name.trim();const word=CONTRACT_KINDS[kind].word;
+ if(kind==='material')return name.includes('관급자재')?name:'관급자재 '+name;
+ if(kind==='construction')return !name?'도급공사':name.includes('도급공사')?name:name+' 도급공사';
+ return name.includes('용역')?name:name+' 용역';}
+const contractAdd=document.createElement('div');contractAdd.id='contractBranchAdd';contractAdd.className='row';contractAdd.style.cssText='gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
+contractAdd.innerHTML='<strong>계약 추가</strong><select id="contractBranchStage" aria-label="계약을 넣을 단계"></select><select id="contractBranchKind" aria-label="계약 종류"><option value="service">용역</option><option value="construction">시공(도급공사)</option><option value="material">관급자재(물품)</option></select><input id="contractBranchName" placeholder="이름 (예: 디자인 감리, 음향컨설팅)" style="min-width:220px"><button id="contractBranchButton">추가</button><small class="muted">종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.</small>';
+$('#addRoot').after(contractAdd);
+function refreshContractStages(){const sel=$('#contractBranchStage');if(!sel)return;const stages=S.tree.map((n,i)=>({n,i})).filter(x=>/단계/.test(x.n.label));const keep=sel.value;
+ sel.innerHTML=stages.map(x=>'<option value="'+x.i+'">'+esc(x.n.label)+'</option>').join('')||'<option value="">단계 폴더 없음</option>';
+ const construction=stages.find(x=>/시공/.test(x.n.label));sel.value=stages.some(x=>String(x.i)===keep)?keep:construction?String(construction.i):(stages[0]?String(stages[0].i):'');}
+const contractAddRender=renderTree;renderTree=function(...args){const r=contractAddRender(...args);refreshContractStages();return r;};
+function addContractBranch(stageIndex,kind,name){
+ const stage=S.tree[stageIndex];if(!stage||!/단계/.test(stage.label))throw Error('계약을 넣을 단계 폴더를 골라주세요.');
+ if(kind!=='construction'&&!name.trim())throw Error((kind==='material'?'품명':'용역 이름')+'을 입력해주세요.');
+ if(/[\/:*?"<>|]/.test(name))throw Error('폴더 이름에 \ / : * ? " < > | 는 쓸 수 없습니다.');
+ const base=contractBranchTemplate(kind);if(!base)throw Error('계약 종류의 기본 구조를 찾지 못했습니다.');
+ stage.children=stage.children||[];const label=contractBranchLabel(kind,name);
+ const empty=kind==='service'&&stage.children.find(n=>!n.contractId&&!n.contractKind&&/^\s*용역\s*\d*\s*$/.test(baseName(n.label)));
+ if(empty){const prefix=(empty.label.match(/^\d+/)||[''])[0];empty.label=(prefix?prefix+' ':'')+label;empty.contractKind='service';return empty;}
+ const number=Math.max(0,...stage.children.map(n=>Number((n.label.match(/^\d+/)||[0])[0])))+1;
+ const node={...structuredClone(base),label:number+' '+label,contractKind:kind};stage.children.push(node);return node;}
+$('#contractBranchButton').onclick=()=>{clearError();try{if(typeof rememberStructure==='function')rememberStructure();addContractBranch(Number($('#contractBranchStage').value),$('#contractBranchKind').value,$('#contractBranchName').value);$('#contractBranchName').value='';renderTree();if(typeof renderAncillary==='function')renderAncillary();}catch(e){error(e.message,'#contractBranchName');}};
+refreshContractStages();

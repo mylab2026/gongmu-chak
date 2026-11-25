@@ -178,6 +178,15 @@ def main():
                     plan_id=page.evaluate('S.plan.id');page.locator('#wizardBack').click();expect(page.locator('#treeStep')).to_be_visible()
                     page.locator('#treeNext').click();expect(page.locator('#reviewStep')).to_be_visible();assert page.evaluate('S.plan.id')==plan_id
                     result['back_and_unchanged_return_preserve_plan']=True
+                    # 폴더 구조의 '계약 추가': 종류별 표준 하위 폴더가 딸린 계약 가지(화면 상태만 확인하고 원래대로 돌린다).
+                    added=page.evaluate("""()=>{const saved=structuredClone(S.tree);try{const stage=S.tree.findIndex(n=>/시공단계/.test(n.label));
+                      const s=addContractBranch(stage,'service','디자인 감리'),m=addContractBranch(stage,'material','미디어월'),c=addContractBranch(stage,'construction','');
+                      let bad='';try{addContractBranch(stage,'service','')}catch(e){bad=e.message}
+                      return {s:s.label,sKids:(s.children||[]).length,m:m.label,mKids:(m.children||[]).length,c:c.label,kinds:[s.contractKind,m.contractKind,c.contractKind],bad,form:!!document.querySelector('#contractBranchAdd select#contractBranchKind')};}
+                      finally{S.tree=saved;renderTree();}}""")
+                    assert added['s'].endswith('디자인 감리 용역') and added['sKids']>3 and '관급자재 미디어월' in added['m'] and added['mKids']>0, added
+                    assert added['c'].endswith('도급공사') and added['kinds']==['service','material','construction'] and added['bad'] and added['form'], added
+                    result['contract_branch_add']=added
                     assert page.locator('#doubtToggle').count()==0
                     assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
