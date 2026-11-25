@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import calendar
+import collections
 import csv
 import datetime
 import html
@@ -1720,6 +1721,25 @@ BRANCH_CHILD_WORDS=(
 TOP_LEVEL_WORDS=((r'공사전사진|착공전사진','공사전'),(r'보도자료|경과보고|언론','주요보고자료'),(r'사용기관|타기관','타기관협의자료'))
 
 
+def check_unit(relative, labels, cache):
+    """Folder that a person decides about as one unit: the first source folder (from the top) that
+    is not a stage, contract, standard work heading or tree folder name. '2. 시공단계/2. 공사/11. 실외기 구조
+    검토/A/B.dwg' -> '2. 시공단계/2. 공사/11. 실외기 구조 검토'. Files inside it may still go to different places;
+    the screen splits a unit by destination."""
+    parts=PurePosixPath(relative).parts[:-1]
+    for i,part in enumerate(parts):
+        known=cache.get(part)
+        if known is None:
+            value=semantic_label(part)
+            known=(not value or value in labels or any(w in value for w,_ in STAGE_SOURCE)
+                   or bool(re.search(r'공사$|용역|관급자재|도급|정리할문서', value))
+                   or any(re.search(pattern,value) for pattern,_ in BRANCH_CHILD_WORDS))
+            cache[part]=known
+        if not known:
+            return '/'.join(parts[:i+1])
+    return '/'.join(parts)
+
+
 def stage_node(paths,word):
     found=[p for p in paths if '/' not in p and (word in semantic_label(p) if word!='기획' else semantic_label(p).startswith('기획'))]
     return found[0] if len(found)==1 else ''
@@ -2061,7 +2081,8 @@ def user_made_folders(project, root, paths):
     made = set()
     for journal in journals:
         for entry in journal['entries']:
-            for value in [entry.get('destination', '')] + list(entry.get('madeDirs', [])):
+            # 이동 기록의 목적지(공무착착이 만든 폴더)와 출발지(정리 대상이던 옛 폴더)는 사용자가 새로 만든 폴더가 아니다.
+            for value in [entry.get('destination', ''), str(PurePosixPath(entry.get('source', '')).parent)] + list(entry.get('madeDirs', [])):
                 part = PurePosixPath(value)
                 while str(part) not in ('', '.'):
                     made.add(str(part)); part = part.parent
@@ -2196,6 +2217,20 @@ def make_plan(pid, ongoing, virtual=None):
     rows[:] = [r for r in rows if not r.get('destination') or str(PurePosixPath(effective_folder(r,r['destination']))/(r.get('proposedName') or r['name'])) != r.get('current',r['relative'])]
     plan['scanInfo']['alreadyInPlaceCount']=max(0,len(files)-sum(r.get('kind')!='directory' for r in rows))+sum(f['files'] for f in user_folders)
     plan['userFolders']=user_folders
+    labels={semantic_label(PurePosixPath(p).name) for p in paths}
+    unit_cache={}
+    for row in rows:
+        row['checkUnit']=check_unit(row.get('current',row['relative']),labels,unit_cache)
+    # 같은 묶음의 대부분이 보류인데 몇 개만 파일 이름 한 단어로 다른 곳에 정해졌으면, 묶음이 흩어지는 것이므로 확인을 받는다.
+    units=collections.defaultdict(list)
+    for row in rows:
+        if row.get('kind')!='directory' and row['checkUnit']:units[row['checkUnit']].append(row)
+    for members in units.values():
+        held=sum(not r.get('destination') for r in members)
+        if len(members)>=5 and held/len(members)>=.6:
+            for row in members:
+                if row.get('destination') and row.get('method')!='manual' and WEAK_RULE.match(row.get('reason') or ''):
+                    row['unitReview']=True
     PROGRESS.pop('plan', None)
     plan['localCount'] = sum(1 for r in rows if r['method'] in ('rule', 'attach'))
     PLANS[plan['id']] = plan
@@ -2237,6 +2272,8 @@ def keep_subfolders(rows, inbox=INBOX):
         if row.get('canonicalContract'):
             row.pop('keepSub',None);row.pop('keepSubFor',None);continue
         existing_sub = row.get('keepSub') if row.get('keepSubFor') == row.get('destination') else None
+        if row.get('unitKeep') and existing_sub and row.get('method')=='manual':
+            continue  # 묶음으로 목적지를 정한 파일: 원래 폴더 이름부터 그대로 둔다
         row.pop('keepSub', None)
         if not row.get('destination'):
             continue
@@ -3054,7 +3091,7 @@ def retarget(plan_id, row_id, destination):
     return {**row,'relatedRows':result['rows']}
 
 
-def retarget_many(plan_id, row_ids, destination):
+def retarget_many(plan_id, row_ids, destination, keep_folder=''):
     plan = get_plan(plan_id)
     if plan.get('finished') or any(j['planId'] == plan_id and j['status'] in ('pending', 'running') for j in JOBS.values()):
         fail('정리안을 확인하거나 AI 검토가 끝난 후 목적지를 바꿔주세요.')
@@ -3079,8 +3116,12 @@ def retarget_many(plan_id, row_ids, destination):
     common = 0
     while all(len(x) > common for x in parents) and len({x[common] for x in parents}) == 1:
         common += 1
+    unit = PurePosixPath(keep_folder).parts if keep_folder else ()
+    if unit and all(x[:len(unit)] == unit for x in parents):
+        common = len(unit) - 1  # 묶음으로 옮길 때는 원래 폴더 이름을 하위 폴더로 유지한다
     for row, parent in zip(rows, parents):
         row.update(change)
+        row['unitKeep'] = bool(unit) and common == len(unit) - 1
         row.pop('executionError', None)
         if not row.get('canonicalAttachment'):
             row.pop('attachTo', None)
@@ -4383,6 +4424,18 @@ def export_run(pid, plan_id):
     return report
 
 
+def confirm_routes(plan_id,row_ids):
+    """Confirm a whole check group at once (same rules as one file)."""
+    plan=get_plan(plan_id)
+    wanted=set(row_ids or [])
+    confirmed=[]
+    for row in [r for r in plan['rows'] if r['id'] in wanted and not r.get('done')]:
+        if row.get('destination') and (row['destination'] not in plan['paths'] or row.get('folderDateReview')):
+            continue
+        confirmed.extend(confirm_route(plan_id,row['id'])['rows'])
+    return {'rows':list({r['id']:r for r in confirmed}.values())}
+
+
 def confirm_route(plan_id,row_id):
     plan=get_plan(plan_id)
     row=next((r for r in plan['rows'] if r['id']==row_id),None)
@@ -4420,6 +4473,8 @@ def dispatch(action, payload):
     if action == '/history-summary':
         return history_summary(payload['id'])
     if action == '/confirm-route':
+        if 'rows' in payload:
+            return confirm_routes(payload['plan'],list(payload['rows']))
         return confirm_route(payload['plan'],payload['row'])
     if action in ('/collection-assist','/collection-search-start','/collection-search-status','/collection-search-cancel'):
         import collection_assistant as assistant
@@ -4531,7 +4586,7 @@ def dispatch(action, payload):
     if action == '/attach':
         return attach_rows(payload['plan'], payload['main'], payload.get('rows'), bool(payload.get('attach', True)))
     if action == '/retarget-many':
-        return retarget_many(payload['plan'], payload.get('rows'), payload['destination'])
+        return retarget_many(payload['plan'], payload.get('rows'), payload['destination'], str(payload.get('keepFolder') or ''))
     if action == '/execute-all':
         return execute_all(payload['plan'], payload['choices'], bool(payload.get('autoRename')))
     if action == '/finish':

@@ -397,19 +397,4 @@ if(support){
   else{review.open=true;$('#supportText').focus();$('#supportText').select();$('#supportMessage').textContent='자동 복사가 막혔습니다. 아래 선택된 내용을 Ctrl+C로 복사해 챗봇에 붙여넣으세요.';}
  };
 }
-/* 8. PC에서 직접 만든 폴더: 정리 뒤 사용자가 탐색기에서 새로 만든 폴더를 알려 주고, 사업 폴더 구조에 추가할지 묻는다.
-   추가하지 않아도 그 안의 파일은 옮기지 않는다(서버에서 제외). 추가하면 비슷한 이름의 새 파일을 그 폴더로 제안한다. */
-const userFolderPanel=document.createElement('div');userFolderPanel.id='userFolderPanel';userFolderPanel.className='card';userFolderPanel.hidden=true;
-$('#reviewMap').before(userFolderPanel);
-function renderUserFolders(){const list=(S.plan&&S.plan.userFolders)||[];userFolderPanel.hidden=!list.length;if(!list.length){userFolderPanel.innerHTML='';return;}
- const key=list.map(f=>f.path).join('|');if(userFolderPanel.dataset.key===key)return;userFolderPanel.dataset.key=key;
- userFolderPanel.innerHTML='<strong>PC에서 새로 만든 폴더 '+list.length+'개를 찾았어요</strong>'
-  +'<p class="muted">사업 폴더 구조에 추가하면 폴더 안의 파일은 그대로 두고, 앞으로 비슷한 이름의 파일을 이 폴더로 제안합니다. 추가하지 않아도 이 폴더 안의 파일은 옮기지 않습니다.</p>'
-  +list.map(f=>'<label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" checked data-user-folder="'+esc(f.path)+'"><span class="path">'+esc(f.path)+' <small class="muted">· 파일 '+f.files+'개</small></span></label>').join('')
-  +'<div class="row"><button id="registerUserFolders" class="primary">선택한 폴더를 구조에 추가</button></div>';
- $('#registerUserFolders').onclick=()=>{const folders=[...userFolderPanel.querySelectorAll('[data-user-folder]:checked')].map(x=>x.dataset.userFolder);if(!folders.length){error('추가할 폴더를 선택해주세요.','#registerUserFolders');return;}
-  task('폴더 구조에 추가 중…',async()=>{await api('/register-folders',{id:S.project.id,folders});await refresh();const fresh=S.status.projects.find(p=>p.id===S.project.id);if(fresh){S.project=fresh;if(fresh.tree)S.tree=fresh.tree;}
-   S.plan=await api('/plan',{id:S.project.id,ongoing:S.plan.ongoing});S.selected.clear();userFolderPanel.dataset.key='';renderReview(true);});};}
-const userFolderReview=renderReview;
-renderReview=function(...args){const result=userFolderReview(...args);renderUserFolders();return result;};
 })();
