@@ -51,8 +51,8 @@ class V3Collections(unittest.TestCase):
         r=app.parse_collection('캠퍼스 관리과에 보낸 공문');self.assertEqual((r['recipient'],r['sender']),('캠퍼스 관리과',''))
 
     def test_saved_collection_verification_is_cached_and_failure_is_not_verified(self):
-        self.write('1 공통/1 공문/260401 협조 공문.txt','수신 시설지원과장\n제목 자재 승인 요청\n발신 ○○종합건설 대표이사')
-        self.write('1 공통/1 공문/260405 회신 공문.txt','수신 시설지원과장\n제목 공정 회신\n발신 ○○종합건설 대표이사')
+        self.write('1 공통/1 공문/260401 협조 공문.txt','문서번호: 예시-001\n수신 시설지원과장\n제목 자재 승인 요청\n발신 ○○종합건설 대표이사')
+        self.write('1 공통/1 공문/260405 회신 공문.txt','문서번호: 예시-002\n수신 시설지원과장\n제목 공정 회신\n발신 ○○종합건설 대표이사')
         item=app.save_collection(self.project['id'],{'name':'시공사 공문','text':'시공사 공문'})
         run=app.run_collection(self.project['id'],item['id']);self.assertEqual(run['estimate']['aiCalls'],2)
         calls=[]

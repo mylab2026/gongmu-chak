@@ -48,6 +48,7 @@ SELECTIONS: dict[str, str] = {}
 PLANS: dict[str, dict] = {}
 JOBS: dict[str, dict] = {}
 INDEX_JOBS: dict[str, dict] = {}
+INDEX_REVISIONS: dict[str, int] = {}
 TEMPLATES = json.loads((APP / 'templates.json').read_text(encoding='utf-8'))
 
 
@@ -884,11 +885,18 @@ def index_file(pid):
 def run_index(job_id):
     job = INDEX_JOBS[job_id]
     try:
-        project = get_project(job['projectId'])
-        root = root_available(project)
+        with LOCK:
+            project = get_project(job['projectId'])
+            root = root_available(project)
+            revision = INDEX_REVISIONS.get(project['id'], 0)
+            old = (read_json(index_file(project['id']), {}) or {}).get('files', {})
+        def save_index(value):
+            with LOCK:
+                if INDEX_REVISIONS.get(project['id'], 0) != revision:
+                    fail('색인 중 파일이 이동했습니다. 문서 색인을 다시 만들어주세요.')
+                atomic_json(index_file(project['id']), value)
         files = scan(root)
         job.update(status='running', count=len(files))
-        old = (read_json(index_file(project['id']), {}) or {}).get('files', {})
         new = {}
         for number, file in enumerate(files, 1):
             if job.get('cancel'):
@@ -904,8 +912,8 @@ def run_index(job_id):
                 job['read'] += 1
             job['processed'] = number
             if number % 300 == 0:
-                atomic_json(index_file(project['id']), {'builtAt': now(), 'root': str(root), 'files': {**old, **new}, 'partial': True})
-        atomic_json(index_file(project['id']), {'builtAt': now(), 'root': str(root), 'files': new})
+                save_index({'builtAt': now(), 'root': str(root), 'files': {**old, **new}, 'partial': True})
+        save_index({'builtAt': now(), 'root': str(root), 'files': new})
         job['status'] = 'done'
     except Exception as error:
         job['status'] = 'failed'
@@ -3790,8 +3798,14 @@ def verification_context(project,relative):
 
 
 def verify_key(content_hash,conditions,context=None):
-    raw=json.dumps({'sha256':content_hash,'context':context,'c':{k:v for k,v in conditions.items() if k!='text'},'v':VERIFY_VERSION},ensure_ascii=False,sort_keys=True)
+    version=VERIFY_VERSION+'-official-structure' if requires_official_structure(conditions) else VERIFY_VERSION
+    raw=json.dumps({'sha256':content_hash,'context':context,'c':{k:v for k,v in conditions.items() if k!='text'},'v':version},ensure_ascii=False,sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def requires_official_structure(conditions):
+    return bool(conditions.get('officialOnly') or
+                not conditions.get('semanticQuery') and conditions.get('types') == ['공문'])
 
 
 def local_match(relative,text,c):
@@ -3984,15 +3998,19 @@ def verify_collection(pid,cid,relatives):
         except Exception as error:
             failed.append({'relative':relative,'error':str(error)[:200]});continue
         decision=answer.get('decision') if answer.get('decision') in ('match','mismatch','unclear') else 'unclear'
-        if decision=='match' and not answer.get('evidence'):decision='unclear'
-        fields={k:str(answer.get(k) or '')[:160] for k in ('docNumber','title','sender','recipient','docDate','contractTitle','party','signed_date') if answer.get(k)}
+        extracted=official_fields(text)
+        fields={k:str(answer.get(k) or extracted.get(k) or '').strip()[:160] for k in ('docNumber','title','sender','recipient','docDate','contractTitle','party','signed_date')}
+        evidence=dict(answer['evidence']) if isinstance(answer.get('evidence'),dict) else {}
+        if decision=='match' and not evidence:decision='unclear'
+        if decision=='match' and requires_official_structure(c) and not all(fields[k] for k in ('docNumber','title','sender','recipient')):
+            decision='unclear';evidence['공문 형식']='문서번호·제목·발신·수신을 모두 확인하지 못했습니다.'
         fields.update(isContract=answer.get('isContract') is True,isEmploymentContract=answer.get('isEmploymentContract') is True or is_employment_contract(relative,analysis={'title':fields.get('contractTitle') or fields.get('title')}))
         if fields['isEmploymentContract']:decision='mismatch'
         with LOCK:
             latest=get_project(pid)
             if not path.is_file() or file_hash(path)!=content_hash or verification_context(latest,relative)!=context:
                 failed.append({'relative':relative,'error':'확인 중 문서 또는 사업 정보가 바뀌었습니다. 다시 확인해주세요.'});continue
-            latest.setdefault('collectionChecks',{})[verify_key(content_hash,c,context)]={'decision':decision,'evidence':answer.get('evidence') or {},
+            latest.setdefault('collectionChecks',{})[verify_key(content_hash,c,context)]={'decision':decision,'evidence':evidence,
                                                                                         'fields':fields,'at':now(),'relative':relative}
             store_project(latest)
         done.append({'relative':relative,'decision':decision})
@@ -4058,6 +4076,24 @@ def carry_collection_marks(pid, moves):
         return
     with LOCK:
         project = get_project(pid);changed = False
+        # Reuse unchanged extracted text at the new path, and prevent an in-flight
+        # index scan from later writing the old paths over this migration.
+        INDEX_REVISIONS[pid] = INDEX_REVISIONS.get(pid, 0) + 1
+        index = read_json(index_file(pid), {}) or {}
+        files = index.get('files', {})
+        root = root_available(project)
+        index_changed = False
+        for old, new in moves:
+            record = files.pop(old, None)
+            if record is None:
+                continue
+            index_changed = True
+            target = safe_path(root, new)
+            if target.is_file() and record.get('fp') == fingerprint(target):
+                files[new] = record
+        if index_changed:
+            index['files'] = files
+            atomic_json(index_file(pid), index)
         for key in ('photoPhases', 'officialMarks'):
             marks = project.get(key) or {}
             for old, new in moves:
@@ -4089,6 +4125,20 @@ def export_target(item, standard, pattern, fallback):
     return min(choice, key=len) if len(choice) == 1 or (choice and len({len(p) for p in choice}) == len(choice)) else fallback
 
 
+def export_snapshot(project, root, data):
+    """Bind approval to the originals, classifications and tree shown in the preview.
+
+    App-generated links/guides and transient missing-item notices are excluded so
+    an unchanged repeat export remains valid. Originals use the same size/mtime
+    fingerprints as collection scans; this does not reread every document body.
+    """
+    state = {'root': str(root), 'name': project['name'], 'tree': project['tree'],
+             'photos': data['photos'], 'officials': data['officials'], 'period': data['period'],
+             'inbox': sorted((f['relative'], f['size'], f['mtime'])
+                             for f in scan(root, True, inbox_of(project)))}
+    return hashlib.sha256(json.dumps(state, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
 def export_plan(pid):
     project = get_project(pid)
     root = root_available(project)
@@ -4117,7 +4167,7 @@ def export_plan(pid):
             'checks': {'photoCheck': data['counts']['check'], 'officialCheck': data['officialCheck'],
                        'missing': data['missing'], 'inboxLeft': leftovers},
             'photos': len(data['photos']), 'officials': len(data['officials'])}
-    EXPORTS[plan['id']] = {**plan, 'data': data}
+    EXPORTS[plan['id']] = {**plan, 'data': data, 'snapshot': export_snapshot(project, root, data)}
     return plan
 
 
@@ -4165,6 +4215,8 @@ def export_run(pid, plan_id):
     root = root_available(project)
     if str(root) != plan['root']:
         fail('사업 폴더 연결이 바뀌었습니다. 내보내기 계획을 다시 확인해주세요.')
+    if plan.get('snapshot') != export_snapshot(project, root, collect(pid)):
+        fail('문서 위치·분류 또는 폴더 구조가 바뀌었습니다. 내보낼 내용을 다시 확인해주세요.')
     index_path = safe_path(root, '.gongmu-chak/export.json')
     index = read_json(index_path, {}) or {}
     owned = index.get('links', {})
