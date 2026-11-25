@@ -101,7 +101,12 @@ renderReview=function(reveal=false){
  $('#mapTargets').innerHTML=nodes(S.project.tree);
  $$('[data-map-toggle]').forEach(b=>b.onclick=()=>{const path=b.dataset.mapToggle;MapReview.collapsed.has(path)?MapReview.collapsed.delete(path):MapReview.collapsed.add(path);renderReview();});
  $$('[data-map-target]').forEach(b=>{
-  b.onclick=()=>{if(MapReview.retargeting&&MapReview.file){changeRoute(MapReview.file,b.dataset.mapTarget);return;}const matched=groupRows.find(r=>r.destination===b.dataset.mapTarget);if(matched)mapFocusFile(matched.id);};
+  // 4차 4번: 왼쪽 파일을 누른 상태에서 오른쪽 폴더를 누르면 그 폴더로 화살표가 바로 바뀐다(끌지 않아도 됨). 체크한 파일이 있으면 함께 옮긴다.
+  b.onclick=()=>{const path=b.dataset.mapTarget,file=S.plan.rows.find(r=>r.id===MapReview.file);
+   if(file&&!file.done&&S.plan.paths.includes(path)){const picked=S.plan.rows.filter(r=>S.selected.has(r.id)&&!r.done).map(r=>r.id);
+    if(picked.length>1&&picked.includes(file.id)&&typeof changeManyRoutes==='function'){changeManyRoutes(picked,path);return;}
+    if(file.destination!==path){changeRoute(file.id,path);return;}}
+   const matched=groupRows.find(r=>r.destination===path);if(matched)mapFocusFile(matched.id);};
   b.ondragover=event=>{if(MapReview.dragging&&S.plan.paths.includes(b.dataset.mapTarget)){event.preventDefault();event.dataTransfer.dropEffect='move';b.classList.add('drop-target');}};
   b.ondragleave=()=>b.classList.remove('drop-target');
   b.ondrop=event=>{event.preventDefault();b.classList.remove('drop-target');const id=MapReview.dragging;MapReview.dragging=null;if(id)changeRoute(id,b.dataset.mapTarget);};

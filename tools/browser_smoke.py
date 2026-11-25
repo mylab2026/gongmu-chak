@@ -192,9 +192,13 @@ def main():
                       const service=S.tree[stage].children.at(-1);openSubFolder(String(stage)+'.0');$('#subFolderKind').value='construction';$('#subFolderKind').onchange();$('#subFolderYes').click();
                       const blocked=!$('#subFolderError').hidden;$('#subFolderKind').value='folder';$('#subFolderKind').onchange();$('#subFolderName').value='내부검토';$('#subFolderYes').click();
                       const plain=S.tree[stage].children[0].children.at(-1);
-                      return {open,service:service.label,kind:service.contractKind,kids:(service.children||[]).length,blocked,plain:plain.label,button:!!$('#addSubFolder'),hint:$('#projectNameHint')?.textContent||''};}
+                      // 4차 1번: '단계'라는 말이 없는 기획 단계 폴더(2 기획 및 기본구상)에도 용역 계약을 만든다.
+                      S.tree.push({label:'9 기획 및 기본구상',children:[{label:'1 사업계획',children:[]}]});const plan=S.tree.length-1;openSubFolder(String(plan));$('#subFolderKind').value='service';$('#subFolderKind').onchange();
+                      const planHelp=$('#subFolderHelp').textContent;$('#subFolderName').value='기획설계 용역';$('#subFolderYes').click();const planning=S.tree[plan].children.at(-1);
+                      return {open,service:service.label,kind:service.contractKind,kids:(service.children||[]).length,blocked,plain:plain.label,planning:planning.label,planningKind:planning.contractKind,planHelp,planError:!$('#subFolderError').hidden,button:!!$('#addSubFolder'),hint:$('#projectNameHint')?.textContent||''};}
                       finally{S.tree=saved;renderTree();}}""")
                     assert sub['open'] and sub['service'].endswith('가상 감리 용역') and sub['kind']=='service' and sub['kids']>3 and sub['blocked'] and sub['plain'].endswith('내부검토') and sub['button'], sub
+                    assert sub['planning'].endswith('기획설계 용역') and sub['planningKind']=='service' and not sub['planError'] and '단계 폴더로 바꿔' not in sub['planHelp'], sub
                     assert '간결하게 정해주세요' in sub['hint'], sub
                     result['subfolder_add_and_name_hint']=sub
                     # 2단계 간소화: 계약 목록(빼기·되살리기)과 폴더 미리보기, 3단계에서 계약마다 폴더 생성(화면 상태만 보고 원래대로 돌린다).
@@ -277,6 +281,15 @@ def main():
                     assert mapped['scrolled']>0 and len(mapped['chips'])>=3 and mapped['groups'], mapped
                     assert mapped['call'] and mapped['call']['keep']==mapped['name'] and mapped['call']['ids']==mapped['expected']>0, mapped
                     result['map_scroll_chips_folder_drag']=mapped
+                    # 4차 4번: 왼쪽 파일을 누른 뒤 오른쪽 폴더를 누르면 그 폴더로 화살표가 바뀐다(끌지 않음). 확인 후 원래대로 돌린다.
+                    clicked=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup);const original=row.destination;
+                      MapReview.group=parentFolder(row);mapFocusFile(row.id);await new Promise(r=>requestAnimationFrame(()=>r()));
+                      const pick=$('#mapTargets').classList.contains('pick-mode'),hint=$('#mapCaption').innerText.includes('폴더를 누르면');
+                      const target=$$('[data-map-target]').find(b=>S.plan.paths.includes(b.dataset.mapTarget)&&b.dataset.mapTarget!==original);const dest=target.dataset.mapTarget;
+                      target.click();for(let i=0;i<50&&row.destination!==dest;i++)await new Promise(r=>setTimeout(r,100));const moved=row.destination===dest;
+                      await changeRoute(row.id,original);return {pick,hint,moved,restored:row.destination===original};}""")
+                    assert clicked['pick'] and clicked['hint'] and clicked['moved'] and clicked['restored'], clicked
+                    result['click_file_then_folder_routes']=clicked
                     # 3차 6번: 새 폴더 제안 카드(규칙·AI 제안). 만들기는 서버 검사(test_round3)에서 확인한다.
                     suggested=page.evaluate("""()=>{const row=S.plan.rows.find(r=>!r.done&&r.method!=='manual');const parent=S.plan.paths[0];row.folderSuggestion={parent,name:'내부검토',reason:'가상 근거'};
                       try{renderReview();const box=$('#folderSuggest');return {shown:!box.hidden,text:box.innerText,make:!!document.querySelector('[data-suggest-make]')};}
@@ -291,10 +304,17 @@ def main():
                         if(path==='/bulk-answers')return {rows:[],paths,tree:S.project.tree,askedUnits:['가상/폴더 A','가상/폴더 B']};
                         if(path==='/bulk-info')return {count:0,batches:0};return savedApi(path,body);};
                       try{const round=questionRound(1);await new Promise(r=>setTimeout(r,50));const dialog=$('#questionDialog');const open=dialog.open,title=dialog.querySelector('h2').textContent;
-                        dialog.querySelector('input[name="q0"][value="c1"]').checked=true;dialog.querySelector('input[name="q1"][value="hold"]').checked=true;$('#questionYes').click();const answered=await round;
-                        return {open,title,answered,answers:calls.find(c=>c[0]==='/bulk-answers')?.[1].answers,closed:!dialog.open};}
+                        // 4차 2번: 한 번에 한 질문, 폴더 경로는 번호 없이 한 번만, 기본값은 '잘 모르겠어요'
+                        const first={step:dialog.querySelector('.q-step').textContent,ask:dialog.querySelector('.q-ask').textContent,options:$$('#questionDialog .q-option').map(o=>o.innerText.trim()),
+                          checked:dialog.querySelector('input[name="qpick"]:checked').value,hiddenSelect:getComputedStyle(dialog.querySelector('[data-q-other]')).display==='none'};
+                        const pick=v=>{const r=dialog.querySelector('input[name="qpick"][value="'+v+'"]');r.checked=true;r.dispatchEvent(new Event('change'));};
+                        pick('other');$('#questionNext').click();const needFolder=!$('#questionError').hidden;pick('c1');$('#questionNext').click();
+                        const second=dialog.querySelector('.q-step').textContent;pick('hold');$('#questionNext').click();const answered=await round;
+                        return {open,title,first,needFolder,second,answered,answers:calls.find(c=>c[0]==='/bulk-answers')?.[1].answers,closed:!dialog.open};}
                       finally{api=savedApi;}}""")
-                    assert asked['open'] and '분류 못한 파일이 너무 많아' in asked['title'] and asked['answered'] and asked['closed'], asked
+                    assert asked['open'] and '분류 못한 파일이 많아' in asked['title'] and asked['answered'] and asked['closed'], asked
+                    f=asked['first'];assert f['step']=='1 / 2' and '어디로 옮길까요' in f['ask'] and f['checked']=='skip' and f['hiddenSelect'] and asked['needFolder'] and asked['second']=='2 / 2', asked
+                    assert not any('/' in o for o in f['options']) and len(f['options'])==6, f  # 보기 2 + 다른 폴더·새 폴더·원래 위치·모르겠어요
                     assert asked['answers']==[{'unit':'가상/폴더 A','destination':page.evaluate('S.plan.paths[1]')},{'unit':'가상/폴더 B','hold':True}], asked
                     result['question_round_before_reclassify']=asked
                     # 3차 3번: AI 분류 진행은 개수·묶음·막대·남은 시간을 보여 주고, 앞 작업의 막대가 남지 않는다.

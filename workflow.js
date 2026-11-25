@@ -194,8 +194,15 @@ function attachSuggestions(){const groups=new Map();S.plan.rows.filter(r=>!r.don
   if(atts.length)out.push({main,atts,folder});}
  return out;}
 function needsCheck(r){if(r.done||(!r.destination&&r.holdConfirmed))return false;if(!r.destination)return r.historyReview?'history':r.contractReview?'contract':'hold';if(r.historyReview)return 'history';if(r.folderDateReview)return 'folderDate';if(r.reviewed)return false;if(r.contractReview)return 'contract';if(r.nameReviewRequired)return 'date';if(r.reviewRequired)return 'folder';if(r.unitReview)return 'unit';if(r.attachTo&&!r.canonicalAttachment)return false;if(r.method==='ai'&&(r.confidence??1)<.85)return 'ai';
- const same=S.plan.rows.filter(o=>!o.done&&folderOf(o)===folderOf(r)&&o.destination);if(same.length>=3){const count=new Map();same.forEach(o=>count.set(o.destination,(count.get(o.destination)||0)+1));const top=[...count.entries()].sort((a,b)=>b[1]-a[1])[0];if(top[0]!==r.destination&&top[1]/same.length>=.6)return 'split';}
+ const stat=folderDestinationStats().get(folderOf(r));if(stat&&stat.total>=3&&stat.top!==r.destination&&stat.topCount/stat.total>=.6)return 'split';
  return false;}
+/* 4차 3번(63동 4단계 느림): 파일마다 전체 파일을 다시 훑던 '같은 폴더 목적지' 계산(4,680개면 약 2천만 번)을
+   폴더별로 한 번만 세어 둔다. 같은 동기 실행(한 번 그리기) 안에서만 쓰고, 다음 작업(await) 전에 비운다. */
+let folderStatsCache=null;
+function folderDestinationStats(){if(folderStatsCache&&folderStatsCache.plan===S.plan)return folderStatsCache.map;
+ const counts=new Map();for(const o of S.plan.rows){if(o.done||!o.destination)continue;const f=folderOf(o);let m=counts.get(f);if(!m)counts.set(f,m=new Map());m.set(o.destination,(m.get(o.destination)||0)+1);}
+ const map=new Map();for(const [f,m] of counts){let total=0,top='',topCount=0;for(const [d,n] of m){total+=n;if(n>topCount){top=d;topCount=n;}}map.set(f,{total,top,topCount});}
+ folderStatsCache={plan:S.plan,map};Promise.resolve().then(()=>{folderStatsCache=null;});return map;}
 const checkLabel={history:'이전 협의기록의 이동 이력이 있습니다. 내용을 확인해주세요',folderDate:'자료 폴더의 날짜를 선택해주세요',contract:'계약서의 소속과 계약 종류를 확인해주세요',date:'계약 체결일 확인이 필요합니다. 현재 파일명은 유지합니다.',folder:'폴더 묶음의 보관 위치를 확인해주세요',hold:'목적지를 정하지 못했어요',ai:'AI가 확신하지 못했어요',split:'같은 폴더의 다른 파일들과 다른 곳으로 가요',unit:'같은 폴더의 다른 파일은 보류됐는데 이 파일만 파일 이름으로 정했어요'};
 /* ! 확인은 파일 하나씩이 아니라 묶음으로: 원래 폴더 단위(checkUnit, 서버가 정함) 안에서 확인 이유·제안 목적지가 같은 파일끼리 묶는다.
    같은 폴더라도 목적지가 갈리면 묶음이 나뉘어 흩어지는 경로가 그대로 보인다. */
@@ -374,6 +381,8 @@ window.gongmuBlockedReason=function(){
 /* 폴더 구조: 계약 가지 추가(용역·시공·관급자재). 일반 폴더와 달리 그 종류의 표준 하위 폴더가 함께 생기고,
    이름에 '용역'·'도급공사'·'관급자재'가 들어가 분류 규칙이 계약 가지로 알아본다. 빈 '용역1' 칸이 있으면 그 칸을 쓴다. */
 const CONTRACT_KINDS={service:{label:'용역',pattern:/용역\s*\d*$/,word:'용역'},construction:{label:'시공(도급공사)',pattern:/도급공사/,word:'도급공사'},material:{label:'관급자재(물품)',pattern:/관급자재/,word:'관급자재'}};
+/* 계약 가지를 넣을 수 있는 단계 폴더: 이름에 '단계'가 없어도 기획·설계·시공 단계면 된다(예: '2 기획 및 기본구상'). 공통·인수인계는 아니다. */
+function isStageNode(node){const label=baseName(node?.label||'');return Boolean(node)&&!INBOX_NAMES.includes(node.label)&&!/공통|인수인계/.test(label)&&/단계|기획|설계|시공/.test(label);}
 function contractBranchTemplate(kind){for(const name of ['construction','planning']){const stage=(S.status?.templates?.[name]||[]).find(n=>/시공단계/.test(n.label));const node=stage?.children?.find(n=>CONTRACT_KINDS[kind].pattern.test(baseName(n.label)));if(node)return node;}return null;}
 function contractBranchLabel(kind,name){name=name.trim();const word=CONTRACT_KINDS[kind].word;
  if(kind==='material')return name.includes('관급자재')?name:'관급자재 '+name;
@@ -382,12 +391,12 @@ function contractBranchLabel(kind,name){name=name.trim();const word=CONTRACT_KIN
 const contractAdd=document.createElement('div');contractAdd.id='contractBranchAdd';contractAdd.className='row';contractAdd.style.cssText='gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
 contractAdd.innerHTML='<strong>계약 추가</strong><select id="contractBranchStage" aria-label="계약을 넣을 단계"></select><select id="contractBranchKind" aria-label="계약 종류"><option value="service">용역</option><option value="construction">시공(도급공사)</option><option value="material">관급자재(물품)</option></select><input id="contractBranchName" placeholder="이름 (예: 디자인 감리, 음향컨설팅)" style="min-width:220px"><button id="contractBranchButton">추가</button><small class="muted">종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.</small>';
 $('#addRoot').after(contractAdd);
-function refreshContractStages(){const sel=$('#contractBranchStage');if(!sel)return;const stages=S.tree.map((n,i)=>({n,i})).filter(x=>/단계/.test(x.n.label));const keep=sel.value;
+function refreshContractStages(){const sel=$('#contractBranchStage');if(!sel)return;const stages=S.tree.map((n,i)=>({n,i})).filter(x=>isStageNode(x.n));const keep=sel.value;
  sel.innerHTML=stages.map(x=>'<option value="'+x.i+'">'+esc(x.n.label)+'</option>').join('')||'<option value="">단계 폴더 없음</option>';
  const construction=stages.find(x=>/시공/.test(x.n.label));sel.value=stages.some(x=>String(x.i)===keep)?keep:construction?String(construction.i):(stages[0]?String(stages[0].i):'');}
 const contractAddRender=renderTree;renderTree=function(...args){const r=contractAddRender(...args);refreshContractStages();return r;};
 function addContractBranch(stageIndex,kind,name){
- const stage=S.tree[stageIndex];if(!stage||!/단계/.test(stage.label))throw Error('계약을 넣을 단계 폴더를 골라주세요.');
+ const stage=S.tree[stageIndex];if(!isStageNode(stage))throw Error('계약을 넣을 단계 폴더(기획·설계·시공)를 골라주세요.');
  if(kind!=='construction'&&!name.trim())throw Error((kind==='material'?'품명':'용역 이름')+'을 입력해주세요.');
  if(/[\/:*?"<>|]/.test(name))throw Error('폴더 이름에 \ / : * ? " < > | 는 쓸 수 없습니다.');
  const base=contractBranchTemplate(kind);if(!base)throw Error('계약 종류의 기본 구조를 찾지 못했습니다.');
@@ -435,12 +444,12 @@ const round3Style=document.createElement('style');round3Style.textContent=`
 #projectNameHint{margin:6px 0 0}#projectNameHint.long{color:#a4262c}
 #mapStageChips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}#mapStageChips button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px);border-radius:999px}
 #mapStageChips button.drop-target{background:#e8efff;border-color:#345fe2}
+#mapTargets.pick-mode .map-target{cursor:copy}#mapTargets.pick-mode .map-target:hover{outline:2px dashed #345fe2;outline-offset:1px;background:#eef3ff}
+.map-pick-hint{display:block;margin-top:4px;color:#345fe2;font-weight:bold}
 .map-group-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px 8px;font-size:var(--fs-meta,13px)}.map-group-actions button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px)}
 .map-group[draggable=true]{cursor:grab}
 #folderSuggest{margin:12px 0}#folderSuggest li{margin:6px 0}#folderSuggest .row{gap:6px;margin-top:4px}
-#questionDialog{max-width:760px;width:calc(100vw - 32px)}#questionDialog fieldset{border:1px solid #d8e3f0;border-radius:10px;margin:10px 0;padding:10px 14px}
-#questionDialog legend{font-weight:bold;padding:0 4px}#questionDialog label{display:block;margin:4px 0}#questionDialog .samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere}
-#questionDialog select,#questionDialog input[type=text]{max-width:100%}
+#questionDialog{max-width:640px;width:calc(100vw - 32px)}#questionDialog .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}#questionDialog h2{margin:0}#questionDialog .q-step{font-weight:bold;color:#345fe2;white-space:nowrap}#questionDialog .q-intro{margin:6px 0 12px}#questionDialog .q-card{background:#f5f8fd;border:1px solid #d8e3f0;border-radius:10px;padding:10px 14px}#questionDialog .q-title{font-weight:bold;font-size:16px}#questionDialog .q-from,#questionDialog .q-samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere;margin-top:2px}#questionDialog .q-ask{margin:14px 0 6px;font-size:15px}#questionDialog .q-options{display:grid;gap:6px}#questionDialog .q-option{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;border:1px solid #d8e3f0;border-radius:10px;padding:8px 12px;cursor:pointer;overflow-wrap:anywhere}#questionDialog .q-option.on{border-color:#345fe2;background:#eef3ff}#questionDialog .q-option select{flex:1 1 100%;max-width:100%}#questionDialog .q-new{display:flex;flex:1 1 100%;gap:6px;align-items:center;flex-wrap:wrap}#questionDialog .q-new select{flex:1 1 220px}#questionDialog .q-new input{flex:1 1 160px}#questionDialog .q-option:not(.on) select,#questionDialog .q-option:not(.on) .q-new{display:none}#questionDialog .q-tag{font-size:12px;background:#345fe2;color:#fff;border-radius:999px;padding:1px 8px}#questionDialog .q-why{flex-basis:100%}
 #subFolderDialog label{display:block;margin-top:8px}`;document.body.appendChild(round3Style);
 
 // 1. 사업 이름: 간결하게 정하도록 안내한다(이름을 바꿔도 연결한 실제 사업 폴더 이름은 그대로다).
@@ -458,10 +467,10 @@ subDialog.innerHTML='<h2>하위 폴더 추가</h2><label for="subFolderParent">�
  +'<p class="muted" id="subFolderHelp"></p><p class="error" id="subFolderError" hidden></p><div class="actions"><button id="subFolderNo">취소</button><button class="primary" id="subFolderYes">추가</button></div>';
 document.body.appendChild(subDialog);
 function treeKeyOptions(){const out=[];const walk=(list,key,label)=>list.forEach((n,i)=>{if(INBOX_NAMES.includes(n.label))return;const k=key?key+'.'+i:String(i),l=label?label+' / '+n.label:n.label;out.push([k,l]);walk(n.children||[],k,l);});walk(S.tree,'','');return out;}
-function subFolderSync(){const kind=$('#subFolderKind').value,parent=$('#subFolderParent').value,top=!parent.includes('.')&&/단계/.test(S.tree[Number(parent)]?.label||'');
+function subFolderSync(){const kind=$('#subFolderKind').value,parent=$('#subFolderParent').value,top=!parent.includes('.')&&isStageNode(S.tree[Number(parent)]);
  $('#subFolderName').hidden=$('#subFolderNameLabel').hidden=kind==='construction';
  $('#subFolderName').placeholder=kind==='service'?'예: 디자인 감리, 음향컨설팅':kind==='material'?'예: 미디어월':'예: 내부검토';
- $('#subFolderHelp').textContent=kind==='folder'?'빈 폴더 하나를 만듭니다. 번호는 자동으로 붙습니다.':top?'종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.'+(kind==='construction'?' 이름은 ‘도급공사’로 정해집니다.':''):'계약 폴더는 기획·설계·시공 단계 폴더 바로 아래에만 만들 수 있습니다. 위치를 단계 폴더로 바꿔주세요.';}
+ $('#subFolderHelp').textContent=kind==='folder'?'빈 폴더 하나를 만듭니다. 번호는 자동으로 붙습니다.':top?'종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.'+(kind==='construction'?' 이름은 ‘도급공사’로 정해집니다.':''):(kind==='folder'?'':'계약 폴더는 기획·설계·시공 단계 폴더 바로 아래에만 만들 수 있습니다. 위치를 단계 폴더로 바꿔주세요.');}
 function openSubFolder(key){const options=treeKeyOptions();$('#subFolderParent').innerHTML=options.map(([k,l])=>'<option value="'+k+'">'+esc(l)+'</option>').join('');
  const fallback=S.tree.findIndex(n=>/시공단계/.test(n.label));$('#subFolderParent').value=key??S.mmSelected??String(fallback>=0?fallback:S.mmRoot??0);
  $('#subFolderKind').value='folder';$('#subFolderName').value='';$('#subFolderError').hidden=true;subFolderSync();subDialog.showModal?.();$('#subFolderName').focus?.();}
@@ -523,29 +532,41 @@ function renderFolderSuggest(){if(!S.plan){suggestBox.hidden=true;return;}const 
 function applyFolderResult(result){if(result.tree&&S.project)S.project.tree=result.tree;if(result.paths)S.plan.paths=result.paths;if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;
  for(const u of result.rows||[])Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);}
 
-const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();renderFolderSuggest();}catch(e){console.error(e);}}return r;};
+function renderPickHint(){const file=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done),pane=$('#mapTargets');pane?.classList?.toggle('pick-mode',Boolean(file));
+ const caption=$('#mapCaption');if(file&&caption?.insertAdjacentHTML&&!caption.querySelector?.('.map-pick-hint'))caption.insertAdjacentHTML('beforeend','<span class="map-pick-hint">오른쪽 새 폴더 구조에서 폴더를 누르면 그 폴더로 화살표가 바로 연결됩니다. 체크한 파일이 있으면 함께 옮깁니다.</span>');}
+const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();renderFolderSuggest();renderPickHint();}catch(e){console.error(e);}}return r;};
 
 // 10. 분류 못한 파일이 많으면 보류가 가장 많은 폴더 3곳을 묻고, 답을 반영해 AI 분류를 다시 돌린다(자동 2회까지). 'AI 다시 분류'는 질문 1회 후 분류.
 const questionDialog=document.createElement('dialog');questionDialog.id='questionDialog';document.body.appendChild(questionDialog);
-function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.paths||[];
- const pathOptions='<option value="">폴더 고르기…</option>'+paths.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
- questionDialog.innerHTML='<h2>분류 못한 파일이 너무 많아 몇 가지 확인하겠습니다</h2><p class="muted">보류 '+q.held+'개 / 확인 대상 '+q.pending+'개'+(round?' · '+round+'회차':'')+'. 답한 폴더의 파일은 고른 곳으로 정하고, 답을 참고해 나머지를 AI가 다시 분류합니다.</p>'
-  +q.questions.map((item,i)=>'<fieldset><legend>'+(i+1)+'. '+esc(item.question)+'</legend><div class="samples">‘'+esc(item.unit)+'’ · 파일 '+item.count+'개 · 예: '+esc(item.samples.slice(0,4).join(', '))+'</div>'
-   +item.choices.map((c,k)=>'<label><input type="radio" name="q'+i+'" value="c'+k+'"> '+esc(c.split('/').slice(-2).join(' › '))+' <small class="muted">'+esc(c)+'</small></label>').join('')
-   +'<label><input type="radio" name="q'+i+'" value="other"> 다른 폴더: <select data-q-other="'+i+'">'+pathOptions+'</select></label>'
-   +'<label><input type="radio" name="q'+i+'" value="new"> 새 폴더 만들기: <select data-q-parent="'+i+'">'+pathOptions+'</select> 아래 <input type="text" data-q-name="'+i+'" placeholder="예: 내부검토" size="12"></label>'
-   +'<label><input type="radio" name="q'+i+'" value="hold"> 원래 위치에 두기(보류)</label><label><input type="radio" name="q'+i+'" value="skip" checked> 잘 모르겠어요(건너뛰기)</label></fieldset>').join('')
-  +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionSkip">건너뛰기</button><button class="primary" id="questionYes">답하고 다시 분류</button></div>';
- const pick=i=>questionDialog.querySelector?.('input[name="q'+i+'"]:checked')?.value||'skip';
- $$('[data-q-other],[data-q-parent],[data-q-name]').forEach(el=>el.onfocus=el.oninput=el.onchange=()=>{const i=el.dataset.qOther??el.dataset.qParent??el.dataset.qName,radio=questionDialog.querySelector?.('input[name="q'+i+'"][value="'+(el.dataset.qOther!==undefined?'other':'new')+'"]');if(radio)radio.checked=true;});
- const done=value=>{questionDialog.close();resolve(value);};
- $('#questionSkip').onclick=()=>done(null);questionDialog.oncancel=e=>{e.preventDefault?.();done(null);};
- $('#questionYes').onclick=()=>{const answers=[];for(const [i,item] of q.questions.entries()){const v=pick(i),a={unit:item.unit};
-   if(v.startsWith('c'))a.destination=item.choices[Number(v.slice(1))];else if(v==='other'){a.destination=$('[data-q-other="'+i+'"]').value;if(!a.destination){$('#questionError').textContent=(i+1)+'번: 폴더를 골라주세요.';$('#questionError').hidden=false;return;}}
-   else if(v==='new'){const parent=$('[data-q-parent="'+i+'"]').value,name=($('[data-q-name="'+i+'"]').value||'').trim();if(!parent||!name){$('#questionError').textContent=(i+1)+'번: 새 폴더의 위치와 이름을 정해주세요.';$('#questionError').hidden=false;return;}a.newFolder={parent,name};}
-   else if(v==='hold')a.hold=true;else a.skip=true;answers.push(a);}
-  done(answers);};
- questionDialog.showModal?.();});}
+/* 4차 2번: 질문 창을 한 번에 하나씩, 고를 수 있는 것이 분명하게 보이도록 바꿨다.
+   - 질문은 늘 같은 형식: 'OO 폴더(파일 n개)를 어디로 옮길까요?' (AI가 만든 자유 질문은 보기와 맞지 않아 쓰지 않는다)
+   - 보기는 폴더 경로를 번호 없이 한 번만 보여 준다. 다른 폴더·새 폴더는 펼쳐서 고른다. 기본값은 '잘 모르겠어요'. */
+function crumb(path){return String(path||'').split('/').map(x=>x.replace(/^\d+(?:[-.]\d+)*[.)]?\s*/,'')||x).join(' › ');}
+function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.paths||[],items=q.questions,answers=items.map(()=>({pick:'skip'}));let at=0;
+ const pathOptions=selected=>'<option value="">폴더 고르기…</option>'+paths.map(p=>'<option value="'+esc(p)+'"'+(p===selected?' selected':'')+'>'+esc(crumb(p))+'</option>').join('');
+ const draw=()=>{const item=items[at],a=answers[at],last=at===items.length-1,folder=String(item.unit).split('/').pop();
+  const option=(value,label,extra='')=>'<label class="q-option'+(a.pick===value?' on':'')+'"><input type="radio" name="qpick" value="'+value+'"'+(a.pick===value?' checked':'')+'> <span>'+label+'</span>'+extra+'</label>';
+  questionDialog.innerHTML='<div class="q-head"><h2>분류 못한 파일이 많아 몇 가지 여쭤볼게요</h2><span class="q-step">'+(at+1)+' / '+items.length+'</span></div>'
+   +'<p class="muted q-intro">폴더마다 <b>옮길 곳 하나</b>를 골라 주세요. 그 폴더의 파일이 하위 폴더째 옮겨지고, 답을 참고해 나머지 보류 파일('+q.held+'개)을 AI가 다시 분류합니다. 모르면 ‘잘 모르겠어요’를 두면 됩니다.</p>'
+   +'<div class="q-card"><div class="q-title">‘'+esc(folder)+'’ 폴더 <span class="muted">· 파일 '+item.count+'개</span></div><div class="q-from">원래 위치: '+esc(crumb(item.unit))+'</div>'
+   +'<div class="q-samples">예: '+esc(item.samples.slice(0,3).join(', '))+(item.count>3?' 등':'')+'</div></div>'
+   +'<h3 class="q-ask">이 폴더를 어디로 옮길까요?</h3><div class="q-options">'
+   +item.choices.map((c,k)=>option('c'+k,'<b>'+esc(crumb(c))+'</b>'+(k===0?' <span class="q-tag">추천</span>':'')+(k===0&&item.reason?'<small class="muted q-why">'+esc(item.reason)+'</small>':''))).join('')
+   +option('other','목록에 없는 다른 폴더','<select data-q-other>'+pathOptions(a.destination)+'</select>')
+   +option('new','새 폴더를 만들어 넣기','<span class="q-new"><select data-q-parent>'+pathOptions(a.parent)+'</select><span>아래에</span><input type="text" data-q-name placeholder="새 폴더 이름 (예: 내부검토)" value="'+esc(a.name||'')+'"></span>')
+   +option('hold','옮기지 않고 원래 위치에 두기')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
+   +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionStop">그만 묻기</button>'+(at?'<button id="questionPrev">이전</button>':'')
+   +'<button class="primary" id="questionNext">'+(last?'답하고 다시 분류':'다음 질문')+'</button></div>';
+  $$('input[name="qpick"]').forEach(r=>r.onchange=()=>{save();a.pick=r.value;draw();});
+  $$('[data-q-other],[data-q-parent],[data-q-name]').forEach(el=>el.onfocus=()=>{const want=el.dataset.qOther!==undefined?'other':'new';if(a.pick!==want){save();a.pick=want;draw();({other:$('[data-q-other]'),new:$('[data-q-parent]')})[want]?.focus?.();}});
+  $('#questionStop').onclick=()=>done(null);if($('#questionPrev'))$('#questionPrev').onclick=()=>{save();at--;draw();};
+  $('#questionNext').onclick=()=>{save();const bad=check(a);if(bad){$('#questionError').textContent=bad;$('#questionError').hidden=false;return;}if(!last){at++;draw();return;}done(answers.map((x,i)=>toAnswer(items[i],x)));};};
+ const save=()=>{const a=answers[at],other=$('[data-q-other]'),parent=$('[data-q-parent]'),name=$('[data-q-name]');if(other)a.destination=other.value;if(parent)a.parent=parent.value;if(name)a.name=(name.value||'').trim();};
+ const check=a=>a.pick==='other'&&!a.destination?'옮길 폴더를 골라 주세요.':a.pick==='new'&&(!a.parent||!a.name)?'새 폴더를 만들 위치와 이름을 정해 주세요.':a.pick==='new'&&/[\\/:*?"<>|]/.test(a.name)?'폴더 이름에 \\ / : * ? " < > | 는 쓸 수 없습니다.':'';
+ const toAnswer=(item,a)=>a.pick.startsWith('c')?{unit:item.unit,destination:item.choices[Number(a.pick.slice(1))]}:a.pick==='other'?{unit:item.unit,destination:a.destination}
+  :a.pick==='new'?{unit:item.unit,newFolder:{parent:a.parent,name:a.name}}:a.pick==='hold'?{unit:item.unit,hold:true}:{unit:item.unit,skip:true};
+ const done=value=>{questionDialog.close();resolve(value);};questionDialog.oncancel=e=>{e.preventDefault?.();done(null);};
+ draw();questionDialog.showModal?.();});}
 async function answerQuestions(answers){const result=await api('/bulk-answers',{plan:S.plan.id,answers});applyFolderResult(result);S.plan.askedUnits=result.askedUnits;S.selected.clear();renderReview(true);return result;}
 async function questionRound(round,{always=false}={}){const q=await api('/bulk-questions',{plan:S.plan.id});if(!q.questions.length||(!always&&!q.many))return false;
  const answers=await askQuestions(q,round);if(!answers)return false;await answerQuestions(answers);return answers.some(a=>!a.skip);}
