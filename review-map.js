@@ -64,7 +64,7 @@ $('#scanWholeProject').onclick=async()=>{if(!await ask('사업 전체 폴더에�
 $('#scanInboxOnly').onclick=()=>refreshScope(true);
 const cancelBulk=document.createElement('button');cancelBulk.id='cancelBulk';cancelBulk.textContent='일괄 분류 중단';cancelBulk.hidden=true;
 $('#busyText').after(cancelBulk);
-cancelBulk.onclick=async()=>{if(!MapReview.job)return;try{await api('/bulk-cancel',{id:MapReview.job});cancelBulk.disabled=true;cancelBulk.textContent='현재 요청 완료 후 중단합니다';}catch(error){$('#busyText').textContent=error.message;}};
+cancelBulk.onclick=async()=>{if(!MapReview.job)return;try{await api('/bulk-cancel',{id:MapReview.job});cancelBulk.disabled=true;cancelBulk.textContent='중단 요청을 보냈습니다';}catch(error){$('#busyText').textContent=error.message;}};
 function mapGroups(){const groups=new Map();for(const row of S.plan.rows){const parent=parentFolder(row);if(!groups.has(parent))groups.set(parent,[]);groups.get(parent).push(row);}return groups;}
 function mapFocusFile(id,inspect=false){const row=S.plan.rows.find(r=>r.id===id);if(!row)return;MapReview.file=id;MapReview.group=parentFolder(row);MapReview.inspection=inspect?id:null;MapReview.retargeting=inspect&&!row.destination&&!row.done;if(row.destination){const parts=row.destination.split('/');for(let i=1;i<parts.length;i++)MapReview.collapsed.delete(parts.slice(0,i).join('/'));}renderReview(true);}
 function mapNeedsCheck(row){return !row.done&&typeof needsCheck==='function'&&Boolean(needsCheck(row));}

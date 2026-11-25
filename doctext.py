@@ -127,7 +127,8 @@ def extract(path):
     if suffix == '.pptx':
         return clean(zip_text(path, [r'ppt/slides/slide\d+\.xml'], {'t'}))
     if suffix in ('.txt', '.csv', '.md'):
-        raw = path.read_bytes()[:16000]
+        with path.open('rb') as stream:
+            raw = stream.read(16000)
         for encoding in ('utf-8', 'cp949'):
             try:
                 return clean(raw.decode(encoding))
