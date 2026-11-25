@@ -374,6 +374,8 @@ window.gongmuBlockedReason=function(){
 /* 폴더 구조: 계약 가지 추가(용역·시공·관급자재). 일반 폴더와 달리 그 종류의 표준 하위 폴더가 함께 생기고,
    이름에 '용역'·'도급공사'·'관급자재'가 들어가 분류 규칙이 계약 가지로 알아본다. 빈 '용역1' 칸이 있으면 그 칸을 쓴다. */
 const CONTRACT_KINDS={service:{label:'용역',pattern:/용역\s*\d*$/,word:'용역'},construction:{label:'시공(도급공사)',pattern:/도급공사/,word:'도급공사'},material:{label:'관급자재(물품)',pattern:/관급자재/,word:'관급자재'}};
+/* 계약 가지를 넣을 수 있는 단계 폴더: 이름에 '단계'가 없어도 기획·설계·시공 단계면 된다(예: '2 기획 및 기본구상'). 공통·인수인계는 아니다. */
+function isStageNode(node){const label=baseName(node?.label||'');return Boolean(node)&&!INBOX_NAMES.includes(node.label)&&!/공통|인수인계/.test(label)&&/단계|기획|설계|시공/.test(label);}
 function contractBranchTemplate(kind){for(const name of ['construction','planning']){const stage=(S.status?.templates?.[name]||[]).find(n=>/시공단계/.test(n.label));const node=stage?.children?.find(n=>CONTRACT_KINDS[kind].pattern.test(baseName(n.label)));if(node)return node;}return null;}
 function contractBranchLabel(kind,name){name=name.trim();const word=CONTRACT_KINDS[kind].word;
  if(kind==='material')return name.includes('관급자재')?name:'관급자재 '+name;
@@ -382,12 +384,12 @@ function contractBranchLabel(kind,name){name=name.trim();const word=CONTRACT_KIN
 const contractAdd=document.createElement('div');contractAdd.id='contractBranchAdd';contractAdd.className='row';contractAdd.style.cssText='gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
 contractAdd.innerHTML='<strong>계약 추가</strong><select id="contractBranchStage" aria-label="계약을 넣을 단계"></select><select id="contractBranchKind" aria-label="계약 종류"><option value="service">용역</option><option value="construction">시공(도급공사)</option><option value="material">관급자재(물품)</option></select><input id="contractBranchName" placeholder="이름 (예: 디자인 감리, 음향컨설팅)" style="min-width:220px"><button id="contractBranchButton">추가</button><small class="muted">종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.</small>';
 $('#addRoot').after(contractAdd);
-function refreshContractStages(){const sel=$('#contractBranchStage');if(!sel)return;const stages=S.tree.map((n,i)=>({n,i})).filter(x=>/단계/.test(x.n.label));const keep=sel.value;
+function refreshContractStages(){const sel=$('#contractBranchStage');if(!sel)return;const stages=S.tree.map((n,i)=>({n,i})).filter(x=>isStageNode(x.n));const keep=sel.value;
  sel.innerHTML=stages.map(x=>'<option value="'+x.i+'">'+esc(x.n.label)+'</option>').join('')||'<option value="">단계 폴더 없음</option>';
  const construction=stages.find(x=>/시공/.test(x.n.label));sel.value=stages.some(x=>String(x.i)===keep)?keep:construction?String(construction.i):(stages[0]?String(stages[0].i):'');}
 const contractAddRender=renderTree;renderTree=function(...args){const r=contractAddRender(...args);refreshContractStages();return r;};
 function addContractBranch(stageIndex,kind,name){
- const stage=S.tree[stageIndex];if(!stage||!/단계/.test(stage.label))throw Error('계약을 넣을 단계 폴더를 골라주세요.');
+ const stage=S.tree[stageIndex];if(!isStageNode(stage))throw Error('계약을 넣을 단계 폴더(기획·설계·시공)를 골라주세요.');
  if(kind!=='construction'&&!name.trim())throw Error((kind==='material'?'품명':'용역 이름')+'을 입력해주세요.');
  if(/[\/:*?"<>|]/.test(name))throw Error('폴더 이름에 \ / : * ? " < > | 는 쓸 수 없습니다.');
  const base=contractBranchTemplate(kind);if(!base)throw Error('계약 종류의 기본 구조를 찾지 못했습니다.');
@@ -458,10 +460,10 @@ subDialog.innerHTML='<h2>하위 폴더 추가</h2><label for="subFolderParent">�
  +'<p class="muted" id="subFolderHelp"></p><p class="error" id="subFolderError" hidden></p><div class="actions"><button id="subFolderNo">취소</button><button class="primary" id="subFolderYes">추가</button></div>';
 document.body.appendChild(subDialog);
 function treeKeyOptions(){const out=[];const walk=(list,key,label)=>list.forEach((n,i)=>{if(INBOX_NAMES.includes(n.label))return;const k=key?key+'.'+i:String(i),l=label?label+' / '+n.label:n.label;out.push([k,l]);walk(n.children||[],k,l);});walk(S.tree,'','');return out;}
-function subFolderSync(){const kind=$('#subFolderKind').value,parent=$('#subFolderParent').value,top=!parent.includes('.')&&/단계/.test(S.tree[Number(parent)]?.label||'');
+function subFolderSync(){const kind=$('#subFolderKind').value,parent=$('#subFolderParent').value,top=!parent.includes('.')&&isStageNode(S.tree[Number(parent)]);
  $('#subFolderName').hidden=$('#subFolderNameLabel').hidden=kind==='construction';
  $('#subFolderName').placeholder=kind==='service'?'예: 디자인 감리, 음향컨설팅':kind==='material'?'예: 미디어월':'예: 내부검토';
- $('#subFolderHelp').textContent=kind==='folder'?'빈 폴더 하나를 만듭니다. 번호는 자동으로 붙습니다.':top?'종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.'+(kind==='construction'?' 이름은 ‘도급공사’로 정해집니다.':''):'계약 폴더는 기획·설계·시공 단계 폴더 바로 아래에만 만들 수 있습니다. 위치를 단계 폴더로 바꿔주세요.';}
+ $('#subFolderHelp').textContent=kind==='folder'?'빈 폴더 하나를 만듭니다. 번호는 자동으로 붙습니다.':top?'종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.'+(kind==='construction'?' 이름은 ‘도급공사’로 정해집니다.':''):(kind==='folder'?'':'계약 폴더는 기획·설계·시공 단계 폴더 바로 아래에만 만들 수 있습니다. 위치를 단계 폴더로 바꿔주세요.');}
 function openSubFolder(key){const options=treeKeyOptions();$('#subFolderParent').innerHTML=options.map(([k,l])=>'<option value="'+k+'">'+esc(l)+'</option>').join('');
  const fallback=S.tree.findIndex(n=>/시공단계/.test(n.label));$('#subFolderParent').value=key??S.mmSelected??String(fallback>=0?fallback:S.mmRoot??0);
  $('#subFolderKind').value='folder';$('#subFolderName').value='';$('#subFolderError').hidden=true;subFolderSync();subDialog.showModal?.();$('#subFolderName').focus?.();}

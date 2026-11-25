@@ -192,9 +192,13 @@ def main():
                       const service=S.tree[stage].children.at(-1);openSubFolder(String(stage)+'.0');$('#subFolderKind').value='construction';$('#subFolderKind').onchange();$('#subFolderYes').click();
                       const blocked=!$('#subFolderError').hidden;$('#subFolderKind').value='folder';$('#subFolderKind').onchange();$('#subFolderName').value='내부검토';$('#subFolderYes').click();
                       const plain=S.tree[stage].children[0].children.at(-1);
-                      return {open,service:service.label,kind:service.contractKind,kids:(service.children||[]).length,blocked,plain:plain.label,button:!!$('#addSubFolder'),hint:$('#projectNameHint')?.textContent||''};}
+                      // 4차 1번: '단계'라는 말이 없는 기획 단계 폴더(2 기획 및 기본구상)에도 용역 계약을 만든다.
+                      S.tree.push({label:'9 기획 및 기본구상',children:[{label:'1 사업계획',children:[]}]});const plan=S.tree.length-1;openSubFolder(String(plan));$('#subFolderKind').value='service';$('#subFolderKind').onchange();
+                      const planHelp=$('#subFolderHelp').textContent;$('#subFolderName').value='기획설계 용역';$('#subFolderYes').click();const planning=S.tree[plan].children.at(-1);
+                      return {open,service:service.label,kind:service.contractKind,kids:(service.children||[]).length,blocked,plain:plain.label,planning:planning.label,planningKind:planning.contractKind,planHelp,planError:!$('#subFolderError').hidden,button:!!$('#addSubFolder'),hint:$('#projectNameHint')?.textContent||''};}
                       finally{S.tree=saved;renderTree();}}""")
                     assert sub['open'] and sub['service'].endswith('가상 감리 용역') and sub['kind']=='service' and sub['kids']>3 and sub['blocked'] and sub['plain'].endswith('내부검토') and sub['button'], sub
+                    assert sub['planning'].endswith('기획설계 용역') and sub['planningKind']=='service' and not sub['planError'] and '단계 폴더로 바꿔' not in sub['planHelp'], sub
                     assert '간결하게 정해주세요' in sub['hint'], sub
                     result['subfolder_add_and_name_hint']=sub
                     # 2단계 간소화: 계약 목록(빼기·되살리기)과 폴더 미리보기, 3단계에서 계약마다 폴더 생성(화면 상태만 보고 원래대로 돌린다).
