@@ -1624,8 +1624,13 @@ def round_key(label,ancestors=()):
 
 
 def service_word(label):
+    """'32 기술지도 용역' -> '기술지도'. '석면'은 용역 이름이 아니라 업무 주제로도 흔히 쓰이므로
+    (예: '6. 석면관련', '석면 대응') 용역·공사·해체·제거·감리가 함께 있을 때만 계약 이름으로 본다."""
     value=semantic_label(label)
-    return next((w for w in SERVICE_WORDS if w in value),'')
+    word=next((w for w in SERVICE_WORDS if w in value),'')
+    if word=='석면' and not re.search(r'용역|공사|해체|제거|감리',value):
+        return ''
+    return word
 
 
 def same_role(source,target):

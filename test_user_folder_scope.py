@@ -96,6 +96,18 @@ class UserFolderScope(unittest.TestCase):
         self.assertEqual(app.label_word('03 착공계'), '착공계')
         self.assertEqual(app.semantic_label('12. 설계변경'), '설계변경')
 
+    def test_asbestos_topic_folder_is_not_a_service(self):
+        self.assertEqual(app.service_word('6. 석면관련'), '')
+        self.assertEqual(app.service_word('석면 대응'), '')
+        self.assertEqual(app.service_word('7 석면 해체 제거 용역'), '석면')
+        self.assertEqual(app.service_word('2 기술지도 용역'), '기술지도')
+        relative = '6. 석면관련/2. 고용노동부 관계서류/제출 공문.pdf'
+        path = self.root / relative; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'SYNTHETIC asbestos')
+        plan = app.make_plan(self.project['id'], False)
+        row = next(r for r in plan['rows'] if r['relative'] == relative)
+        self.assertNotIn('용역', row['reason'])
+        self.assertFalse(row['destination'].startswith('4 시공단계/'), row['destination'])
+
     def test_contract_search_finds_cause_documents_and_skips_conditions_and_requests(self):
         found = {c['relative'] for c in app.contract_candidates({'selection': 'scope'})['candidates']}
         for relative in list(FILES)[:6]:
