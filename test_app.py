@@ -309,7 +309,7 @@ class FileOperations(unittest.TestCase):
         self.assertEqual(app.bulk_info(restored['id'])['count'], 0)
         self.assertEqual(app.bulk_info(restored['id'], True)['count'], 52)
 
-    def test_bulk_rejects_invalid_whole_batch_without_partial_apply(self):
+    def test_bulk_holds_only_the_file_answered_outside_the_tree(self):
         self.write_file('문서A.txt')
         self.write_file('문서B.txt')
         plan = self.plan()
@@ -319,8 +319,11 @@ class FileOperations(unittest.TestCase):
             {'file_id': rows[1]['id'], 'destination_id': '../outside', 'reason': '근거', 'confidence': .9}]}
         with patch.object(app, 'gateway', return_value=answer):
             job = self.run_bulk_sync(plan)
-        self.assertEqual(job['status'], 'failed')
-        self.assertTrue(all(not row['destination'] for row in rows))
+        # 3차 5번: 구조 밖 폴더를 답한 파일만 보류, 같은 묶음의 다른 파일 답은 적용한다.
+        self.assertEqual(job['status'], 'done')
+        self.assertEqual(rows[0]['destination'], plan['paths'][1])
+        self.assertEqual((rows[1]['destination'], rows[1]['method']), ('', 'hold'))
+        self.assertIn('구조에 없는', rows[1]['reason'])
 
     def test_bulk_low_confidence_held(self):
         self.write_file('문서A.txt')

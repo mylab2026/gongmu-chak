@@ -137,7 +137,7 @@ class BulkThroughput(unittest.TestCase):
         self.assertTrue(all(r.get('aiChecked') for r in plan['rows']))
 
     def test_invalid_ids_destinations_and_confidence_never_partially_apply(self):
-        for kind in ('duplicate', 'unknown', 'outside', 'array_id', 'array_destination', 'bool_confidence'):
+        for kind in ('duplicate', 'unknown', 'array_id', 'bool_confidence'):
             with self.subTest(kind=kind):
                 app.store_project(self.project)
                 plan = self.plan(8)
@@ -145,14 +145,28 @@ class BulkThroughput(unittest.TestCase):
                     result = self.answer(messages, **kwargs); rows = result['assignments']
                     if kind == 'duplicate': rows[-1]['file_id'] = rows[0]['file_id']
                     elif kind == 'unknown': rows[-1]['file_id'] = 'unknown'
-                    elif kind == 'outside': rows[-1]['destination_id'] = '../outside'
                     elif kind == 'array_id': rows[-1]['file_id'] = []
-                    elif kind == 'array_destination': rows[-1]['destination_id'] = []
                     else: rows[-1]['confidence'] = True
                     return result
                 job = self.run_job(plan, invalid)
                 self.assertEqual(job['status'], 'failed', job)
                 self.assertFalse(any(r.get('aiChecked') or r['destination'] for r in plan['rows']))
+
+    def test_outside_destination_holds_only_that_file(self):
+        # 3차 5번: 구조 밖·형식이 틀린 목적지는 그 파일만 보류하고 나머지는 적용한다.
+        for kind in ('outside', 'array_destination'):
+            with self.subTest(kind=kind):
+                app.store_project(self.project)
+                plan = self.plan(8)
+                def outside(messages, **kwargs):
+                    result = self.answer(messages, **kwargs)
+                    result['assignments'][-1]['destination_id'] = '../outside' if kind == 'outside' else []
+                    return result
+                job = self.run_job(plan, outside)
+                self.assertEqual(job['status'], 'done', job)
+                held = [r for r in plan['rows'] if not r['destination']]
+                self.assertEqual(len(held), 1)
+                self.assertTrue(all(r.get('aiChecked') for r in plan['rows']))
 
     def test_missing_smallest_batch_stays_unverified(self):
         plan = self.plan(8)

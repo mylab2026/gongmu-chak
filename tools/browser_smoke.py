@@ -187,6 +187,16 @@ def main():
                     assert added['s'].endswith('디자인 감리 용역') and added['sKids']>3 and '관급자재 미디어월' in added['m'] and added['mKids']>0, added
                     assert added['c'].endswith('도급공사') and added['kinds']==['service','material','construction'] and added['bad'] and added['form'], added
                     result['contract_branch_add']=added
+                    sub=page.evaluate("""()=>{const saved=structuredClone(S.tree);try{const stage=S.tree.findIndex(n=>/시공단계/.test(n.label));
+                      openSubFolder(String(stage));const open=$('#subFolderDialog').open;$('#subFolderKind').value='service';$('#subFolderKind').onchange();$('#subFolderName').value='가상 감리';$('#subFolderYes').click();
+                      const service=S.tree[stage].children.at(-1);openSubFolder(String(stage)+'.0');$('#subFolderKind').value='construction';$('#subFolderKind').onchange();$('#subFolderYes').click();
+                      const blocked=!$('#subFolderError').hidden;$('#subFolderKind').value='folder';$('#subFolderKind').onchange();$('#subFolderName').value='내부검토';$('#subFolderYes').click();
+                      const plain=S.tree[stage].children[0].children.at(-1);
+                      return {open,service:service.label,kind:service.contractKind,kids:(service.children||[]).length,blocked,plain:plain.label,button:!!$('#addSubFolder'),hint:$('#projectNameHint')?.textContent||''};}
+                      finally{S.tree=saved;renderTree();}}""")
+                    assert sub['open'] and sub['service'].endswith('가상 감리 용역') and sub['kind']=='service' and sub['kids']>3 and sub['blocked'] and sub['plain'].endswith('내부검토') and sub['button'], sub
+                    assert '간결하게 정해주세요' in sub['hint'], sub
+                    result['subfolder_add_and_name_hint']=sub
                     # 2단계 간소화: 계약 목록(빼기·되살리기)과 폴더 미리보기, 3단계에서 계약마다 폴더 생성(화면 상태만 보고 원래대로 돌린다).
                     listed=page.evaluate("""()=>{const savedSlots=ContractInput.slots,savedContracts=S.contracts,savedTree=S.tree,savedType=S.type;
                       const mk=(id,title,party,kind)=>({id,name:id+'.pdf',supersededIds:[],analysis:{title,party,kind,signed_date:'2026-01-02'}});
@@ -247,14 +257,58 @@ def main():
                     assert page.locator('#doubtToggle').count()==0
                     assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
-                    assert page.locator('#checkPanel').inner_text().find('아래 화살표와 !를 보고 경로를 확정해주세요')>=0
-                    expect(page.locator('#checkPanel')).to_contain_text('경로 확인 0 / ')
+                    # 3차 4번: '경로 확인' 칸과 '확인할 묶음' 표는 보이지 않고, 숫자 칸과 화살표 연결도에서 처리한다.
+                    expect(page.locator('#checkPanel')).to_be_hidden();expect(page.locator('#checkGroupsBox')).to_be_hidden()
+                    expect(page.locator('#lead-reviewStep')).to_contain_text('아래 화살표에서 목적지를 확인')
                     expect(page.locator('#lead-reviewStep')).to_contain_text('지금 할 일')
                     expect(page.locator('#sideSteps .side-step.now')).to_contain_text('파일 이동');expect(page.locator('#sideProject')).not_to_have_text('선택 안 함')
                     assert page.locator('#stepStats .stat').count()==4
                     result['theme_side_menu_and_stats']=True
                     assert page.locator('#mapSources .map-group [data-short]').count()>=1 or not page.evaluate("$$('#mapSources .map-group').some(b=>b.textContent.includes('/'))")
                     result['check_progress_and_short_paths']=True
+                    # 3차 7·9번: 단계 바로가기, 끌기 중 자동 스크롤, 폴더째 끌어 옮기기(하위 폴더 포함, 원래 폴더 이름 유지)
+                    mapped=page.evaluate("""async()=>{const pane=$('#mapTargets');pane.scrollTop=pane.scrollHeight;const before=pane.scrollTop,r=pane.getBoundingClientRect();
+                      for(let i=0;i<5;i++)mapEdgeScroll(r.left+20,r.top+5);const scrolled=before-pane.scrollTop;
+                      const chips=$$('[data-map-stage]').map(b=>b.textContent);const groups=$$('[data-map-group]').every(b=>b.draggable);
+                      const name=[...mapGroups().keys()].find(n=>n!=='최상위 파일'&&S.plan.rows.some(r=>r.relative.startsWith(n+'/')));
+                      const savedAsk=ask,savedMany=changeManyRoutes;let call=null;ask=async()=>true;changeManyRoutes=async(ids,dest,keep)=>{call={ids:ids.length,dest,keep};};
+                      try{await moveFolder(name,S.plan.paths[0]);}finally{ask=savedAsk;changeManyRoutes=savedMany;}
+                      return {scrolled,chips,groups,name,call,expected:folderRows(name).length};}""")
+                    assert mapped['scrolled']>0 and len(mapped['chips'])>=3 and mapped['groups'], mapped
+                    assert mapped['call'] and mapped['call']['keep']==mapped['name'] and mapped['call']['ids']==mapped['expected']>0, mapped
+                    result['map_scroll_chips_folder_drag']=mapped
+                    # 3차 6번: 새 폴더 제안 카드(규칙·AI 제안). 만들기는 서버 검사(test_round3)에서 확인한다.
+                    suggested=page.evaluate("""()=>{const row=S.plan.rows.find(r=>!r.done&&r.method!=='manual');const parent=S.plan.paths[0];row.folderSuggestion={parent,name:'내부검토',reason:'가상 근거'};
+                      try{renderReview();const box=$('#folderSuggest');return {shown:!box.hidden,text:box.innerText,make:!!document.querySelector('[data-suggest-make]')};}
+                      finally{delete row.folderSuggestion;renderReview();}}""")
+                    assert suggested['shown'] and '내부검토' in suggested['text'] and suggested['make'], suggested
+                    assert page.locator('#folderSuggest').is_hidden()
+                    result['folder_suggestion_card']=suggested
+                    # 3차 10번: 보류가 많으면 질문 3개 → 답 반영 → 보류 다시 분류. 'AI 다시 분류'도 질문부터.
+                    asked=page.evaluate("""async()=>{const savedApi=api,calls=[];const paths=S.plan.paths;
+                      api=async(path,body)=>{calls.push([path,structuredClone(body)]);
+                        if(path==='/bulk-questions')return {many:true,held:300,pending:900,questions:[{unit:'가상/폴더 A',count:200,samples:['a.pdf','b.pdf'],choices:[paths[0],paths[1]],question:'폴더 A는 어디에 둘까요?'},{unit:'가상/폴더 B',count:80,samples:['c.pdf'],choices:[paths[0]],question:'폴더 B는 어디에 둘까요?'}]};
+                        if(path==='/bulk-answers')return {rows:[],paths,tree:S.project.tree,askedUnits:['가상/폴더 A','가상/폴더 B']};
+                        if(path==='/bulk-info')return {count:0,batches:0};return savedApi(path,body);};
+                      try{const round=questionRound(1);await new Promise(r=>setTimeout(r,50));const dialog=$('#questionDialog');const open=dialog.open,title=dialog.querySelector('h2').textContent;
+                        dialog.querySelector('input[name="q0"][value="c1"]').checked=true;dialog.querySelector('input[name="q1"][value="hold"]').checked=true;$('#questionYes').click();const answered=await round;
+                        return {open,title,answered,answers:calls.find(c=>c[0]==='/bulk-answers')?.[1].answers,closed:!dialog.open};}
+                      finally{api=savedApi;}}""")
+                    assert asked['open'] and '분류 못한 파일이 너무 많아' in asked['title'] and asked['answered'] and asked['closed'], asked
+                    assert asked['answers']==[{'unit':'가상/폴더 A','destination':page.evaluate('S.plan.paths[1]')},{'unit':'가상/폴더 B','hold':True}], asked
+                    result['question_round_before_reclassify']=asked
+                    # 3차 3번: AI 분류 진행은 개수·묶음·막대·남은 시간을 보여 주고, 앞 작업의 막대가 남지 않는다.
+                    progress=page.evaluate("""async()=>{const savedApi=api;let n=0,mid=null;
+                      api=async(path,body)=>{if(path==='/bulk-info')return {count:200,batches:3};if(path==='/bulk-start')return {id:'j'};
+                        if(path==='/bulk-status'){n++;if(n===1)return {status:'running',processed:96,count:200,completedBatches:1,batches:3,elapsed:40,remaining:80};
+                          return {status:'done',processed:200,count:200,completedBatches:3,batches:3,plan:S.plan};}return savedApi(path,body);};
+                      const watch=setInterval(()=>{if(!mid&&n===1)mid={text:$('#busyText').textContent,detail:$('#busyDetail').textContent,bar:$('#busyBar').value};},100);
+                      const configured=S.status.configured;S.status.configured=true;
+                      try{busyOn('x');await round3Classify(false,false);}finally{busyOff();clearInterval(watch);api=savedApi;S.status.configured=configured;}
+                      return {mid,afterBar:$('#busyBar').hidden};}""")
+                    assert progress['mid'] and '96 / 200개 (1 / 3묶음)' in progress['mid']['text'] and '남은 시간 약 1분 20초' in progress['mid']['detail'], progress
+                    assert progress['afterBar'], progress
+                    result['bulk_progress_remaining_time']=progress
                     assert page.locator('.map-route-ok').count()==0
                     skip=page.evaluate('rels=>rels.map(rel=>S.plan.rows.find(r=>r.relative===rel).id)',[held_relative,retarget_relative]);page.locator('#mapSources [data-map-review]'+''.join(':not([data-map-review="'+i+'"])' for i in skip)).first.click()  # file order differs by OS: confirm a moving file first; the held and retarget files are checked below
                     page.locator('.map-route-ok').wait_for(state='visible')
