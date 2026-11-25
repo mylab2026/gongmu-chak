@@ -187,6 +187,31 @@ def main():
                     assert added['s'].endswith('디자인 감리 용역') and added['sKids']>3 and '관급자재 미디어월' in added['m'] and added['mKids']>0, added
                     assert added['c'].endswith('도급공사') and added['kinds']==['service','material','construction'] and added['bad'] and added['form'], added
                     result['contract_branch_add']=added
+                    # 2단계 간소화: 계약 목록(빼기·되살리기)과 폴더 미리보기, 3단계에서 계약마다 폴더 생성(화면 상태만 보고 원래대로 돌린다).
+                    listed=page.evaluate("""()=>{const savedSlots=ContractInput.slots,savedContracts=S.contracts,savedTree=S.tree,savedType=S.type;
+                      const mk=(id,title,party,kind)=>({id,name:id+'.pdf',supersededIds:[],analysis:{title,party,kind,signed_date:'2026-01-02'}});
+                      const recs=[mk('k1','가상관 환경개선 건축공사(총차 및 장기1차)','가상건설','construction'),mk('k2','가상관 환경개선 건축공사 실시설계 용역','가상건축','design'),
+                        mk('k3','가상관 환경개선 건축공사 재해예방 기술지도 용역','가상기술원','service'),mk('k4','가상관 환경개선 건축공사 설계의도 구현 용역','가상건축','service'),
+                        mk('k5','가상관 라운지 건축음향 컨설팅 용역','가상음향','service'),mk('k6','가상관 구조도면 현행화 및 안전진단 용역','가상구조','service'),mk('k7','가상관 미디어월 구매','가상상사','material')];
+                      try{ContractInput.slots=recs.map((r,i)=>({number:i+1,status:'ready',record:r,pasteOpen:false,error:''}));
+                        const wasHidden=$('#contractStep').hidden;$('#contractStep').hidden=false;renderContractInput();
+                        const before=document.querySelector('#contractList').innerText;
+                        document.querySelector('[data-ci-out="7"]').click();const afterOut=document.querySelector('#contractList').innerText;
+                        document.querySelector('[data-ci-restore="7"]').click();
+                        const cardsHidden=[...document.querySelectorAll('#pendingContracts .ci-card')].filter(c=>c.id.startsWith('contract-slot-')&&Number(c.id.slice(14))<=7).every(c=>c.hidden);
+                        $('#noContracts').checked=false;syncContractRecords();const synced=S.contracts.length;S.type='planning';autoTemplate();
+                        const stage=S.tree.find(n=>/시공단계/.test(n.label)),design=S.tree.find(n=>/설계단계/.test(n.label));
+                        const out={synced,count:before.includes('찾은 계약 7건'),services:before.includes('용역 폴더 4개'),afterOut:afterOut.includes('찾은 계약 6건'),cardsHidden,
+                          build:stage.children.map(n=>[n.label,n.contractKind||'',n.contractId||'',(n.children||[]).length]),top:S.tree.map(n=>n.label+' > '+(n.children||[]).map(c=>c.label+'['+(c.contractId||'')+'|'+(c.contractKind||'')+']').join(', ')),plan:contractBranchPlan(S.contracts).map(p=>p.record.id+':'+p.stage+':'+p.kind+':'+p.name),design:(design?.children||[]).map(n=>[n.label,n.contractId||''])};
+                        $('#contractStep').hidden=wasHidden;return out;}
+                      finally{ContractInput.slots=savedSlots;S.contracts=savedContracts;S.tree=savedTree;S.type=savedType;renderContractInput();renderTree();}}""")
+                    assert listed['count'] and listed['services'] and listed['afterOut'] and listed['cardsHidden'], listed
+                    linked={c for _,_,c,_ in listed['build'] if c}
+                    assert {'k1','k3','k4','k5','k6','k7'}<=linked and sum(1 for l,k,c,_ in listed['build'] if c in {'k3','k4','k5','k6'})==4, listed['build']
+                    assert not any(l.split(' ',1)[-1].startswith('가상관 환경개선') for l,k,c,_ in listed['build']), listed['build']  # 건명 전체가 아닌 짧은 폴더 이름
+                    assert all(kids>0 for l,k,c,kids in listed['build'] if c) and any(c=='k2' for _,c in listed['design']), listed
+                    numbers=[l.split(' ',1)[0] for l,_,_,_ in listed['build']];assert len(numbers)==len(set(numbers)), numbers  # 계약 폴더 번호가 겹치지 않음
+                    result['contract_list_and_tree']=listed
                     assert page.locator('#doubtToggle').count()==0
                     assert '기존 협의기록 보존 · 자료 묶음 이름' not in page.locator('#reviewStep').inner_text()
                     assert '자료 묶음·첨부 관계' not in page.locator('#reviewStep').inner_text()
