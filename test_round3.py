@@ -113,6 +113,13 @@ class Round3(unittest.TestCase):
         status = app.bulk_status(job['id'])
         self.assertIn('remaining', status); self.assertNotIn('guidance', status)
 
+    def test_question_choices_drop_stage_only_and_merge_subfolders(self):
+        # 4차 2번: '4 시공단계'처럼 넓은 보기는 빼고, 계약 가지 아래 '1 품의서' 같은 하위 폴더는 상위 보기 하나로 합친다.
+        branch = '4 시공단계/3 설계의도 구현 용역'
+        got = app.tidy_choices(['4 시공단계', branch + '/1 최초 품의 및 최초 계약서/1 품의서', branch, branch + '/1 최초 품의 및 최초 계약서',
+                                '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/13 기타공문'])
+        self.assertEqual(got, [branch, '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/13 기타공문'])
+
     def test_ai_new_folder_suggestion_is_validated(self):
         folders = {'d1': PLAN_PARENT}
         self.assertIsNone(app.folder_suggestion({'new_folder': {'parent_id': 'd9', 'name': '내부검토'}}, folders))

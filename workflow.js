@@ -440,9 +440,7 @@ const round3Style=document.createElement('style');round3Style.textContent=`
 .map-group-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px 8px;font-size:var(--fs-meta,13px)}.map-group-actions button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px)}
 .map-group[draggable=true]{cursor:grab}
 #folderSuggest{margin:12px 0}#folderSuggest li{margin:6px 0}#folderSuggest .row{gap:6px;margin-top:4px}
-#questionDialog{max-width:760px;width:calc(100vw - 32px)}#questionDialog fieldset{border:1px solid #d8e3f0;border-radius:10px;margin:10px 0;padding:10px 14px}
-#questionDialog legend{font-weight:bold;padding:0 4px}#questionDialog label{display:block;margin:4px 0}#questionDialog .samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere}
-#questionDialog select,#questionDialog input[type=text]{max-width:100%}
+#questionDialog{max-width:640px;width:calc(100vw - 32px)}#questionDialog .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}#questionDialog h2{margin:0}#questionDialog .q-step{font-weight:bold;color:#345fe2;white-space:nowrap}#questionDialog .q-intro{margin:6px 0 12px}#questionDialog .q-card{background:#f5f8fd;border:1px solid #d8e3f0;border-radius:10px;padding:10px 14px}#questionDialog .q-title{font-weight:bold;font-size:16px}#questionDialog .q-from,#questionDialog .q-samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere;margin-top:2px}#questionDialog .q-ask{margin:14px 0 6px;font-size:15px}#questionDialog .q-options{display:grid;gap:6px}#questionDialog .q-option{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;border:1px solid #d8e3f0;border-radius:10px;padding:8px 12px;cursor:pointer;overflow-wrap:anywhere}#questionDialog .q-option.on{border-color:#345fe2;background:#eef3ff}#questionDialog .q-option select{flex:1 1 100%;max-width:100%}#questionDialog .q-new{display:flex;flex:1 1 100%;gap:6px;align-items:center;flex-wrap:wrap}#questionDialog .q-new select{flex:1 1 220px}#questionDialog .q-new input{flex:1 1 160px}#questionDialog .q-option:not(.on) select,#questionDialog .q-option:not(.on) .q-new{display:none}#questionDialog .q-tag{font-size:12px;background:#345fe2;color:#fff;border-radius:999px;padding:1px 8px}#questionDialog .q-why{flex-basis:100%}
 #subFolderDialog label{display:block;margin-top:8px}`;document.body.appendChild(round3Style);
 
 // 1. 사업 이름: 간결하게 정하도록 안내한다(이름을 바꿔도 연결한 실제 사업 폴더 이름은 그대로다).
@@ -529,25 +527,35 @@ const round3RenderReview=renderReview;renderReview=function(...args){const r=rou
 
 // 10. 분류 못한 파일이 많으면 보류가 가장 많은 폴더 3곳을 묻고, 답을 반영해 AI 분류를 다시 돌린다(자동 2회까지). 'AI 다시 분류'는 질문 1회 후 분류.
 const questionDialog=document.createElement('dialog');questionDialog.id='questionDialog';document.body.appendChild(questionDialog);
-function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.paths||[];
- const pathOptions='<option value="">폴더 고르기…</option>'+paths.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
- questionDialog.innerHTML='<h2>분류 못한 파일이 너무 많아 몇 가지 확인하겠습니다</h2><p class="muted">보류 '+q.held+'개 / 확인 대상 '+q.pending+'개'+(round?' · '+round+'회차':'')+'. 답한 폴더의 파일은 고른 곳으로 정하고, 답을 참고해 나머지를 AI가 다시 분류합니다.</p>'
-  +q.questions.map((item,i)=>'<fieldset><legend>'+(i+1)+'. '+esc(item.question)+'</legend><div class="samples">‘'+esc(item.unit)+'’ · 파일 '+item.count+'개 · 예: '+esc(item.samples.slice(0,4).join(', '))+'</div>'
-   +item.choices.map((c,k)=>'<label><input type="radio" name="q'+i+'" value="c'+k+'"> '+esc(c.split('/').slice(-2).join(' › '))+' <small class="muted">'+esc(c)+'</small></label>').join('')
-   +'<label><input type="radio" name="q'+i+'" value="other"> 다른 폴더: <select data-q-other="'+i+'">'+pathOptions+'</select></label>'
-   +'<label><input type="radio" name="q'+i+'" value="new"> 새 폴더 만들기: <select data-q-parent="'+i+'">'+pathOptions+'</select> 아래 <input type="text" data-q-name="'+i+'" placeholder="예: 내부검토" size="12"></label>'
-   +'<label><input type="radio" name="q'+i+'" value="hold"> 원래 위치에 두기(보류)</label><label><input type="radio" name="q'+i+'" value="skip" checked> 잘 모르겠어요(건너뛰기)</label></fieldset>').join('')
-  +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionSkip">건너뛰기</button><button class="primary" id="questionYes">답하고 다시 분류</button></div>';
- const pick=i=>questionDialog.querySelector?.('input[name="q'+i+'"]:checked')?.value||'skip';
- $$('[data-q-other],[data-q-parent],[data-q-name]').forEach(el=>el.onfocus=el.oninput=el.onchange=()=>{const i=el.dataset.qOther??el.dataset.qParent??el.dataset.qName,radio=questionDialog.querySelector?.('input[name="q'+i+'"][value="'+(el.dataset.qOther!==undefined?'other':'new')+'"]');if(radio)radio.checked=true;});
- const done=value=>{questionDialog.close();resolve(value);};
- $('#questionSkip').onclick=()=>done(null);questionDialog.oncancel=e=>{e.preventDefault?.();done(null);};
- $('#questionYes').onclick=()=>{const answers=[];for(const [i,item] of q.questions.entries()){const v=pick(i),a={unit:item.unit};
-   if(v.startsWith('c'))a.destination=item.choices[Number(v.slice(1))];else if(v==='other'){a.destination=$('[data-q-other="'+i+'"]').value;if(!a.destination){$('#questionError').textContent=(i+1)+'번: 폴더를 골라주세요.';$('#questionError').hidden=false;return;}}
-   else if(v==='new'){const parent=$('[data-q-parent="'+i+'"]').value,name=($('[data-q-name="'+i+'"]').value||'').trim();if(!parent||!name){$('#questionError').textContent=(i+1)+'번: 새 폴더의 위치와 이름을 정해주세요.';$('#questionError').hidden=false;return;}a.newFolder={parent,name};}
-   else if(v==='hold')a.hold=true;else a.skip=true;answers.push(a);}
-  done(answers);};
- questionDialog.showModal?.();});}
+/* 4차 2번: 질문 창을 한 번에 하나씩, 고를 수 있는 것이 분명하게 보이도록 바꿨다.
+   - 질문은 늘 같은 형식: 'OO 폴더(파일 n개)를 어디로 옮길까요?' (AI가 만든 자유 질문은 보기와 맞지 않아 쓰지 않는다)
+   - 보기는 폴더 경로를 번호 없이 한 번만 보여 준다. 다른 폴더·새 폴더는 펼쳐서 고른다. 기본값은 '잘 모르겠어요'. */
+function crumb(path){return String(path||'').split('/').map(x=>x.replace(/^\d+(?:[-.]\d+)*[.)]?\s*/,'')||x).join(' › ');}
+function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.paths||[],items=q.questions,answers=items.map(()=>({pick:'skip'}));let at=0;
+ const pathOptions=selected=>'<option value="">폴더 고르기…</option>'+paths.map(p=>'<option value="'+esc(p)+'"'+(p===selected?' selected':'')+'>'+esc(crumb(p))+'</option>').join('');
+ const draw=()=>{const item=items[at],a=answers[at],last=at===items.length-1,folder=String(item.unit).split('/').pop();
+  const option=(value,label,extra='')=>'<label class="q-option'+(a.pick===value?' on':'')+'"><input type="radio" name="qpick" value="'+value+'"'+(a.pick===value?' checked':'')+'> <span>'+label+'</span>'+extra+'</label>';
+  questionDialog.innerHTML='<div class="q-head"><h2>분류 못한 파일이 많아 몇 가지 여쭤볼게요</h2><span class="q-step">'+(at+1)+' / '+items.length+'</span></div>'
+   +'<p class="muted q-intro">폴더마다 <b>옮길 곳 하나</b>를 골라 주세요. 그 폴더의 파일이 하위 폴더째 옮겨지고, 답을 참고해 나머지 보류 파일('+q.held+'개)을 AI가 다시 분류합니다. 모르면 ‘잘 모르겠어요’를 두면 됩니다.</p>'
+   +'<div class="q-card"><div class="q-title">‘'+esc(folder)+'’ 폴더 <span class="muted">· 파일 '+item.count+'개</span></div><div class="q-from">원래 위치: '+esc(crumb(item.unit))+'</div>'
+   +'<div class="q-samples">예: '+esc(item.samples.slice(0,3).join(', '))+(item.count>3?' 등':'')+'</div></div>'
+   +'<h3 class="q-ask">이 폴더를 어디로 옮길까요?</h3><div class="q-options">'
+   +item.choices.map((c,k)=>option('c'+k,'<b>'+esc(crumb(c))+'</b>'+(k===0?' <span class="q-tag">추천</span>':'')+(k===0&&item.reason?'<small class="muted q-why">'+esc(item.reason)+'</small>':''))).join('')
+   +option('other','목록에 없는 다른 폴더','<select data-q-other>'+pathOptions(a.destination)+'</select>')
+   +option('new','새 폴더를 만들어 넣기','<span class="q-new"><select data-q-parent>'+pathOptions(a.parent)+'</select><span>아래에</span><input type="text" data-q-name placeholder="새 폴더 이름 (예: 내부검토)" value="'+esc(a.name||'')+'"></span>')
+   +option('hold','옮기지 않고 원래 위치에 두기')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
+   +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionStop">그만 묻기</button>'+(at?'<button id="questionPrev">이전</button>':'')
+   +'<button class="primary" id="questionNext">'+(last?'답하고 다시 분류':'다음 질문')+'</button></div>';
+  $$('input[name="qpick"]').forEach(r=>r.onchange=()=>{save();a.pick=r.value;draw();});
+  $$('[data-q-other],[data-q-parent],[data-q-name]').forEach(el=>el.onfocus=()=>{const want=el.dataset.qOther!==undefined?'other':'new';if(a.pick!==want){save();a.pick=want;draw();({other:$('[data-q-other]'),new:$('[data-q-parent]')})[want]?.focus?.();}});
+  $('#questionStop').onclick=()=>done(null);if($('#questionPrev'))$('#questionPrev').onclick=()=>{save();at--;draw();};
+  $('#questionNext').onclick=()=>{save();const bad=check(a);if(bad){$('#questionError').textContent=bad;$('#questionError').hidden=false;return;}if(!last){at++;draw();return;}done(answers.map((x,i)=>toAnswer(items[i],x)));};};
+ const save=()=>{const a=answers[at],other=$('[data-q-other]'),parent=$('[data-q-parent]'),name=$('[data-q-name]');if(other)a.destination=other.value;if(parent)a.parent=parent.value;if(name)a.name=(name.value||'').trim();};
+ const check=a=>a.pick==='other'&&!a.destination?'옮길 폴더를 골라 주세요.':a.pick==='new'&&(!a.parent||!a.name)?'새 폴더를 만들 위치와 이름을 정해 주세요.':a.pick==='new'&&/[\\/:*?"<>|]/.test(a.name)?'폴더 이름에 \\ / : * ? " < > | 는 쓸 수 없습니다.':'';
+ const toAnswer=(item,a)=>a.pick.startsWith('c')?{unit:item.unit,destination:item.choices[Number(a.pick.slice(1))]}:a.pick==='other'?{unit:item.unit,destination:a.destination}
+  :a.pick==='new'?{unit:item.unit,newFolder:{parent:a.parent,name:a.name}}:a.pick==='hold'?{unit:item.unit,hold:true}:{unit:item.unit,skip:true};
+ const done=value=>{questionDialog.close();resolve(value);};questionDialog.oncancel=e=>{e.preventDefault?.();done(null);};
+ draw();questionDialog.showModal?.();});}
 async function answerQuestions(answers){const result=await api('/bulk-answers',{plan:S.plan.id,answers});applyFolderResult(result);S.plan.askedUnits=result.askedUnits;S.selected.clear();renderReview(true);return result;}
 async function questionRound(round,{always=false}={}){const q=await api('/bulk-questions',{plan:S.plan.id});if(!q.questions.length||(!always&&!q.many))return false;
  const answers=await askQuestions(q,round);if(!answers)return false;await answerQuestions(answers);return answers.some(a=>!a.skip);}

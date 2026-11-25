@@ -295,10 +295,17 @@ def main():
                         if(path==='/bulk-answers')return {rows:[],paths,tree:S.project.tree,askedUnits:['가상/폴더 A','가상/폴더 B']};
                         if(path==='/bulk-info')return {count:0,batches:0};return savedApi(path,body);};
                       try{const round=questionRound(1);await new Promise(r=>setTimeout(r,50));const dialog=$('#questionDialog');const open=dialog.open,title=dialog.querySelector('h2').textContent;
-                        dialog.querySelector('input[name="q0"][value="c1"]').checked=true;dialog.querySelector('input[name="q1"][value="hold"]').checked=true;$('#questionYes').click();const answered=await round;
-                        return {open,title,answered,answers:calls.find(c=>c[0]==='/bulk-answers')?.[1].answers,closed:!dialog.open};}
+                        // 4차 2번: 한 번에 한 질문, 폴더 경로는 번호 없이 한 번만, 기본값은 '잘 모르겠어요'
+                        const first={step:dialog.querySelector('.q-step').textContent,ask:dialog.querySelector('.q-ask').textContent,options:$$('#questionDialog .q-option').map(o=>o.innerText.trim()),
+                          checked:dialog.querySelector('input[name="qpick"]:checked').value,hiddenSelect:getComputedStyle(dialog.querySelector('[data-q-other]')).display==='none'};
+                        const pick=v=>{const r=dialog.querySelector('input[name="qpick"][value="'+v+'"]');r.checked=true;r.dispatchEvent(new Event('change'));};
+                        pick('other');$('#questionNext').click();const needFolder=!$('#questionError').hidden;pick('c1');$('#questionNext').click();
+                        const second=dialog.querySelector('.q-step').textContent;pick('hold');$('#questionNext').click();const answered=await round;
+                        return {open,title,first,needFolder,second,answered,answers:calls.find(c=>c[0]==='/bulk-answers')?.[1].answers,closed:!dialog.open};}
                       finally{api=savedApi;}}""")
-                    assert asked['open'] and '분류 못한 파일이 너무 많아' in asked['title'] and asked['answered'] and asked['closed'], asked
+                    assert asked['open'] and '분류 못한 파일이 많아' in asked['title'] and asked['answered'] and asked['closed'], asked
+                    f=asked['first'];assert f['step']=='1 / 2' and '어디로 옮길까요' in f['ask'] and f['checked']=='skip' and f['hiddenSelect'] and asked['needFolder'] and asked['second']=='2 / 2', asked
+                    assert not any('/' in o for o in f['options']) and len(f['options'])==6, f  # 보기 2 + 다른 폴더·새 폴더·원래 위치·모르겠어요
                     assert asked['answers']==[{'unit':'가상/폴더 A','destination':page.evaluate('S.plan.paths[1]')},{'unit':'가상/폴더 B','hold':True}], asked
                     result['question_round_before_reclassify']=asked
                     # 3차 3번: AI 분류 진행은 개수·묶음·막대·남은 시간을 보여 주고, 앞 작업의 막대가 남지 않는다.
