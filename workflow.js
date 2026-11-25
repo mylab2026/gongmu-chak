@@ -26,13 +26,20 @@ $('#treeNext').onclick=async()=>{
  S.resetClassification=changed;Workflow.autoRecheck=changed;
  try{return await beforeTreeNext();}finally{S.resetClassification=false;Workflow.autoRecheck=false;}
 };
-async function classifyCurrentPlan(recheck=false){
+async function classifyCurrentPlan(recheck=false,retry=false){
  if(!S.plan?.rows.length)return;
- const info=await api('/bulk-info',{plan:S.plan.id,recheck});
+ const info=await api('/bulk-info',{plan:S.plan.id,recheck,retry});
  if(!info.count){$('#mapBulkResult').textContent=localNote()+'저장된 정리안과 규칙 분류를 사용합니다. 새로 AI 검토할 파일이 없습니다.';return;}
  if(!S.status.configured)throw Error('자동 일괄 분류에 사용할 AI 연결을 먼저 설정해주세요. 연결 후 AI 다시 분류로 이어갈 수 있습니다.');
- const job=await api('/bulk-start',{plan:S.plan.id,recheck});MapReview.job=job.id;cancelBulk.hidden=false;cancelBulk.disabled=false;cancelBulk.textContent='일괄 분류 중단';
- try{while(true){$('#busyText').textContent='AI 자동 일괄 분류 중 · '+info.count+'개 대상';await new Promise(resolve=>setTimeout(resolve,800));const status=await api('/bulk-status',{id:job.id});$('#busyText').textContent='AI 자동 일괄 분류 '+status.processed+' / '+status.count+'개 · '+status.completedBatches+' / '+status.batches+'묶음';if(['done','cancelled','failed'].includes(status.status)){S.plan=status.plan;S.selected.clear();renderReview(true);$('#mapBulkResult').className=status.status==='failed'?'error':'success';$('#mapBulkResult').textContent=(status.status==='done'?'자동 일괄 분류 완료':status.status==='cancelled'?'분류 중단':'일부 분류 실패')+' · '+status.processed+'개 검토. '+(status.error||'파일별 목적지를 확인하고 이동을 실행해주세요.');if(status.status==='failed')throw Error(status.error||'AI 분류 실패. 완료된 제안은 유지했습니다.');break;}}}finally{MapReview.job=null;cancelBulk.hidden=true;}
+ const job=await api('/bulk-start',{plan:S.plan.id,recheck,retry});MapReview.job=job.id;cancelBulk.hidden=false;cancelBulk.disabled=false;cancelBulk.textContent='일괄 분류 중단';
+ const shown={at:Date.now(),done:-1};
+ busyProgress({text:'AI 분류 중 · 0 / '+info.count+'개 (0 / '+info.batches+'묶음)',percent:0,detail:'첫 묶음 확인 중',note:'멈춘 것이 아닙니다. 중단해도 이미 분류한 결과는 남습니다.'});
+ try{while(true){await new Promise(resolve=>setTimeout(resolve,1000));const status=await api('/bulk-status',{id:job.id});
+  if(status.completedBatches!==shown.done){shown.done=status.completedBatches;shown.at=Date.now();}
+  const quiet=(Date.now()-shown.at)/1000;
+  busyProgress({text:'AI 분류 중 · '+status.processed+' / '+status.count+'개 ('+status.completedBatches+' / '+status.batches+'묶음)',percent:status.batches?status.completedBatches/status.batches*100:0,
+   elapsed:status.elapsed||0,remaining:typeof status.remaining==='number'?status.remaining:undefined,detail:status.completedBatches?'':'첫 묶음 확인 중',
+   note:quiet>=120?'AI 응답을 기다리는 중입니다(최근 '+Math.round(quiet/60)+'분 동안 새 결과 없음). 계속 기다리거나 중단할 수 있습니다.':'멈춘 것이 아닙니다. 중단해도 이미 분류한 결과는 남습니다.'});if(['done','cancelled','failed'].includes(status.status)){S.plan=status.plan;S.selected.clear();renderReview(true);$('#mapBulkResult').className=status.status==='failed'?'error':'success';$('#mapBulkResult').textContent=(status.status==='done'?'자동 일괄 분류 완료':status.status==='cancelled'?'분류 중단':'일부 분류 실패')+' · '+status.processed+'개 검토. '+(status.error||'파일별 목적지를 확인하고 이동을 실행해주세요.');if(status.status==='failed')throw Error(status.error||'AI 분류 실패. 완료된 제안은 유지했습니다.');break;}}}finally{MapReview.job=null;cancelBulk.hidden=true;busyProgress(null);}
 }
 const beforeOpenPlan=openPlan;
 function localNote(){const n=S.plan?.localCount||0;return n?'PC 규칙으로 '+n+'개 목적지를 정했습니다(AI 미사용). ':'';}
@@ -40,9 +47,9 @@ openPlan=async function(){await beforeOpenPlan();if(S.status?.prefs?.autoClassif
 $('#bulkAI').textContent='AI 다시 분류';$('#bulkAI').onclick=()=>task('AI 다시 분류 중…',()=>classifyCurrentPlan($('#recheckBulk').checked));
 const routeDialog=document.createElement('dialog');routeDialog.id='batchRouteDialog';routeDialog.innerHTML='<h2>선택 파일의 목적지 변경</h2><p id="batchRouteCount"></p><label for="batchRouteSelect">새 목적지 폴더</label><select id="batchRouteSelect"></select><p class="muted">정리안의 경로만 바꿉니다. 실제 이동은 파일 이동 실행으로 진행합니다.</p><div class="actions"><button id="batchRouteNo">취소</button><button class="primary" id="batchRouteYes">선택 파일에 적용</button></div>';document.body.appendChild(routeDialog);
 function routeSelection(fallback=null){const selected=S.plan.rows.filter(r=>S.selected.has(r.id)&&!r.done).map(r=>r.id);return fallback&&!selected.includes(fallback)?[fallback]:selected.length?selected:fallback?[fallback]:MapReview.file?[MapReview.file]:[];}
-async function changeManyRoutes(ids,destination){
+async function changeManyRoutes(ids,destination,keepFolder=''){
  if(!ids.length||!S.plan.paths.includes(destination)){error('파일과 새 목적지 폴더를 선택해주세요.');return;}
- return task(ids.length+'개 파일 목적지 저장 중…',async()=>{const result=await api('/retarget-many',{plan:S.plan.id,rows:ids,destination});if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;for(const updated of result.rows)Object.assign(S.plan.rows.find(r=>r.id===updated.id),updated);MapReview.retargeting=false;mapFocusFile(ids[0]);$('#routeHelp').textContent=result.rows.length+'개 파일 목적지를 함께 변경했습니다: '+destination+' · 실제 파일은 아직 이동하지 않았습니다.';});
+ return task(ids.length+'개 파일 목적지 저장 중…',async()=>{const result=await api('/retarget-many',{plan:S.plan.id,rows:ids,destination,keepFolder});if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;for(const updated of result.rows)Object.assign(S.plan.rows.find(r=>r.id===updated.id),updated);MapReview.retargeting=false;mapFocusFile(ids[0]);$('#routeHelp').textContent=result.rows.length+'개 파일 목적지를 함께 변경했습니다: '+destination+' · 실제 파일은 아직 이동하지 않았습니다.';});
 }
 changeRoute=function(id,destination){return changeManyRoutes(routeSelection(id),destination);};
 $('#retargetMode').textContent='선택 파일 목적지 변경';$('#retargetMode').onclick=()=>{const ids=routeSelection();if(!ids.length){error('왼쪽에서 파일을 선택해주세요.');return;}$('#batchRouteCount').textContent=ids.length+'개 파일을 같은 폴더로 한 번에 지정합니다.';$('#batchRouteSelect').innerHTML='<option value="">목적지 폴더 선택</option>'+S.plan.paths.map(path=>'<option value="'+esc(path)+'">'+esc(path)+'</option>').join('');routeDialog.showModal();};
@@ -282,11 +289,11 @@ const baseRenderAncillary09=renderAncillary;renderAncillary=function(...a){norma
 const baseAutoTemplate09=autoTemplate;autoTemplate=function(...a){normalizeKinds();return baseAutoTemplate09(...a);};
 const baseTreeNext09=$('#treeNext').onclick;$('#treeNext').onclick=(...a)=>{normalizeKinds();return baseTreeNext09(...a);};
 // 분류 진행 표시
-const baseOpenPlan09=openPlan;openPlan=async function(...a){const start=Date.now();
- const tick=async()=>{try{const p=await api('/plan-progress',{});if(!p||!p.stage)return;const elapsed=(Date.now()-start)/1000;
+const baseOpenPlan09=openPlan;openPlan=async function(...a){const start=Date.now();let alive=true;
+ const tick=async()=>{try{const p=await api('/plan-progress',{});if(!alive||!p||!p.stage)return;const elapsed=(Date.now()-start)/1000;
   busyProgress({text:'정리 계획 만드는 중 · '+p.stage+(p.total?' '+p.done+' / '+p.total+'개':''),percent:typeof p.percent==='number'?p.percent:undefined,elapsed,
    remaining:typeof p.remaining==='number'?p.remaining:undefined,note:'파일이 많으면 몇 분 걸릴 수 있습니다. 끝날 때까지 다른 버튼은 잠깁니다.'});}catch(e){}};
- const timer=setInterval(tick,1000);try{return await baseOpenPlan09(...a);}finally{clearInterval(timer);busyProgress(null);}};
+ const timer=setInterval(tick,1000);try{return await baseOpenPlan09(...a);}finally{alive=false;clearInterval(timer);busyProgress(null);}};
 // 다중 선택: 누르면 선택, Shift로 범위 선택, 선택한 파일을 함께 끌어 옮기기
 const selBar=document.createElement('div');selBar.id='selBar';selBar.hidden=true;$('#reviewMap').before(selBar);
 function renderSelBar(){const n=S.selected.size;selBar.hidden=!n;selBar.innerHTML=n?'<b>'+n+'개 파일 선택됨</b> · 선택한 파일 중 하나를 오른쪽 폴더로 끌어 놓으면 함께 옮겨집니다. 원래 하위 폴더 구조는 유지됩니다. <button id="selClear">선택 해제</button>':'';if(n)$('#selClear').onclick=()=>{S.selected.clear();renderReview();};}
@@ -419,3 +426,130 @@ function applyContractBranches(){
  return made;}
 const contractTreeAuto=autoTemplate;
 autoTemplate=function(...args){const result=contractTreeAuto(...args);if(S.tree.length&&applyContractBranches()){renderTree();renderAncillary();}return result;};
+
+/* ===== 3차 시험 반영(2026-11-25) =====
+   1 사업 이름 안내 · 2 '하위 폴더 추가'로 계약 가지 만들기 · 4 경로 확인 칸·확인할 묶음 표 대신 연결도에서 처리
+   6 새 폴더 제안 · 7 끌기 중 자동 스크롤·단계 바로가기 · 9 폴더째 옮기기 · 10 보류가 많으면 질문 3개 후 다시 분류 */
+const round3Style=document.createElement('style');round3Style.textContent=`
+#checkPanel,#checkGroupsBox,#contractBranchAdd{display:none!important}
+#projectNameHint{margin:6px 0 0}#projectNameHint.long{color:#a4262c}
+#mapStageChips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}#mapStageChips button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px);border-radius:999px}
+#mapStageChips button.drop-target{background:#e8efff;border-color:#345fe2}
+.map-group-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px 8px;font-size:var(--fs-meta,13px)}.map-group-actions button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px)}
+.map-group[draggable=true]{cursor:grab}
+#folderSuggest{margin:12px 0}#folderSuggest li{margin:6px 0}#folderSuggest .row{gap:6px;margin-top:4px}
+#questionDialog{max-width:760px;width:calc(100vw - 32px)}#questionDialog fieldset{border:1px solid #d8e3f0;border-radius:10px;margin:10px 0;padding:10px 14px}
+#questionDialog legend{font-weight:bold;padding:0 4px}#questionDialog label{display:block;margin:4px 0}#questionDialog .samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere}
+#questionDialog select,#questionDialog input[type=text]{max-width:100%}
+#subFolderDialog label{display:block;margin-top:8px}`;document.body.appendChild(round3Style);
+
+// 1. 사업 이름: 간결하게 정하도록 안내한다(이름을 바꿔도 연결한 실제 사업 폴더 이름은 그대로다).
+function updateProjectNameHint(){const input=$('#projectName'),hint=$('#projectNameHint');if(!input||!hint)return;{const n=(input.value||'').trim().length,long=n>20;hint.className='muted'+(long?' long':'');
+  hint.textContent='이 사업의 폴더 이름입니다. 간결하게 정해주세요. 예: ○○관(00동) 리모델링 · 이력 파일 이름 등에 쓰이고, 연결한 실제 사업 폴더 이름은 바뀌지 않습니다.'+(long?' 지금 '+n+'자입니다. 조금 더 짧게 정하면 폴더·파일 이름이 깔끔해집니다.':'');};
+}
+(()=>{const input=$('#projectName');if(!input||!input.after)return;const hint=document.createElement('p');hint.id='projectNameHint';hint.className='muted';input.after(hint);input.placeholder='예: ○○관(00동) 리모델링';
+ input.addEventListener('input',updateProjectNameHint);updateProjectNameHint();})();
+
+// 2. 3단계 '하위 폴더 추가': 위치와 종류(일반·용역·공사·관급자재)를 고른다. 계약 종류는 단계 폴더 바로 아래에 표준 하위 폴더와 함께 만든다.
+const subDialog=document.createElement('dialog');subDialog.id='subFolderDialog';
+subDialog.innerHTML='<h2>하위 폴더 추가</h2><label for="subFolderParent">어느 폴더 아래에 만들까요?</label><select id="subFolderParent"></select>'
+ +'<label for="subFolderKind">종류</label><select id="subFolderKind"><option value="folder">일반 폴더</option><option value="service">용역</option><option value="construction">공사(도급공사)</option><option value="material">관급자재(물품)</option></select>'
+ +'<label for="subFolderName" id="subFolderNameLabel">이름</label><input id="subFolderName" type="text" placeholder="예: 내부검토">'
+ +'<p class="muted" id="subFolderHelp"></p><p class="error" id="subFolderError" hidden></p><div class="actions"><button id="subFolderNo">취소</button><button class="primary" id="subFolderYes">추가</button></div>';
+document.body.appendChild(subDialog);
+function treeKeyOptions(){const out=[];const walk=(list,key,label)=>list.forEach((n,i)=>{if(INBOX_NAMES.includes(n.label))return;const k=key?key+'.'+i:String(i),l=label?label+' / '+n.label:n.label;out.push([k,l]);walk(n.children||[],k,l);});walk(S.tree,'','');return out;}
+function subFolderSync(){const kind=$('#subFolderKind').value,parent=$('#subFolderParent').value,top=!parent.includes('.')&&/단계/.test(S.tree[Number(parent)]?.label||'');
+ $('#subFolderName').hidden=$('#subFolderNameLabel').hidden=kind==='construction';
+ $('#subFolderName').placeholder=kind==='service'?'예: 디자인 감리, 음향컨설팅':kind==='material'?'예: 미디어월':'예: 내부검토';
+ $('#subFolderHelp').textContent=kind==='folder'?'빈 폴더 하나를 만듭니다. 번호는 자동으로 붙습니다.':top?'종류별 표준 하위 폴더(품의서·계약서·착수계·지출서류·설계변경·완수계 등)가 함께 생깁니다.'+(kind==='construction'?' 이름은 ‘도급공사’로 정해집니다.':''):'계약 폴더는 기획·설계·시공 단계 폴더 바로 아래에만 만들 수 있습니다. 위치를 단계 폴더로 바꿔주세요.';}
+function openSubFolder(key){const options=treeKeyOptions();$('#subFolderParent').innerHTML=options.map(([k,l])=>'<option value="'+k+'">'+esc(l)+'</option>').join('');
+ const fallback=S.tree.findIndex(n=>/시공단계/.test(n.label));$('#subFolderParent').value=key??S.mmSelected??String(fallback>=0?fallback:S.mmRoot??0);
+ $('#subFolderKind').value='folder';$('#subFolderName').value='';$('#subFolderError').hidden=true;subFolderSync();subDialog.showModal?.();$('#subFolderName').focus?.();}
+$('#subFolderKind').onchange=subFolderSync;$('#subFolderParent').onchange=subFolderSync;$('#subFolderNo').onclick=()=>subDialog.close();
+$('#subFolderYes').onclick=()=>{const kind=$('#subFolderKind').value,key=$('#subFolderParent').value,name=($('#subFolderName').value||'').trim();
+ try{if(typeof rememberStructure==='function')rememberStructure();
+  if(kind==='folder'){if(!name)throw Error('폴더 이름을 입력해주세요.');if(/[\\/:*?"<>|]/.test(name))throw Error('폴더 이름에 \\ / : * ? " < > | 는 쓸 수 없습니다.');
+   const p=nodeAt(key),node=p.list[p.index],kids=(node.children??=[]),number=Math.max(0,...kids.map(n=>Number((n.label.match(/^\d+/)||[0])[0])))+1;
+   kids.push({label:(kids.some(n=>/^\d+/.test(n.label))?number+' ':'')+name,num:number,children:[]});S.mmClosed.delete(key);S.mmOpen.add(key);S.mmSelected=key+'.'+(kids.length-1);}
+  else{if(key.includes('.'))throw Error('계약 폴더는 기획·설계·시공 단계 폴더 바로 아래에만 만들 수 있습니다.');const node=addContractBranch(Number(key),kind,name);S.mmSelected=key+'.'+S.tree[Number(key)].children.indexOf(node);S.mmOpen.add(key);}
+  subDialog.close();renderTree();if(typeof renderAncillary==='function')renderAncillary();}
+ catch(e){$('#subFolderError').textContent=e.message;$('#subFolderError').hidden=false;}};
+(()=>{const add=$('#addRoot');if(!add||!add.after)return;const b=document.createElement('button');b.id='addSubFolder';b.textContent='하위 폴더 추가';add.after(b);b.onclick=()=>openSubFolder();})();
+// 마인드맵의 '+ 하위 폴더': 단계(최상위) 폴더에서는 같은 창으로 종류를 묻고, 그 아래 폴더에서는 지금처럼 빈 폴더를 바로 만든다.
+const round3RenderTree=renderTree;renderTree=function(...args){const r=round3RenderTree(...args);updateProjectNameHint();$$('[data-mm-child]').forEach(b=>{if(!b.dataset.mmChild.includes('.'))b.onclick=e=>{e?.stopPropagation?.();openSubFolder(b.dataset.mmChild);};});return r;};
+
+// 7. 연결도 끌기 중 자동 스크롤(오른쪽 칸 위·아래 끝 가까이)과 단계 바로가기
+function mapEdgeScroll(x,y){const pane=$('#mapTargets');if(!pane?.getBoundingClientRect)return;const r=pane.getBoundingClientRect();if(x<r.left-60||x>r.right+60)return;
+ const zone=60;let step=0;if(y<r.top+zone)step=-Math.ceil((r.top+zone-y)/3)-4;else if(y>r.bottom-zone)step=Math.ceil((y-(r.bottom-zone))/3)+4;
+ if(step)pane.scrollTop+=Math.max(-40,Math.min(40,step));}
+function scrollMapToPath(path){const pane=$('#mapTargets'),node=$$('[data-map-target]').find(e=>e.dataset.mapTarget===path);if(!pane||!node?.getBoundingClientRect)return;const a=pane.getBoundingClientRect(),b=node.getBoundingClientRect();pane.scrollTop+=b.top-a.top-8;}
+(()=>{const pane=$('#mapTargets');if(!pane)return;pane.addEventListener('dragover',e=>mapEdgeScroll(e.clientX,e.clientY));
+ const heading=pane.parentElement?.querySelector?.('.map-heading');if(!heading)return;const chips=document.createElement('div');chips.id='mapStageChips';chips.setAttribute('aria-label','단계로 바로 가기');heading.append(chips);})();
+let chipTimer=null;
+function renderStageChips(){const chips=$('#mapStageChips');if(!chips||!S.project)return;const tops=(S.project.tree||[]).filter(n=>!INBOX_NAMES.includes(n.label));
+ chips.innerHTML=tops.map(n=>'<button type="button" data-map-stage="'+esc(n.label)+'" title="'+esc(n.label)+'(으)로 이동 · 끌면서 잠깐 올려 두면 이동합니다">'+esc(baseName(n.label).replace(/\s*단계$/,''))+'</button>').join('');
+ $$('[data-map-stage]').forEach(b=>{const go=()=>{MapReview.collapsed.delete(b.dataset.mapStage);scrollMapToPath(b.dataset.mapStage);};b.onclick=go;
+  const hover=()=>{b.classList.add('drop-target');if(!chipTimer)chipTimer=setTimeout(()=>{chipTimer=null;go();},450);};const leave=()=>{b.classList.remove('drop-target');clearTimeout(chipTimer);chipTimer=null;};
+  b.ondragover=e=>{e.preventDefault?.();hover();};b.ondragleave=leave;b.ondrop=e=>{e.preventDefault?.();leave();};b.onpointerenter=()=>{if(MapReview.pointerDrag)hover();};b.onpointerleave=leave;});}
+
+// 9. 폴더째 옮기기: 왼쪽 폴더 이름을 끌어 오른쪽 폴더에 놓으면 하위 폴더까지 모든 파일이 함께 옮겨지고, 원래 폴더 이름과 하위 구조는 유지된다.
+function folderRows(name){return S.plan.rows.filter(r=>!r.done&&(parentFolder(r)===name||(name!=='최상위 파일'&&r.relative.startsWith(name+'/'))));}
+async function moveFolder(name,destination){const rows=folderRows(name);if(!rows.length)return;
+ if(rows.length>1&&!await ask('폴더째 옮길까요?',(name==='최상위 파일'?'사업 폴더 바로 아래 파일':'‘'+name.split('/').pop()+'’ 폴더(하위 폴더 포함)')+' '+rows.length+'개를 ‘'+destination+'’(으)로 정합니다. 원래 폴더 이름과 하위 폴더 구조는 그대로 둡니다. 실제 이동은 파일 이동 실행 때 합니다.'))return;
+ return changeManyRoutes(rows.map(r=>r.id),destination,name==='최상위 파일'?'':name);}
+function bindFolderDrag(){const names=[...mapGroups().keys()];
+ $$('[data-map-group]').forEach(b=>{const name=names[Number(b.dataset.mapGroup)];if(!name)return;b.draggable=true;b.title=(b.title?b.title+' · ':'')+'끌어 오른쪽 폴더에 놓으면 하위 폴더까지 함께 옮깁니다';
+  b.ondragstart=e=>{MapReview.dragging='group:'+name;e.dataTransfer?.setData?.('text/plain','group:'+name);if(e.dataTransfer)e.dataTransfer.effectAllowed='move';};b.ondragend=()=>{MapReview.dragging=null;};});
+ $$('[data-map-target]').forEach(t=>{const drop=t.ondrop;t.ondrop=e=>{const id=MapReview.dragging;if(typeof id==='string'&&id.startsWith('group:')){e.preventDefault?.();t.classList.remove('drop-target');MapReview.dragging=null;moveFolder(id.slice(6),t.dataset.mapTarget);return;}return drop?.(e);};});
+ // 펼친 폴더 아래 한 줄: 폴더째 확정·옮기기 안내(확인할 묶음 표 대신)
+ const active=$$('[data-map-group]').find(b=>names[Number(b.dataset.mapGroup)]===MapReview.group),row=active?.parentElement;
+ if(row?.insertAdjacentHTML&&!row.nextElementSibling?.classList?.contains('map-group-actions')){const rows=folderRows(MapReview.group),doubt=rows.filter(mapNeedsCheck);
+  row.insertAdjacentHTML('afterend','<div class="map-group-actions"><span>이 폴더 '+rows.length+'개(하위 폴더 포함)</span>'+(doubt.length?'<button data-group-confirm>지금 경로로 확정 ('+doubt.length+'개)</button>':'')+'<span class="muted">폴더 이름을 끌어 오른쪽 폴더에 놓으면 하위 폴더까지 함께 옮겨집니다.</span></div>');
+  const ok=$('[data-group-confirm]');if(ok)ok.onclick=()=>task('폴더 경로 확정 중…',async()=>{const result=await api('/confirm-route',{plan:S.plan.id,rows:doubt.map(r=>r.id)});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u));renderReview();});}}
+
+// 6. 새 폴더 제안: 맞는 폴더가 없을 때(규칙·AI) 부모 폴더 아래 새 폴더를 만들고 넣을지 묻는다. 확인 전에는 만들지 않는다.
+const suggestBox=document.createElement('div');suggestBox.id='folderSuggest';suggestBox.className='card';suggestBox.hidden=true;$('#reviewMap')?.before?.(suggestBox);
+function folderSuggestions(){const map=new Map(),dismissed=new Set(S.plan.dismissedSuggestions||[]);
+ for(const r of S.plan.rows){const f=r.folderSuggestion;if(!f||r.done||r.method==='manual'||!S.plan.paths.includes(f.parent))continue;const key=f.parent+'\u0000'+f.name;if(dismissed.has(key))continue;
+  if(!map.has(key))map.set(key,{key,parent:f.parent,name:f.name,reason:f.reason||'',rows:[]});map.get(key).rows.push(r);}
+ return [...map.values()].sort((a,b)=>b.rows.length-a.rows.length);}
+function renderFolderSuggest(){if(!S.plan){suggestBox.hidden=true;return;}const list=folderSuggestions();suggestBox.hidden=!list.length;if(!list.length){suggestBox.innerHTML='';return;}
+ suggestBox.innerHTML='<strong>새 폴더 제안 '+list.length+'개</strong><p class="muted" style="margin:4px 0">지금 구조에 맞는 폴더가 없어 새 폴더를 제안합니다. ‘만들고 넣기’를 누르기 전에는 만들지 않습니다.</p><ul>'
+  +list.map((g,i)=>'<li><b>'+esc(g.parent.split('/').pop())+'</b> 아래 <b>‘'+esc(g.name)+'’</b> · 파일 '+g.rows.length+'개 <span class="muted">('+esc(g.rows.slice(0,3).map(r=>r.name).join(', '))+(g.rows.length>3?' 등':'')+')</span>'
+   +(g.reason?'<div class="muted">'+esc(g.reason)+'</div>':'')+'<div class="row"><button class="primary" data-suggest-make="'+i+'">만들고 넣기</button><button data-suggest-skip="'+i+'">안 만들기</button></div></li>').join('')+'</ul>';
+ $$('[data-suggest-make]').forEach(b=>b.onclick=()=>{const g=list[Number(b.dataset.suggestMake)];task('새 폴더 추가 중…',async()=>{const result=await api('/add-plan-folder',{plan:S.plan.id,parent:g.parent,name:g.name,rows:g.rows.map(r=>r.id)});applyFolderResult(result);
+  for(const r of g.rows)delete S.plan.rows.find(x=>x.id===r.id)?.folderSuggestion;$('#routeHelp').textContent='‘'+result.path+'’ 폴더를 구조에 더하고 파일 '+g.rows.length+'개를 넣었습니다. 실제 폴더는 파일 이동 실행 때 만듭니다.';renderReview(true);});});
+ $$('[data-suggest-skip]').forEach(b=>b.onclick=()=>{const g=list[Number(b.dataset.suggestSkip)];(S.plan.dismissedSuggestions??=[]).push(g.key);renderReview();});}
+function applyFolderResult(result){if(result.tree&&S.project)S.project.tree=result.tree;if(result.paths)S.plan.paths=result.paths;if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;
+ for(const u of result.rows||[])Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);}
+
+const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();renderFolderSuggest();}catch(e){console.error(e);}}return r;};
+
+// 10. 분류 못한 파일이 많으면 보류가 가장 많은 폴더 3곳을 묻고, 답을 반영해 AI 분류를 다시 돌린다(자동 2회까지). 'AI 다시 분류'는 질문 1회 후 분류.
+const questionDialog=document.createElement('dialog');questionDialog.id='questionDialog';document.body.appendChild(questionDialog);
+function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.paths||[];
+ const pathOptions='<option value="">폴더 고르기…</option>'+paths.map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join('');
+ questionDialog.innerHTML='<h2>분류 못한 파일이 너무 많아 몇 가지 확인하겠습니다</h2><p class="muted">보류 '+q.held+'개 / 확인 대상 '+q.pending+'개'+(round?' · '+round+'회차':'')+'. 답한 폴더의 파일은 고른 곳으로 정하고, 답을 참고해 나머지를 AI가 다시 분류합니다.</p>'
+  +q.questions.map((item,i)=>'<fieldset><legend>'+(i+1)+'. '+esc(item.question)+'</legend><div class="samples">‘'+esc(item.unit)+'’ · 파일 '+item.count+'개 · 예: '+esc(item.samples.slice(0,4).join(', '))+'</div>'
+   +item.choices.map((c,k)=>'<label><input type="radio" name="q'+i+'" value="c'+k+'"> '+esc(c.split('/').slice(-2).join(' › '))+' <small class="muted">'+esc(c)+'</small></label>').join('')
+   +'<label><input type="radio" name="q'+i+'" value="other"> 다른 폴더: <select data-q-other="'+i+'">'+pathOptions+'</select></label>'
+   +'<label><input type="radio" name="q'+i+'" value="new"> 새 폴더 만들기: <select data-q-parent="'+i+'">'+pathOptions+'</select> 아래 <input type="text" data-q-name="'+i+'" placeholder="예: 내부검토" size="12"></label>'
+   +'<label><input type="radio" name="q'+i+'" value="hold"> 원래 위치에 두기(보류)</label><label><input type="radio" name="q'+i+'" value="skip" checked> 잘 모르겠어요(건너뛰기)</label></fieldset>').join('')
+  +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionSkip">건너뛰기</button><button class="primary" id="questionYes">답하고 다시 분류</button></div>';
+ const pick=i=>questionDialog.querySelector?.('input[name="q'+i+'"]:checked')?.value||'skip';
+ $$('[data-q-other],[data-q-parent],[data-q-name]').forEach(el=>el.onfocus=el.oninput=el.onchange=()=>{const i=el.dataset.qOther??el.dataset.qParent??el.dataset.qName,radio=questionDialog.querySelector?.('input[name="q'+i+'"][value="'+(el.dataset.qOther!==undefined?'other':'new')+'"]');if(radio)radio.checked=true;});
+ const done=value=>{questionDialog.close();resolve(value);};
+ $('#questionSkip').onclick=()=>done(null);questionDialog.oncancel=e=>{e.preventDefault?.();done(null);};
+ $('#questionYes').onclick=()=>{const answers=[];for(const [i,item] of q.questions.entries()){const v=pick(i),a={unit:item.unit};
+   if(v.startsWith('c'))a.destination=item.choices[Number(v.slice(1))];else if(v==='other'){a.destination=$('[data-q-other="'+i+'"]').value;if(!a.destination){$('#questionError').textContent=(i+1)+'번: 폴더를 골라주세요.';$('#questionError').hidden=false;return;}}
+   else if(v==='new'){const parent=$('[data-q-parent="'+i+'"]').value,name=($('[data-q-name="'+i+'"]').value||'').trim();if(!parent||!name){$('#questionError').textContent=(i+1)+'번: 새 폴더의 위치와 이름을 정해주세요.';$('#questionError').hidden=false;return;}a.newFolder={parent,name};}
+   else if(v==='hold')a.hold=true;else a.skip=true;answers.push(a);}
+  done(answers);};
+ questionDialog.showModal?.();});}
+async function answerQuestions(answers){const result=await api('/bulk-answers',{plan:S.plan.id,answers});applyFolderResult(result);S.plan.askedUnits=result.askedUnits;S.selected.clear();renderReview(true);return result;}
+async function questionRound(round,{always=false}={}){const q=await api('/bulk-questions',{plan:S.plan.id});if(!q.questions.length||(!always&&!q.many))return false;
+ const answers=await askQuestions(q,round);if(!answers)return false;await answerQuestions(answers);return answers.some(a=>!a.skip);}
+const round3Classify=classifyCurrentPlan;
+classifyCurrentPlan=async function(recheck=false,retry=false){await round3Classify(recheck,retry);if(retry||!S.plan?.rows.length)return;
+ for(const round of [1,2]){if(!await questionRound(round))break;await round3Classify(false,true);}};
+$('#bulkAI').onclick=()=>task('AI 다시 분류 중…',async()=>{const answered=await questionRound(0,{always:true});await round3Classify($('#recheckBulk').checked,answered);});
