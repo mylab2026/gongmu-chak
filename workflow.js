@@ -67,7 +67,7 @@ $('#mapSelectGroup').onclick=()=>{S.plan.rows.filter(r=>parentFolder(r)===MapRev
 window.addEventListener('pointermove',event=>{if(!MapReview.pointerDrag)return;const target=findDropTarget(event.clientX,event.clientY);showRouteHover(target,routeSelection(MapReview.pointerDrag.id).length);});
 $('#routeHelp').textContent='왼쪽에서 여러 파일을 체크한 뒤 함께 끌어 놓거나 선택 파일 목적지 변경을 누르세요. 목적지 행 전체가 드롭 영역입니다.';
 
-const aiPrefs=document.createElement('div');aiPrefs.innerHTML='<label><input type="checkbox" id="autoClassify">파일 이동 단계에서 PC 규칙으로 못 정한 파일만 AI가 자동 분류</label><p class="muted">끄면 AI는 “AI 다시 분류”·“AI 발췌 검토”·“AI로 더 정확히 찾기”를 누를 때만 사용합니다.</p>';$('#settingsStatus').before(aiPrefs);
+const aiPrefs=document.createElement('div');aiPrefs.innerHTML='<label><input type="checkbox" id="autoClassify">파일 이동 단계에서 PC 규칙으로 못 정한 파일만 AI가 자동 분류</label>';$('#settingsStatus').before(aiPrefs);
 $('#autoClassify').onchange=()=>task('설정 저장 중…',async()=>{S.status.prefs=await api('/prefs',{autoClassify:$('#autoClassify').checked});});
 // AI 연결 설정: 등록 후에는 현재 모델·이번 달 호출을 먼저 보여주고, 키 입력은 변경할 때만 엽니다.
 const DEFAULT_MODEL='gemini-3.1-flash-lite';
@@ -77,7 +77,8 @@ function showModelWarning(){const id=chosenModel(),tier=id?modelTier(id):'light'
 function ensureModelOption(id,label){if(id&&!$('#aiModel').innerHTML.includes('value="'+esc(id)+'"'))$('#aiModel').innerHTML=$('#aiModel').innerHTML.replace('<option value="__manual__">','<option value="'+esc(id)+'">'+esc(label||id)+'</option><option value="__manual__">');}
 function updateUsageBadge(){const u=S.status?.usage;$('#usageBadge').classList[S.status?.configured?'remove':'add']('needs-setup');$('#usageBadge').textContent=S.status?.configured?(S.status.model||'모델 미선택')+' · 이번 달 AI '+(u?u.calls:0)+'회':'AI 미연결 · 설정 필요';}
 function prepareSettings(){const configured=Boolean(S.status?.configured);$('#apiKey').value='';$('#currentAI').hidden=!configured;$('#keyArea').hidden=configured;$('#changeKey').hidden=!configured;$('#changeKey').textContent='API 키 변경';$('#forgetKey').hidden=!configured;$('#modelHeading').textContent=configured?'모델 변경 (바꾸려면 선택 후 연결 확인·저장)':'사용할 모델';
- if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash-Lite ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;$('#settingsStatus').textContent='학내 API 키를 입력하고 연결 확인·저장을 눌러주세요. 모델은 Gemini 3.1 Flash-Lite가 기본으로 선택돼 있습니다.';}
+ if(configured){$('#currentModel').textContent=S.status.model||'선택되지 않음';ensureModelOption(S.status.model);$('#aiModel').value=S.status.model||'';}else{ensureModelOption(DEFAULT_MODEL,'Gemini 3.1 Flash-Lite ('+DEFAULT_MODEL+') · 기본값');$('#aiModel').value=DEFAULT_MODEL;}
+ $('#settingsStatus').textContent='';
  $('#manualModelArea').hidden=true;showModelWarning();$('#autoClassify').checked=S.status?.prefs?.autoClassify!==false;
  $('#monthCalls').textContent='확인 중…';api('/usage').then(u=>{$('#monthCalls').textContent=u.calls+'회 · 토큰 '+Number(u.tokens).toLocaleString()+'개 ('+u.month+')';if(S.status){S.status.usage=u;updateUsageBadge();}}).catch(()=>{$('#monthCalls').textContent='확인하지 못했습니다';});}
 const settingsDialog=$('#settings'),baseShowSettings=settingsDialog.showModal.bind(settingsDialog);settingsDialog.showModal=()=>{prepareSettings();baseShowSettings();};
@@ -185,14 +186,36 @@ function attachSuggestions(){const groups=new Map();S.plan.rows.filter(r=>!r.don
   const atts=rows.filter(r=>r!==main&&!r.attachTo&&!(S.attachDismissed||new Set()).has(r.id)&&(/^(붙임|첨부)/.test(r.name)||(eventFolder&&r.destination!==main.destination)));
   if(atts.length)out.push({main,atts,folder});}
  return out;}
-function needsCheck(r){if(r.done||(!r.destination&&r.holdConfirmed))return false;if(!r.destination)return r.historyReview?'history':r.contractReview?'contract':'hold';if(r.historyReview)return 'history';if(r.folderDateReview)return 'folderDate';if(r.reviewed)return false;if(r.contractReview)return 'contract';if(r.nameReviewRequired)return 'date';if(r.reviewRequired)return 'folder';if(r.attachTo&&!r.canonicalAttachment)return false;if(r.method==='ai'&&(r.confidence??1)<.85)return 'ai';
+function needsCheck(r){if(r.done||(!r.destination&&r.holdConfirmed))return false;if(!r.destination)return r.historyReview?'history':r.contractReview?'contract':'hold';if(r.historyReview)return 'history';if(r.folderDateReview)return 'folderDate';if(r.reviewed)return false;if(r.contractReview)return 'contract';if(r.nameReviewRequired)return 'date';if(r.reviewRequired)return 'folder';if(r.unitReview)return 'unit';if(r.attachTo&&!r.canonicalAttachment)return false;if(r.method==='ai'&&(r.confidence??1)<.85)return 'ai';
  const same=S.plan.rows.filter(o=>!o.done&&folderOf(o)===folderOf(r)&&o.destination);if(same.length>=3){const count=new Map();same.forEach(o=>count.set(o.destination,(count.get(o.destination)||0)+1));const top=[...count.entries()].sort((a,b)=>b[1]-a[1])[0];if(top[0]!==r.destination&&top[1]/same.length>=.6)return 'split';}
  return false;}
-const checkLabel={history:'이전 협의기록의 이동 이력이 있습니다. 내용을 확인해주세요',folderDate:'자료 폴더의 날짜를 선택해주세요',contract:'계약서의 소속과 계약 종류를 확인해주세요',date:'계약 체결일 확인이 필요합니다. 현재 파일명은 유지합니다.',folder:'폴더 묶음의 보관 위치를 확인해주세요',hold:'목적지를 정하지 못했어요',ai:'AI가 확신하지 못했어요',split:'같은 폴더의 다른 파일들과 다른 곳으로 가요'};
-function renderCheckPanel(){if(!S.plan)return;const count=S.plan.rows.filter(r=>needsCheck(r)).length;
+const checkLabel={history:'이전 협의기록의 이동 이력이 있습니다. 내용을 확인해주세요',folderDate:'자료 폴더의 날짜를 선택해주세요',contract:'계약서의 소속과 계약 종류를 확인해주세요',date:'계약 체결일 확인이 필요합니다. 현재 파일명은 유지합니다.',folder:'폴더 묶음의 보관 위치를 확인해주세요',hold:'목적지를 정하지 못했어요',ai:'AI가 확신하지 못했어요',split:'같은 폴더의 다른 파일들과 다른 곳으로 가요',unit:'같은 폴더의 다른 파일은 보류됐는데 이 파일만 파일 이름으로 정했어요'};
+/* ! 확인은 파일 하나씩이 아니라 묶음으로: 원래 폴더 단위(checkUnit, 서버가 정함) 안에서 확인 이유·제안 목적지가 같은 파일끼리 묶는다.
+   같은 폴더라도 목적지가 갈리면 묶음이 나뉘어 흩어지는 경로가 그대로 보인다. */
+function checkGroups(){const map=new Map();for(const r of S.plan.rows){const kind=needsCheck(r);if(!kind)continue;const unit=r.checkUnit??folderOf(r),key=unit+'\u0001'+kind+'\u0001'+(r.destination||'');let g=map.get(key);if(!g){g={unit,kind,destination:r.destination||'',rows:[]};map.set(key,g);}g.rows.push(r);}
+ return [...map.values()].sort((a,b)=>b.rows.length-a.rows.length||a.unit.localeCompare(b.unit));}
+function checkGroupRow(g,i){const many=g.rows.length>1;
+ return '<tr data-check-group="'+i+'"><td class="path">'+esc(g.unit||'(사업 폴더 바로 아래)')+'<br><small class="muted">파일 '+g.rows.length+'개</small></td><td class="path">'+(g.destination?esc(g.destination):'<b>보류</b>')+'</td><td><small>'+esc(checkLabel[g.kind]||'')+'</small></td>'
+  +'<td><div class="row" style="gap:6px"><button data-check-confirm="'+i+'">'+(g.destination?'이대로 확정':'보류로 두기')+'</button><select data-check-target="'+i+'" aria-label="묶음 목적지 선택"><option value="">'+(many?'묶음 목적지 바꾸기…':'목적지 바꾸기…')+'</option></select><button data-check-show="'+i+'">보기</button></div></td></tr>';}
+const checkGroupsBox=document.createElement('div');checkGroupsBox.id='checkGroupsBox';checkPanel.after(checkGroupsBox);
+function renderCheckPanel(){if(!S.plan)return;const groups=checkGroups(),count=groups.reduce((n,g)=>n+g.rows.length,0);
  undoBar.hidden=!S.lastJournal;
- checkPanel.innerHTML=count?'<p class="warn" style="margin:0;background:#fff1f0;color:#a4262c"><b>'+count+'개 파일</b>의 경로를 확신하지 못했습니다. 아래 화살표와 <b>!</b>를 보고 경로를 확정해주세요.</p>':'<p class="success" style="margin:0">확인이 필요한 경로가 없습니다. 연결도를 확인한 뒤 파일 이동 실행을 누르세요.</p>';
+ if(!count){checkPanel.innerHTML='<p class="success" style="margin:0">확인이 필요한 경로가 없습니다. 연결도를 확인한 뒤 파일 이동 실행을 누르세요.</p>';checkGroupsBox.innerHTML='';checkShown=[];return;}
+ const shown=groups.slice(0,60);
+ checkPanel.innerHTML='<p class="warn" style="margin:0;background:#fff1f0;color:#a4262c"><b>'+count+'개 파일</b>('+groups.length+'개 묶음)의 경로를 확신하지 못했습니다. 아래 화살표와 <b>!</b>를 보고, 묶음별로 확정하거나 목적지를 고르세요. 같은 폴더라도 목적지가 다르면 묶음이 나뉩니다.</p>';
+ checkGroupsBox.innerHTML='<details id="checkGroups" open><summary><b>확인할 묶음 '+groups.length+'개</b> · 파일 '+count+'개 · 같은 폴더라도 목적지가 다르면 묶음이 나뉩니다</summary><table><tr><th>원래 폴더</th><th>지금 제안</th><th>확인할 점</th><th></th></tr>'+shown.map(checkGroupRow).join('')+'</table>'
+  +(groups.length>shown.length?'<p class="muted">나머지 '+(groups.length-shown.length)+'개 묶음은 위 묶음을 확인하면 이어서 보입니다.</p>':'')+'</details>';
+ checkShown=shown;
 }
+let checkShown=[];
+const checkIds=i=>(checkShown[i]?.rows||[]).map(r=>r.id);
+const fillCheckTargets=e=>{const sel=e.target;if(!sel?.dataset?.checkTarget||sel.options.length>1)return;sel.insertAdjacentHTML('beforeend',(S.plan.paths||[]).map(p=>'<option value="'+esc(p)+'">'+esc(p)+'</option>').join(''));};
+checkGroupsBox.addEventListener('focusin',fillCheckTargets);checkGroupsBox.addEventListener('mousedown',fillCheckTargets);
+checkGroupsBox.onclick=e=>{const b=e.target?.closest?.('[data-check-confirm],[data-check-show]');if(!b)return;
+ if(b.dataset.checkShow!==undefined){const first=checkShown[+b.dataset.checkShow]?.rows[0];if(first&&typeof mapFocusFile==='function')mapFocusFile(first.id);return;}
+ task('묶음 확정 중…',async()=>{const result=await api('/confirm-route',{plan:S.plan.id,rows:checkIds(+b.dataset.checkConfirm)});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u));renderReview();});};
+checkGroupsBox.onchange=e=>{const sel=e.target;if(!sel?.dataset?.checkTarget||!sel.value)return;const i=+sel.dataset.checkTarget,g=checkShown[i],destination=sel.value;
+ task('묶음 목적지 바꾸는 중…',async()=>{const result=await api('/retarget-many',{plan:S.plan.id,rows:checkIds(i),destination,keepFolder:g.unit});if(result.folderRenames)S.plan.folderRenames=result.folderRenames;result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u));renderReview();});};
 const baseRenderReviewTidy=renderReview;
 renderReview=function(...args){const result=baseRenderReviewTidy(...args);if(!S.plan)return result;const info=S.plan.scanInfo,unassigned=S.plan.rows.some(r=>!r.done&&!r.destination),failed=S.plan.rows.some(r=>r.executionError);
  scanPanel.hidden=S.plan.rows.length>0&&(!info||info.sourceExists!==false);
@@ -299,3 +322,19 @@ window.addEventListener('keydown',e=>{if(!(e.ctrlKey||e.metaKey)||e.shiftKey||e.
 });
 const initialWithUndo=$('#initialButton').onclick;$('#initialButton').onclick=(...a)=>{resetStructureUndo();S.annualKind='';S.annualManagement='';$$('#annualChoices input').forEach(el=>el.checked=false);return initialWithUndo(...a);};
 const editWithUndo=editStructure.onclick;editStructure.onclick=(...a)=>{resetStructureUndo();return editWithUndo(...a);};
+
+/* 8. PC에서 직접 만든 폴더: 정리 뒤 사용자가 탐색기에서 새로 만든 폴더를 알려 주고, 사업 폴더 구조에 추가할지 묻는다.
+   추가하지 않아도 그 안의 파일은 옮기지 않는다(서버에서 제외). 추가하면 비슷한 이름의 새 파일을 그 폴더로 제안한다. */
+const userFolderPanel=document.createElement('div');userFolderPanel.id='userFolderPanel';userFolderPanel.className='card';userFolderPanel.hidden=true;
+$('#reviewMap').before(userFolderPanel);
+function renderUserFolders(){const list=(S.plan&&S.plan.userFolders)||[];userFolderPanel.hidden=!list.length;if(!list.length){userFolderPanel.innerHTML='';return;}
+ const key=list.map(f=>f.path).join('|');if(userFolderPanel.dataset.key===key)return;userFolderPanel.dataset.key=key;
+ userFolderPanel.innerHTML='<strong>PC에서 새로 만든 폴더 '+list.length+'개를 찾았어요</strong>'
+  +'<p class="muted">사업 폴더 구조에 추가하면 폴더 안의 파일은 그대로 두고, 앞으로 비슷한 이름의 파일을 이 폴더로 제안합니다. 추가하지 않아도 이 폴더 안의 파일은 옮기지 않습니다.</p>'
+  +list.map(f=>'<label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" checked data-user-folder="'+esc(f.path)+'"><span class="path">'+esc(f.path)+' <small class="muted">· 파일 '+f.files+'개</small></span></label>').join('')
+  +'<div class="row"><button id="registerUserFolders" class="primary">선택한 폴더를 구조에 추가</button></div>';
+ $('#registerUserFolders').onclick=()=>{const folders=[...userFolderPanel.querySelectorAll('[data-user-folder]:checked')].map(x=>x.dataset.userFolder);if(!folders.length){error('추가할 폴더를 선택해주세요.','#registerUserFolders');return;}
+  task('폴더 구조에 추가 중…',async()=>{await api('/register-folders',{id:S.project.id,folders});await refresh();const fresh=S.status.projects.find(p=>p.id===S.project.id);if(fresh){S.project=fresh;if(fresh.tree)S.tree=fresh.tree;}
+   S.plan=await api('/plan',{id:S.project.id,ongoing:S.plan.ongoing});S.selected.clear();userFolderPanel.dataset.key='';renderReview(true);});};}
+const userFolderReview=renderReview;
+renderReview=function(...args){const result=userFolderReview(...args);renderUserFolders();return result;};

@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import base64
 import calendar
+import collections
 import csv
 import datetime
 import html
 import ctypes
 from ctypes import wintypes
+import copy
 import functools
 import hashlib
 import io
@@ -48,6 +50,7 @@ SELECTIONS: dict[str, str] = {}
 PLANS: dict[str, dict] = {}
 JOBS: dict[str, dict] = {}
 INDEX_JOBS: dict[str, dict] = {}
+INDEX_REVISIONS: dict[str, int] = {}
 TEMPLATES = json.loads((APP / 'templates.json').read_text(encoding='utf-8'))
 
 
@@ -884,11 +887,18 @@ def index_file(pid):
 def run_index(job_id):
     job = INDEX_JOBS[job_id]
     try:
-        project = get_project(job['projectId'])
-        root = root_available(project)
+        with LOCK:
+            project = get_project(job['projectId'])
+            root = root_available(project)
+            revision = INDEX_REVISIONS.get(project['id'], 0)
+            old = (read_json(index_file(project['id']), {}) or {}).get('files', {})
+        def save_index(value):
+            with LOCK:
+                if INDEX_REVISIONS.get(project['id'], 0) != revision:
+                    fail('색인 중 파일이 이동했습니다. 문서 색인을 다시 만들어주세요.')
+                atomic_json(index_file(project['id']), value)
         files = scan(root)
         job.update(status='running', count=len(files))
-        old = (read_json(index_file(project['id']), {}) or {}).get('files', {})
         new = {}
         for number, file in enumerate(files, 1):
             if job.get('cancel'):
@@ -904,8 +914,8 @@ def run_index(job_id):
                 job['read'] += 1
             job['processed'] = number
             if number % 300 == 0:
-                atomic_json(index_file(project['id']), {'builtAt': now(), 'root': str(root), 'files': {**old, **new}, 'partial': True})
-        atomic_json(index_file(project['id']), {'builtAt': now(), 'root': str(root), 'files': new})
+                save_index({'builtAt': now(), 'root': str(root), 'files': {**old, **new}, 'partial': True})
+        save_index({'builtAt': now(), 'root': str(root), 'files': new})
         job['status'] = 'done'
     except Exception as error:
         job['status'] = 'failed'
@@ -1616,8 +1626,13 @@ def round_key(label,ancestors=()):
 
 
 def service_word(label):
+    """'32 기술지도 용역' -> '기술지도'. '석면'은 용역 이름이 아니라 업무 주제로도 흔히 쓰이므로
+    (예: '6. 석면관련', '석면 대응') 용역·공사·해체·제거·감리가 함께 있을 때만 계약 이름으로 본다."""
     value=semantic_label(label)
-    return next((w for w in SERVICE_WORDS if w in value),'')
+    word=next((w for w in SERVICE_WORDS if w in value),'')
+    if word=='석면' and not re.search(r'용역|공사|해체|제거|감리',value):
+        return ''
+    return word
 
 
 def same_role(source,target):
@@ -1704,6 +1719,25 @@ BRANCH_CHILD_WORDS=(
 
 
 TOP_LEVEL_WORDS=((r'공사전사진|착공전사진','공사전'),(r'보도자료|경과보고|언론','주요보고자료'),(r'사용기관|타기관','타기관협의자료'))
+
+
+def check_unit(relative, labels, cache):
+    """Folder that a person decides about as one unit: the first source folder (from the top) that
+    is not a stage, contract, standard work heading or tree folder name. '2. 시공단계/2. 공사/11. 실외기 구조
+    검토/A/B.dwg' -> '2. 시공단계/2. 공사/11. 실외기 구조 검토'. Files inside it may still go to different places;
+    the screen splits a unit by destination."""
+    parts=PurePosixPath(relative).parts[:-1]
+    for i,part in enumerate(parts):
+        known=cache.get(part)
+        if known is None:
+            value=semantic_label(part)
+            known=(not value or value in labels or any(w in value for w,_ in STAGE_SOURCE)
+                   or bool(re.search(r'공사$|용역|관급자재|도급|정리할문서', value))
+                   or any(re.search(pattern,value) for pattern,_ in BRANCH_CHILD_WORDS))
+            cache[part]=known
+        if not known:
+            return '/'.join(parts[:i+1])
+    return '/'.join(parts)
 
 
 def stage_node(paths,word):
@@ -2029,6 +2063,89 @@ def map_roles(project,rows,paths,inbox=INBOX):
         row.update(keepSub=inner,keepSubFor=target) if inner else (row.pop('keepSub',None),row.pop('keepSubFor',None))
 
 
+def user_made_folders(project, root, paths):
+    """Folders the user created on the PC after the first organization, outside the registered tree.
+
+    Only after at least one move run (before that, every old folder is unorganized material). A folder
+    counts when it is not in the tree, was not created by a move run (journal destinations and their
+    parents), is not the export or inbox folder, holds something other than shortcuts, and was created
+    after the first run. Only the top-most such folder is returned; its contents stay where they are."""
+    journals = [j for p in (DATA / 'history').glob('*.json') for j in [read_json(p)]
+                if j and j.get('projectId') == project['id'] and j.get('entries')]
+    if not journals or not root.is_dir():
+        return []
+    try:
+        first = time.mktime(time.strptime(min(j['at'] for j in journals), '%Y-%m-%d %H:%M:%S'))
+    except (KeyError, ValueError):
+        return []
+    made = set()
+    for journal in journals:
+        for entry in journal['entries']:
+            # 이동 기록의 목적지(공무착착이 만든 폴더)와 출발지(정리 대상이던 옛 폴더)는 사용자가 새로 만든 폴더가 아니다.
+            for value in [entry.get('destination', ''), str(PurePosixPath(entry.get('source', '')).parent)] + list(entry.get('madeDirs', [])):
+                part = PurePosixPath(value)
+                while str(part) not in ('', '.'):
+                    made.add(str(part)); part = part.parent
+    known = set(paths) | made
+    inbox = inbox_of(project)
+    registered = set(project.get('registeredFolders', []))
+    known.update(str(PurePosixPath(p).parent) for p in paths)
+    found = []
+    for folder, dirs, files in os.walk(root, followlinks=False):
+        relative = Path(folder).relative_to(root).as_posix()
+        dirs[:] = sorted(d for d in dirs if d not in ('.gongmu-chak', '$RECYCLE.BIN', 'System Volume Information', EXPORT_DIR, inbox)
+                         and not (Path(folder) / d).is_symlink())
+        if relative == '.':
+            continue
+        if relative in registered:
+            dirs[:] = []  # a folder the user registered keeps its own inner structure
+            continue
+        if relative in known:
+            continue
+        parent = str(PurePosixPath(relative).parent)
+        dirs[:] = []  # top-most only
+        if parent != '.' and parent not in paths:
+            continue
+        here = Path(folder)
+        try:
+            if here.stat().st_ctime < first:
+                continue
+        except OSError:
+            continue
+        contents = [p for p in here.rglob('*') if p.is_file()]
+        if contents and all(p.suffix.lower() == '.lnk' for p in contents):
+            continue
+        found.append({'path': relative, 'parent': '' if parent == '.' else parent, 'label': PurePosixPath(relative).name, 'files': len(contents)})
+    return found
+
+
+def register_user_folders(pid, folders):
+    """Add PC-made folders to the project tree as they are (no files move)."""
+    project = get_project(pid)
+    root = root_available(project)
+    candidates = {f['path']: f for f in user_made_folders(project, root, work_paths(project))}
+    tree = copy.deepcopy(project['tree'])
+    added = []
+    for path in folders:
+        item = candidates.get(path)
+        if not item:
+            fail('추가할 수 없는 폴더입니다: ' + str(path))
+        siblings = tree
+        for part in PurePosixPath(item['parent']).parts if item['parent'] else ():
+            node = next((n for n in siblings if n['label'] == part), None)
+            if node is None:
+                fail('상위 폴더를 폴더 구조에서 찾을 수 없습니다: ' + item['parent'])
+            siblings = node.setdefault('children', [])
+        if not any(n['label'] == item['label'] for n in siblings):
+            siblings.append({'label': item['label']})
+        added.append(path)
+    saved = save_project({'id': pid, 'name': project['name'], 'type': project.get('type', ''), 'tree': tree}, False)
+    saved['registeredFolders'] = sorted(set(saved.get('registeredFolders', [])) | set(added))
+    projects = read_json(DATA / 'projects.json', [])
+    atomic_json(DATA / 'projects.json', [saved if p.get('id') == pid else p for p in projects])
+    return {'added': added}
+
+
 def make_plan(pid, ongoing, virtual=None):
     project = get_project(pid)
     root = root_available(project)
@@ -2036,6 +2153,11 @@ def make_plan(pid, ongoing, virtual=None):
     PROGRESS['plan'] = {'stage': '파일 목록 읽는 중', 'done': 0, 'total': 0}
     files = scan(root, ongoing, inbox) if virtual is None else virtual
     paths = work_paths(project)
+    # PC에서 직접 만든 폴더(등록 전)의 파일은 사용자가 정리해 둔 것으로 보고 옮기지 않는다.
+    user_folders = user_made_folders(project, root, paths) if virtual is None else []
+    if user_folders:
+        prefixes = tuple(f['path'] + '/' for f in user_folders)
+        files = [f for f in files if not f['relative'].startswith(prefixes)]
     PROGRESS['plan'] = {'stage': '파일 이름·폴더로 분류 중', 'done': 0, 'total': len(files)}
     rows = []
     history = project.get('rules', [])
@@ -2093,7 +2215,22 @@ def make_plan(pid, ongoing, virtual=None):
     if virtual is None:rows.extend(add_empty_bundle_folders(root,rows,ongoing,inbox))
     plan['contextSummary']=meeting_coverage(project,plan)
     rows[:] = [r for r in rows if not r.get('destination') or str(PurePosixPath(effective_folder(r,r['destination']))/(r.get('proposedName') or r['name'])) != r.get('current',r['relative'])]
-    plan['scanInfo']['alreadyInPlaceCount']=max(0,len(files)-sum(r.get('kind')!='directory' for r in rows))
+    plan['scanInfo']['alreadyInPlaceCount']=max(0,len(files)-sum(r.get('kind')!='directory' for r in rows))+sum(f['files'] for f in user_folders)
+    plan['userFolders']=user_folders
+    labels={semantic_label(PurePosixPath(p).name) for p in paths}
+    unit_cache={}
+    for row in rows:
+        row['checkUnit']=check_unit(row.get('current',row['relative']),labels,unit_cache)
+    # 같은 묶음의 대부분이 보류인데 몇 개만 파일 이름 한 단어로 다른 곳에 정해졌으면, 묶음이 흩어지는 것이므로 확인을 받는다.
+    units=collections.defaultdict(list)
+    for row in rows:
+        if row.get('kind')!='directory' and row['checkUnit']:units[row['checkUnit']].append(row)
+    for members in units.values():
+        held=sum(not r.get('destination') for r in members)
+        if len(members)>=5 and held/len(members)>=.6:
+            for row in members:
+                if row.get('destination') and row.get('method')!='manual' and WEAK_RULE.match(row.get('reason') or ''):
+                    row['unitReview']=True
     PROGRESS.pop('plan', None)
     plan['localCount'] = sum(1 for r in rows if r['method'] in ('rule', 'attach'))
     PLANS[plan['id']] = plan
@@ -2135,6 +2272,8 @@ def keep_subfolders(rows, inbox=INBOX):
         if row.get('canonicalContract'):
             row.pop('keepSub',None);row.pop('keepSubFor',None);continue
         existing_sub = row.get('keepSub') if row.get('keepSubFor') == row.get('destination') else None
+        if row.get('unitKeep') and existing_sub and row.get('method')=='manual':
+            continue  # 묶음으로 목적지를 정한 파일: 원래 폴더 이름부터 그대로 둔다
         row.pop('keepSub', None)
         if not row.get('destination'):
             continue
@@ -2952,7 +3091,7 @@ def retarget(plan_id, row_id, destination):
     return {**row,'relatedRows':result['rows']}
 
 
-def retarget_many(plan_id, row_ids, destination):
+def retarget_many(plan_id, row_ids, destination, keep_folder=''):
     plan = get_plan(plan_id)
     if plan.get('finished') or any(j['planId'] == plan_id and j['status'] in ('pending', 'running') for j in JOBS.values()):
         fail('정리안을 확인하거나 AI 검토가 끝난 후 목적지를 바꿔주세요.')
@@ -2977,8 +3116,12 @@ def retarget_many(plan_id, row_ids, destination):
     common = 0
     while all(len(x) > common for x in parents) and len({x[common] for x in parents}) == 1:
         common += 1
+    unit = PurePosixPath(keep_folder).parts if keep_folder else ()
+    if unit and all(x[:len(unit)] == unit for x in parents):
+        common = len(unit) - 1  # 묶음으로 옮길 때는 원래 폴더 이름을 하위 폴더로 유지한다
     for row, parent in zip(rows, parents):
         row.update(change)
+        row['unitKeep'] = bool(unit) and common == len(unit) - 1
         row.pop('executionError', None)
         if not row.get('canonicalAttachment'):
             row.pop('attachTo', None)
@@ -3308,6 +3451,23 @@ def reconnect(pid, selection):
         if PLANS[plan_id]['projectId'] == pid:
             del PLANS[plan_id]
     return project
+
+
+def delete_project(pid):
+    """Remove a project from the registered list only.
+
+    The user's project folder and files are never touched. The record is appended to
+    deleted-projects.json (not shown in the app) and history journals/archives stay on disk,
+    so nothing is lost; the folder must be connected again to use it.
+    """
+    project = get_project(pid)
+    archive = read_json(DATA / 'deleted-projects.json', []) or []
+    atomic_json(DATA / 'deleted-projects.json', archive + [{**project, 'deletedAt': now()}])
+    atomic_json(DATA / 'projects.json', [p for p in read_json(DATA / 'projects.json', []) if p.get('id') != pid])
+    for plan_id in list(PLANS):
+        if PLANS[plan_id].get('projectId') == pid:
+            del PLANS[plan_id]
+    return {'ok': True, 'id': pid, 'name': project.get('name', '')}
 
 
 # Contract discovery is confined to the selected project. Cache contains no API keys.
@@ -3790,8 +3950,14 @@ def verification_context(project,relative):
 
 
 def verify_key(content_hash,conditions,context=None):
-    raw=json.dumps({'sha256':content_hash,'context':context,'c':{k:v for k,v in conditions.items() if k!='text'},'v':VERIFY_VERSION},ensure_ascii=False,sort_keys=True)
+    version=VERIFY_VERSION+'-official-structure' if requires_official_structure(conditions) else VERIFY_VERSION
+    raw=json.dumps({'sha256':content_hash,'context':context,'c':{k:v for k,v in conditions.items() if k!='text'},'v':version},ensure_ascii=False,sort_keys=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+def requires_official_structure(conditions):
+    return bool(conditions.get('officialOnly') or
+                not conditions.get('semanticQuery') and conditions.get('types') == ['공문'])
 
 
 def local_match(relative,text,c):
@@ -3984,15 +4150,19 @@ def verify_collection(pid,cid,relatives):
         except Exception as error:
             failed.append({'relative':relative,'error':str(error)[:200]});continue
         decision=answer.get('decision') if answer.get('decision') in ('match','mismatch','unclear') else 'unclear'
-        if decision=='match' and not answer.get('evidence'):decision='unclear'
-        fields={k:str(answer.get(k) or '')[:160] for k in ('docNumber','title','sender','recipient','docDate','contractTitle','party','signed_date') if answer.get(k)}
+        extracted=official_fields(text)
+        fields={k:str(answer.get(k) or extracted.get(k) or '').strip()[:160] for k in ('docNumber','title','sender','recipient','docDate','contractTitle','party','signed_date')}
+        evidence=dict(answer['evidence']) if isinstance(answer.get('evidence'),dict) else {}
+        if decision=='match' and not evidence:decision='unclear'
+        if decision=='match' and requires_official_structure(c) and not all(fields[k] for k in ('docNumber','title','sender','recipient')):
+            decision='unclear';evidence['공문 형식']='문서번호·제목·발신·수신을 모두 확인하지 못했습니다.'
         fields.update(isContract=answer.get('isContract') is True,isEmploymentContract=answer.get('isEmploymentContract') is True or is_employment_contract(relative,analysis={'title':fields.get('contractTitle') or fields.get('title')}))
         if fields['isEmploymentContract']:decision='mismatch'
         with LOCK:
             latest=get_project(pid)
             if not path.is_file() or file_hash(path)!=content_hash or verification_context(latest,relative)!=context:
                 failed.append({'relative':relative,'error':'확인 중 문서 또는 사업 정보가 바뀌었습니다. 다시 확인해주세요.'});continue
-            latest.setdefault('collectionChecks',{})[verify_key(content_hash,c,context)]={'decision':decision,'evidence':answer.get('evidence') or {},
+            latest.setdefault('collectionChecks',{})[verify_key(content_hash,c,context)]={'decision':decision,'evidence':evidence,
                                                                                         'fields':fields,'at':now(),'relative':relative}
             store_project(latest)
         done.append({'relative':relative,'decision':decision})
@@ -4058,6 +4228,24 @@ def carry_collection_marks(pid, moves):
         return
     with LOCK:
         project = get_project(pid);changed = False
+        # Reuse unchanged extracted text at the new path, and prevent an in-flight
+        # index scan from later writing the old paths over this migration.
+        INDEX_REVISIONS[pid] = INDEX_REVISIONS.get(pid, 0) + 1
+        index = read_json(index_file(pid), {}) or {}
+        files = index.get('files', {})
+        root = root_available(project)
+        index_changed = False
+        for old, new in moves:
+            record = files.pop(old, None)
+            if record is None:
+                continue
+            index_changed = True
+            target = safe_path(root, new)
+            if target.is_file() and record.get('fp') == fingerprint(target):
+                files[new] = record
+        if index_changed:
+            index['files'] = files
+            atomic_json(index_file(pid), index)
         for key in ('photoPhases', 'officialMarks'):
             marks = project.get(key) or {}
             for old, new in moves:
@@ -4089,6 +4277,20 @@ def export_target(item, standard, pattern, fallback):
     return min(choice, key=len) if len(choice) == 1 or (choice and len({len(p) for p in choice}) == len(choice)) else fallback
 
 
+def export_snapshot(project, root, data):
+    """Bind approval to the originals, classifications and tree shown in the preview.
+
+    App-generated links/guides and transient missing-item notices are excluded so
+    an unchanged repeat export remains valid. Originals use the same size/mtime
+    fingerprints as collection scans; this does not reread every document body.
+    """
+    state = {'root': str(root), 'name': project['name'], 'tree': project['tree'],
+             'photos': data['photos'], 'officials': data['officials'], 'period': data['period'],
+             'inbox': sorted((f['relative'], f['size'], f['mtime'])
+                             for f in scan(root, True, inbox_of(project)))}
+    return hashlib.sha256(json.dumps(state, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+
+
 def export_plan(pid):
     project = get_project(pid)
     root = root_available(project)
@@ -4117,7 +4319,7 @@ def export_plan(pid):
             'checks': {'photoCheck': data['counts']['check'], 'officialCheck': data['officialCheck'],
                        'missing': data['missing'], 'inboxLeft': leftovers},
             'photos': len(data['photos']), 'officials': len(data['officials'])}
-    EXPORTS[plan['id']] = {**plan, 'data': data}
+    EXPORTS[plan['id']] = {**plan, 'data': data, 'snapshot': export_snapshot(project, root, data)}
     return plan
 
 
@@ -4165,6 +4367,8 @@ def export_run(pid, plan_id):
     root = root_available(project)
     if str(root) != plan['root']:
         fail('사업 폴더 연결이 바뀌었습니다. 내보내기 계획을 다시 확인해주세요.')
+    if plan.get('snapshot') != export_snapshot(project, root, collect(pid)):
+        fail('문서 위치·분류 또는 폴더 구조가 바뀌었습니다. 내보낼 내용을 다시 확인해주세요.')
     index_path = safe_path(root, '.gongmu-chak/export.json')
     index = read_json(index_path, {}) or {}
     owned = index.get('links', {})
@@ -4220,6 +4424,18 @@ def export_run(pid, plan_id):
     return report
 
 
+def confirm_routes(plan_id,row_ids):
+    """Confirm a whole check group at once (same rules as one file)."""
+    plan=get_plan(plan_id)
+    wanted=set(row_ids or [])
+    confirmed=[]
+    for row in [r for r in plan['rows'] if r['id'] in wanted and not r.get('done')]:
+        if row.get('destination') and (row['destination'] not in plan['paths'] or row.get('folderDateReview')):
+            continue
+        confirmed.extend(confirm_route(plan_id,row['id'])['rows'])
+    return {'rows':list({r['id']:r for r in confirmed}.values())}
+
+
 def confirm_route(plan_id,row_id):
     plan=get_plan(plan_id)
     row=next((r for r in plan['rows'] if r['id']==row_id),None)
@@ -4257,6 +4473,8 @@ def dispatch(action, payload):
     if action == '/history-summary':
         return history_summary(payload['id'])
     if action == '/confirm-route':
+        if 'rows' in payload:
+            return confirm_routes(payload['plan'],list(payload['rows']))
         return confirm_route(payload['plan'],payload['row'])
     if action in ('/collection-assist','/collection-search-start','/collection-search-status','/collection-search-cancel'):
         import collection_assistant as assistant
@@ -4334,6 +4552,10 @@ def dispatch(action, payload):
         return save_project(payload, bool(payload.get('createFolders', False)))
     if action == '/reconnect':
         return reconnect(payload['id'], payload['selection'])
+    if action == '/register-folders':
+        return register_user_folders(payload.get('id', ''), list(payload.get('folders', [])))
+    if action == '/delete-project':
+        return delete_project(payload.get('id', ''))
     if action == '/connection-status':
         project = get_project(payload['id'])
         return {'exists': Path(project['root']).is_dir(), 'root': project['root']}
@@ -4364,7 +4586,7 @@ def dispatch(action, payload):
     if action == '/attach':
         return attach_rows(payload['plan'], payload['main'], payload.get('rows'), bool(payload.get('attach', True)))
     if action == '/retarget-many':
-        return retarget_many(payload['plan'], payload.get('rows'), payload['destination'])
+        return retarget_many(payload['plan'], payload.get('rows'), payload['destination'], str(payload.get('keepFolder') or ''))
     if action == '/execute-all':
         return execute_all(payload['plan'], payload['choices'], bool(payload.get('autoRename')))
     if action == '/finish':

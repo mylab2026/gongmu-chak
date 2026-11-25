@@ -130,7 +130,7 @@ def check_batch(a, pid, item, rows):
         decision = result.get('decision') if result.get('decision') in ('match', 'mismatch', 'unclear') else 'unclear'
         evidence = result.get('evidence')
         evidence = {str(k)[:80]: str(v)[:600] for k,v in evidence.items()} if isinstance(evidence, dict) else {}
-        fields = {k: str(result.get(k) or file['fields'].get(k) or '')[:160] for k in ('docNumber','title','sender','recipient','docDate','contractTitle','party','signed_date')}
+        fields = {k: str(result.get(k) or file['fields'].get(k) or '').strip()[:160] for k in ('docNumber','title','sender','recipient','docDate','contractTitle','party','signed_date')}
         fields.update(isContract=result.get('isContract') is True,isEmploymentContract=result.get('isEmploymentContract') is True)
         fields['signed_date']=a.signed_date({'analysis':{'signed_date':fields['signed_date']}})
         if a.is_employment_contract(file['relative'],analysis={'title':fields.get('contractTitle') or fields.get('title')}):fields['isEmploymentContract']=True
@@ -139,7 +139,7 @@ def check_batch(a, pid, item, rows):
         if fields['isEmploymentContract']:decision='mismatch'
         if decision == 'match' and (not evidence or conditions.get('unresolved')):
             decision = 'unclear'
-        if decision == 'match' and conditions.get('officialOnly') and not all(fields[k] for k in ('docNumber','title','sender','recipient')):
+        if decision == 'match' and a.requires_official_structure(conditions) and not all(fields[k] for k in ('docNumber','title','sender','recipient')):
             decision = 'unclear'; evidence['공문 형식'] = '문서번호·제목·발신·수신을 모두 확인하지 못했습니다.'
         with a.LOCK:
             latest = a.get_project(pid)

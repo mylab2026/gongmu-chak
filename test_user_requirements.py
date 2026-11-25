@@ -57,7 +57,8 @@ class UserRequirements(unittest.TestCase):
         self.assertNotIn(p.name,[d['name'] for d in app.collect(self.project['id'])['officials'] if d['status']=='yes'])
 
     def test_06_different_content_same_stat_does_not_share_ai_verdict(self):
-        a=self.write('3 시공단계/1 공문/a 공문.txt','AAAA');b=self.write('3 시공단계/1 공문/b 공문.txt','BBBB')
+        body='문서번호: 예시-001\n제목: 공정 협의\n발신: 예시건설\n수신: 시설지원과\n내용: '
+        a=self.write('3 시공단계/1 공문/a 공문.txt',body+'AAAA');b=self.write('3 시공단계/1 공문/b 공문.txt',body+'BBBB')
         stamp=1784000000000000000
         for p in (a,b):os.utime(p,ns=(stamp,stamp))
         c=app.save_collection(self.project['id'],{'name':'공문','text':'공문'})

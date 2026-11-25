@@ -170,6 +170,8 @@ body>main{flex:1 1 auto;min-width:0;width:100%;max-width:1140px;margin:24px auto
 #appSide .side-project{background:var(--side-2);border-radius:12px;padding:12px 14px}#appSide .side-project small{display:block;font-size:12px;color:var(--side-muted)}#appSide .side-project b{display:block;font-size:15px;line-height:1.4;overflow-wrap:anywhere}
 #appSide .side-label{font-size:12px;color:var(--side-muted);padding:0 10px;margin-bottom:2px}
 #appSide .side-steps,#appSide .side-nav{display:flex;flex-direction:column;gap:3px}
+#appSide .side-work{display:flex;flex-direction:column;gap:12px;border-top:1px solid #ffffff1f;padding-top:16px}
+#appSide .side-steps{border-left:2px solid #ffffff26;margin-left:8px;padding-left:4px}#appSide .side-steps .side-step{padding:7px 10px;font-size:13px}
 #appSide .side-step{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--side-muted);font-size:14px}
 #appSide .side-step span:nth-child(2){flex:1}#appSide .side-step.now{background:var(--side-on);color:#fff;font-weight:700}#appSide .side-step.done{color:#a7f3d0}#appSide .side-step .n{font-size:12px;font-weight:700}
 #appSide .side-nav button,#appSide .side-bottom button{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:9px 12px;border:0;border-radius:10px;background:transparent;color:var(--side-ink);font-size:14px;font-weight:500;text-align:left}
@@ -199,9 +201,12 @@ function iconize(el,name){if(el){el.classList.add('has-ic');el.style.setProperty
 const version=(document.querySelector('header span')?.textContent.match(/\d+\.\d+\.\d+/)||[''])[0];
 const side=document.createElement('aside');side.id='appSide';
 side.innerHTML='<div class="side-brand"><span class="side-logo">'+svg('folder',22)+'</span><div><b>공무착착</b><small>Windows 시험판 '+esc(version)+'</small></div></div>'
- +'<div class="side-project"><small>작업 중인 사업</small><b id="sideProject">선택 안 함</b></div>'
- +'<div id="sideStepsWrap" hidden><div class="side-label" id="sideStepsLabel"></div><div class="side-steps" id="sideSteps" role="list"></div></div>'
- +'<nav class="side-nav" id="sideNav" aria-label="메뉴"></nav><div class="side-bottom" id="sideBottom"></div>';
+ /* 메뉴는 항상 브랜드 바로 아래 같은 자리에 둔다. 작업 중인 사업·진행 단계는 메뉴 아래 별도 칸에 표시해
+    정리 단계에 들어가도 메뉴 버튼이 밀리거나 단계 목록과 섞여 보이지 않게 한다. */
+ +'<nav class="side-nav" id="sideNav" aria-label="메뉴"></nav>'
+ +'<section class="side-work" aria-label="진행 중인 작업"><div class="side-project"><small>작업 중인 사업</small><b id="sideProject">선택 안 함</b></div>'
+ +'<div id="sideStepsWrap" hidden><div class="side-label" id="sideStepsLabel"></div><div class="side-steps" id="sideSteps" role="list"></div></div></section>'
+ +'<div class="side-bottom" id="sideBottom"></div>';
 document.body.prepend(side);
 const nav=$('#sideNav'),bottom=$('#sideBottom');
 const navButton=(id,label,icon,go)=>{const b=document.createElement('button');b.id=id;b.textContent=label;b.onclick=go;iconize(b,icon);nav.appendChild(b);return b;};
