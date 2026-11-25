@@ -384,6 +384,34 @@ function addContractBranch(stageIndex,kind,name){
  const empty=kind==='service'&&stage.children.find(n=>!n.contractId&&!n.contractKind&&/^\s*용역\s*\d*\s*$/.test(baseName(n.label)));
  if(empty){const prefix=(empty.label.match(/^\d+/)||[''])[0];empty.label=(prefix?prefix+' ':'')+label;empty.contractKind='service';return empty;}
  const number=Math.max(0,...stage.children.map(n=>Number((n.label.match(/^\d+/)||[0])[0])))+1;
- const node={...structuredClone(base),label:number+' '+label,contractKind:kind};stage.children.push(node);return node;}
+ const node={...structuredClone(base),label:number+' '+label,num:number,contractKind:kind};stage.children.push(node);return node;}
 $('#contractBranchButton').onclick=()=>{clearError();try{if(typeof rememberStructure==='function')rememberStructure();addContractBranch(Number($('#contractBranchStage').value),$('#contractBranchKind').value,$('#contractBranchName').value);$('#contractBranchName').value='';renderTree();if(typeof renderAncillary==='function')renderAncillary();}catch(e){error(e.message,'#contractBranchName');}};
 refreshContractStages();
+
+/* 3단계: 2단계 계약 목록으로 기본 폴더 구조를 짠다. 계약마다 단계 아래 계약 가지 하나(종류별 표준 하위 폴더 포함).
+   기본 구조의 빈 칸(도급공사, 용역1, 관급자재 1, 설계 용역)이 있으면 그 칸을 쓰고, 모자라면 '계약 추가'와 같은 방식으로 늘린다.
+   예: 시공단계 용역 4건 → 시공단계에 용역 폴더 4개. 서버 분류는 가지의 contractId로 계약서를 그 가지에 보낸다. */
+const CONTRACT_CATEGORY={construction:'construction',service:'service',design:'design',material:'material'};
+function stageNodeIndex(stage){const pattern=stage==='기획'?/기획/:stage==='설계'?/설계단계/:/시공단계/;
+ let i=S.tree.findIndex(n=>pattern.test(n.label));if(i<0&&stage!=='시공')i=S.tree.findIndex(n=>/시공단계/.test(n.label));return i;}
+function applyContractBranches(){
+ if(typeof contractBranchPlan!=='function'||!S.tree.length)return 0;
+ const records=(S.contracts||[]).filter(c=>c?.analysis&&c.management!=='none'&&!(typeof c.analysis.is_employment_contract==='boolean'&&c.analysis.is_employment_contract));
+ let made=0;
+ for(const item of contractBranchPlan(records)){
+  const index=stageNodeIndex(item.stage);if(index<0)continue;const stage=S.tree[index];stage.children=stage.children||[];
+  const linked=stage.children.find(n=>n.contractId===item.record.id);
+  if(linked){if(baseName(linked.label)===String(item.record.analysis.title||'')){const prefix=(linked.label.match(/^\d+/)||[''])[0];linked.label=(prefix?prefix+' ':'')+item.name;item.record.branchLabel=linked.label;made++;}continue;}
+  const free=n=>!n.contractId;
+  let node=null;
+  if(item.kind==='construction')node=stage.children.find(n=>free(n)&&/도급공사/.test(baseName(n.label)));
+  else if(item.kind==='design')node=stage.children.find(n=>free(n)&&/설계\s*용역/.test(baseName(n.label)));
+  else if(item.kind==='material')node=stage.children.find(n=>free(n)&&/^\s*관급자재\s*\d*\s*$/.test(baseName(n.label)));
+  if(node){if(item.kind==='material'){const prefix=(node.label.match(/^\d+/)||[''])[0];node.label=(prefix?prefix+' ':'')+item.name;}}
+  else{const kind=item.kind==='design'?'service':item.kind;node=addContractBranch(index,kind,item.kind==='construction'&&stage.children.some(n=>/도급공사/.test(n.label))?item.name+' '+(stage.children.filter(n=>/도급공사/.test(n.label)).length+1):item.name);}
+  node.contractId=item.record.id;node.contractKind=CONTRACT_CATEGORY[item.kind];
+  if(item.kind==='service'||item.kind==='design')item.record.branchLabel=node.label;
+  made++;}
+ return made;}
+const contractTreeAuto=autoTemplate;
+autoTemplate=function(...args){const result=contractTreeAuto(...args);if(S.tree.length&&applyContractBranches()){renderTree();renderAncillary();}return result;};

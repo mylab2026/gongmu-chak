@@ -5,7 +5,7 @@ const autoContractNotice=document.createElement('div');autoContractNotice.classN
 function newContractSlot(number){return {number,status:'empty',record:null,pasteOpen:false,error:''};}
 function resetContractSlots(){AutoContract.generation++;AutoContract.scope=null;AutoContract.running=false;AutoContract.promise=null;AutoContract.hasNew=false;ContractInput.slots=[newContractSlot(1),newContractSlot(2)];ContractInput.ending=null;}
 function contractSlot(number){return ContractInput.slots.find(slot=>slot.number===number);}
-function syncContractRecords(){S.contracts=$('#noContracts').checked?[]:ContractInput.slots.filter(s=>s.record&&s.status!=='end').map(s=>s.record);}
+function syncContractRecords(){S.contracts=$('#noContracts').checked?[]:ContractInput.slots.filter(s=>s.record&&s.status!=='end'&&!s.excluded).map(s=>s.record);}
 function renderContractInput(){
  if(!ContractInput.slots.length)resetContractSlots();
  syncContractRecords();$('#addContracts').hidden=true;$('#contractFiles').hidden=true;$('#pasteArea').hidden=true;$('#contractAckLabel').hidden=true;
@@ -85,10 +85,10 @@ const originalContractNext=$('#contractNext').onclick;
 $('#contractNext').onclick=async()=>{
  clearError();if(AutoContract.running){error('계약서를 자동으로 찾고 있습니다. 완료 후 내용을 확인해주세요.');return;}syncContractRecords();
  if(!$('#noContracts').checked){
-  const incomplete=ContractInput.slots.find(slot=>['analyzing','error'].includes(slot.status));
+  const incomplete=ContractInput.slots.find(slot=>!slot.excluded&&['analyzing','error'].includes(slot.status));
   if(incomplete){const n=incomplete.number;error(incomplete.status==='error'?n+'번 계약서 자동 추출이 완료되지 않았습니다. 오류를 확인하고 다시 등록하거나 재시도해주세요.':n+'번 계약서 자동 추출이 끝날 때까지 기다려주세요.');$('#contract-slot-'+n)?.focus();return;}
-  if(!ContractInput.slots.some(slot=>slot.status==='ready')){$('#noContracts').checked=true;syncContractRecords();}
-  const confirmed=await task('확인한 계약 정보를 PC에 저장 중…',async()=>{for(const slot of ContractInput.slots.filter(s=>s.status==='ready')){const record=await api('/update-contract',{id:slot.record.id,analysis:slot.record.analysis});slot.record={...slot.record,...record};}const ids=ContractInput.slots.filter(s=>s.status==='ready').map(s=>s.record.id);if(ids.length)applyResolvedContracts(await api('/resolve-contracts',{ids}));syncContractRecords();return true;});
+  if(!ContractInput.slots.some(slot=>slot.status==='ready'&&!slot.excluded)){$('#noContracts').checked=true;syncContractRecords();}
+  const confirmed=await task('확인한 계약 정보를 PC에 저장 중…',async()=>{for(const slot of ContractInput.slots.filter(s=>s.status==='ready'&&!s.excluded)){const record=await api('/update-contract',{id:slot.record.id,analysis:slot.record.analysis});slot.record={...slot.record,...record};}const ids=ContractInput.slots.filter(s=>s.status==='ready'&&!s.excluded).map(s=>s.record.id);if(ids.length)applyResolvedContracts(await api('/resolve-contracts',{ids}));syncContractRecords();return true;});
   if(!confirmed)return;
  }
  $('#contractAck').checked=true;const result=await originalContractNext();if($('#contractStep').hidden)AutoContract.hasNew=false;return result;
@@ -96,7 +96,7 @@ $('#contractNext').onclick=async()=>{
 resetContractSlots();renderContractInput();
 function applyResolvedContracts(resolved){
  if(!Array.isArray(resolved.current))return;
- const pending=ContractInput.slots.filter(s=>s.record&&s.status==='error');
+ const pending=ContractInput.slots.filter(s=>s.record&&(s.status==='error'||s.excluded));
  ContractInput.slots=resolved.current.map((record,i)=>({...newContractSlot(i+1),record,status:'ready'})).concat(pending);
  ContractInput.slots.forEach((s,i)=>s.number=i+1);ContractInput.slots.push(newContractSlot(ContractInput.slots.length+1));
  while(ContractInput.slots.length<2)ContractInput.slots.push(newContractSlot(ContractInput.slots.length+1));
@@ -153,3 +153,57 @@ async function discoverContracts(){
 const showWithAutoContracts=show;
 show=function(step){showWithAutoContracts(step);if(!Navigation.restoring&&!$('#contractStep').hidden)discoverContracts();};
 renderAutoContractNotice();
+
+/* 2단계 간소화(2026-11-25 LIM 요청): 계약 내용은 펼치지 않고, AI가 계약서로 파악한 '계약 목록'과
+   그 목록으로 만들 폴더(단계별 계약 가지)만 보여 준다. 같은 계약의 최초·변경·사본은 이미 하나로 합쳐져 있다(최종 계약 기준).
+   빼기/되살리기, 단계 고치기, 계약서 추가(파일·캡처·끌어 놓기)는 그대로 쓴다. 자세한 값은 '고치기'로만 연다. */
+const CONTRACT_STAGES=[['기획','기획 단계'],['설계','설계단계'],['시공','시공단계']];
+const CONTRACT_KIND_NAMES={construction:'공사',service:'용역',design:'설계 용역',material:'관급자재'};
+function contractKindOf(record){const a=record?.analysis||{},t=String(a.title||'');
+ if(a.kind==='material'||/관급자재|물품|구매/.test(t))return 'material';
+ if(/용역/.test(t))return /설계/.test(t)&&!/설계의도|감리/.test(t)?'design':'service';
+ if(a.kind==='design')return 'design';if(a.kind==='service')return 'service';
+ if(/공사/.test(t)||a.kind==='construction')return 'construction';return 'service';}
+function contractStageOf(record){const a=record?.analysis||{};if(['기획','설계','시공'].includes(a.stage))return a.stage;
+ const t=String(a.title||'');if(/기획/.test(t)&&/용역/.test(t))return '기획';return contractKindOf(record)==='design'?'설계':'시공';}
+function contractFolderName(record){const a=record?.analysis||{},kind=contractKindOf(record),t=String(a.title||'').replace(/\([^)]*\)/g,' ').replace(/\s+/g,' ').trim();
+ const short=String(a.short_name||'').trim();
+ if(kind==='construction')return '도급공사';
+ if(kind==='design')return /기획/.test(t)?'기획설계 용역':'설계 용역';
+ let name=short&&short.length<=12?short:'';
+ if(!name){const words=t.split(' ').filter(Boolean);while(words.length&&/^용역$/.test(words.at(-1)))words.pop();const cut=words.map(w=>/공사$/.test(w)).lastIndexOf(true);let tail=cut>=0&&words.length-cut-1>=1&&words.length-cut-1<=5?words.slice(cut+1):words.slice(-3);while(tail.length>1&&/^(및|관련|의|와|과)$/.test(tail[0]))tail=tail.slice(1);name=tail.join(' ');}
+ if(kind==='material')return name.includes('관급자재')?name:'관급자재 '+name.replace(/\s*(구매|계약)$/,'');
+ return /용역$/.test(name)?name:name+' 용역';}
+function contractBranchPlan(records){return records.map(r=>({record:r,stage:contractStageOf(r),kind:contractKindOf(r),name:contractFolderName(r)}));}
+const baseRenderContractInput=renderContractInput;
+renderContractInput=function(...args){
+ const result=baseRenderContractInput(...args),box=$('#pendingContracts');if(!box||!box.prepend)return result;
+ const listed=ContractInput.slots.filter(s=>s.record&&(s.status==='ready'||s.excluded));
+ for(const slot of ContractInput.slots){const card=$('#contract-slot-'+slot.number);if(!card)continue;
+  const open=slot.editOpen||(!slot.record&&slot.status!=='end'&&ContractInput.addOpen)||(['analyzing','error'].includes(slot.status)&&!slot.excluded);card.hidden=!open;}
+ const live=listed.filter(s=>!s.excluded),plan=contractBranchPlan(live.map(s=>s.record));
+ const row=slot=>{const r=slot.record,a=r.analysis||{},kind=contractKindOf(r),files=1+(r.supersededIds||[]).length,date=String(a.signed_date||'').slice(2).replace(/-/g,'.');
+  return '<tr class="'+(slot.excluded?'ci-out':'')+'"><td><b>'+esc(a.title||r.name)+'</b><div class="muted">'+esc(a.party||'상대자 미확인')+(a.long_term?' · 장기계속계약':'')+' · 계약서 '+files+'건 합침'+(r.contractDoubt?' · <span class="warn">계약서인지 확인 필요</span>':'')+'</div></td>'
+   +'<td><span class="pill">'+CONTRACT_KIND_NAMES[kind]+'</span><br><select data-ci-stage="'+slot.number+'" aria-label="단계"'+(slot.excluded?' disabled':'')+'>'+CONTRACT_STAGES.map(([k,v])=>'<option value="'+k+'"'+(k===contractStageOf(r)?' selected':'')+'>'+v+'</option>').join('')+'</select></td>'
+   +'<td>'+esc(date||'미확인')+'</td><td>'+(slot.excluded?'<button data-ci-restore="'+slot.number+'">되살리기</button>':'<button data-ci-out="'+slot.number+'">빼기</button> <button data-ci-edit="'+slot.number+'">고치기</button>')+'</td></tr>';};
+ const order={construction:0,design:1,service:1,material:2};
+ const stages=CONTRACT_STAGES.map(([k,v])=>{const items=plan.filter(p=>p.stage===k);if(!items.length)return '';
+  return '<li><b>'+v+'</b><ul>'+items.sort((x,y)=>order[x.kind]-order[y.kind]).map(p=>'<li>'+esc(p.name)+' <span class="muted">← '+CONTRACT_KIND_NAMES[p.kind]+'</span></li>').join('')+'</ul></li>';}).join('');
+ const services=plan.filter(p=>p.stage==='시공'&&p.kind==='service').length;
+ const summary=document.createElement('div');summary.id='contractList';
+ summary.innerHTML='<style>#contractList{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin:12px 0}#contractList .ci-box{border:1px solid #d8e3f0;border-radius:12px;padding:16px;background:#fff}#contractList table{width:100%;border-collapse:collapse}#contractList td,#contractList th{padding:8px 6px;border-bottom:1px solid #edf1f7;text-align:left;vertical-align:middle}#contractList tr.ci-out td{opacity:.5}#contractList tr.ci-out td:last-child{opacity:1}#contractList ul{margin:4px 0;padding-left:18px}#contractList th{white-space:nowrap;font-size:13px}#contractList td:nth-child(2){min-width:110px}#contractList select{min-width:100px;width:auto;padding:4px 6px;font-size:13px}#contractList td:last-child{white-space:nowrap}#contractList td:last-child button{padding:5px 10px;min-height:0;font-size:13px}@media(max-width:1180px){#contractList{grid-template-columns:1fr}}</style>'
+  +'<div class="ci-box"><strong>찾은 계약 '+live.length+'건</strong><p class="muted" style="margin:4px 0 0">같은 계약의 최초·변경·사본은 하나로 합쳐 가장 나중 계약 기준으로 보여 줍니다. 필요 없는 계약은 빼고, 빠진 계약은 추가하세요.</p>'
+  +(listed.length?'<table><tr><th>계약</th><th>종류 · 단계</th><th>최종 체결</th><th></th></tr>'+listed.map(row).join('')+'</table>':'<p class="muted">아직 찾은 계약이 없습니다.</p>')
+  +'<div class="row" style="margin-top:10px"><button id="ciAddOpen">＋ 계약서 추가</button><span class="muted">파일 선택 · 캡처 붙여넣기 · 끌어다 놓기</span></div></div>'
+  +'<div class="ci-box"><strong>이 계약으로 만들 폴더</strong><p class="muted" style="margin:4px 0 0">계약마다 폴더가 하나씩 생기고, 안에 품의서·계약서·착수계·지출서류·설계변경·완수계 같은 표준 하위 폴더가 함께 생깁니다. 다음 단계에서 이름·위치를 고칠 수 있습니다.</p>'
+  +(stages?'<ul>'+stages+'</ul>':'<p class="muted">계약이 없으면 기본 폴더 구조만 만듭니다.</p>')+(services?'<p><b>시공단계 용역 '+services+'건 → 용역 폴더 '+services+'개</b></p>':'')+'</div>';
+ box.prepend(summary);
+ $$('[data-ci-out]').forEach(b=>b.onclick=()=>{const slot=contractSlot(Number(b.dataset.ciOut));slot.excluded=true;slot.editOpen=false;renderContractInput();});
+ $$('[data-ci-restore]').forEach(b=>b.onclick=()=>{const slot=contractSlot(Number(b.dataset.ciRestore));slot.excluded=false;renderContractInput();});
+ $$('[data-ci-edit]').forEach(b=>b.onclick=()=>{const slot=contractSlot(Number(b.dataset.ciEdit));slot.editOpen=!slot.editOpen;renderContractInput();$('#contract-slot-'+slot.number)?.scrollIntoView({block:'center'});});
+ $$('[data-ci-stage]').forEach(sel=>sel.onchange=()=>{const slot=contractSlot(Number(sel.dataset.ciStage));slot.record.analysis={...slot.record.analysis,stage:sel.value};renderContractInput();});
+ const add=$('#ciAddOpen');if(add)add.onclick=()=>{ContractInput.addOpen=true;let empty=ContractInput.slots.find(s=>!s.record&&s.status!=='end');if(!empty){empty=newContractSlot(ContractInput.slots.length+1);ContractInput.slots.push(empty);}renderContractInput();$('#contract-slot-'+empty.number)?.scrollIntoView({block:'center'});};
+ if(AutoContract.running)$$('#contractList button, #contractList select').forEach(el=>el.disabled=true);
+ return result;};
+renderContracts=renderContractInput;
+renderContractInput();

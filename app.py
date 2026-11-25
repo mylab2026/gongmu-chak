@@ -648,12 +648,14 @@ def update_contract(cid, analysis):
     if not isinstance(analysis, dict):
         fail('계약 정보 형식을 확인해주세요.')
     for key in ('title', 'party', 'period', 'project_name', 'kind', 'signed_date', 'contract_number', 'original_contract_number', 'amount',
-                'short_name', 'total_amount', 'total_period', 'annual_amount', 'annual_period'):
+                'short_name', 'total_amount', 'total_period', 'annual_amount', 'annual_period', 'stage'):
         value = analysis.get(key, record['analysis'].get(key))
         if key == 'amount' and isinstance(value, (int, float)):
             value = str(value)
         if value is not None and (not isinstance(value, str) or len(value) > 1000):
             fail('계약 정보는 1,000자 이내의 문자로 입력해주세요.')
+        if key == 'stage' and value not in (None, '기획', '설계', '시공'):
+            fail('계약 단계를 확인해주세요.')
         if key == 'kind' and value not in (None, 'construction', 'design', 'service', 'material', 'unknown'):
             fail('계약 종류를 확인해주세요.')
         record['analysis'][key] = value
