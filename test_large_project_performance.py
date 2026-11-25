@@ -22,6 +22,13 @@ class LargeProjectPerformance(unittest.TestCase):
         self.data = patch.object(app, 'DATA', self.base / 'settings')
         self.data.start()
         self.addCleanup(self.data.stop)
+        # Exercise three or more batches independently of the production batch size.
+        batch = patch.object(app, 'BULK_MAX_FILES', 24)
+        batch.start()
+        self.addCleanup(batch.stop)
+        workers = patch.object(app, 'BULK_WORKERS', 1)
+        workers.start()
+        self.addCleanup(workers.stop)
         app.DATA.mkdir()
         app.SELECTIONS['performance'] = str(self.root)
         tree = [{'label': app.INBOX}, {'label': '1 공통', 'children': [
@@ -127,7 +134,7 @@ class LargeProjectPerformance(unittest.TestCase):
         return source
 
     @staticmethod
-    def answer(messages):
+    def answer(messages, **kwargs):
         rows = json.loads(messages[-1]['content'])['files']
         return {'assignments': [{'file_id': row['file_id'], 'destination_id': None,
                                  'reason': '합성 응답: 보류', 'confidence': 0.1} for row in rows]}
@@ -154,7 +161,7 @@ class LargeProjectPerformance(unittest.TestCase):
     def test_changed_contract_is_rehashed_during_the_same_job(self):
         source = self.setup_bulk()
         calls = 0
-        def change(messages):
+        def change(messages, **kwargs):
             nonlocal calls
             calls += 1
             if calls == 2: source.write_bytes(b'changed candidate with different bytes')

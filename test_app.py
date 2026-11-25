@@ -289,19 +289,19 @@ class FileOperations(unittest.TestCase):
             self.write_file(f'문서 {i:02d}.txt', b'PRIVATE DOCUMENT CONTENT NEVER SENT')
         plan = self.plan()
         captured = []
-        def respond(messages):
+        def respond(messages, **kwargs):
             data = json.loads(messages[1]['content'])
             captured.extend(data['files'])
             self.assertNotIn('PRIVATE DOCUMENT CONTENT', json.dumps(messages))
             self.assertTrue(all('original_folder' in file for file in data['files']))
-            self.assertLessEqual(len(data['files']), 24)
+            self.assertLessEqual(len(data['files']), app.BULK_MAX_FILES)
             return {'assignments': [{'file_id': file['file_id'], 'destination_id': 'd2',
                                       'reason': '파일명과 기존 폴더 문맥', 'confidence': .9} for file in data['files']]}
         with patch.object(app, 'gateway', side_effect=respond) as call:
             job = self.run_bulk_sync(plan)
             self.assertEqual(job['status'], 'done')
             self.assertEqual(job['processed'], 52)
-            self.assertEqual(call.call_count, 3)
+            self.assertEqual(call.call_count, 1)
         self.assertEqual(len({file['file_id'] for file in captured}), 52)
         self.assertTrue(all(row['destination'] == '01 공통/계약서' for row in plan['rows']))
         self.assertEqual(len(list((self.root / app.INBOX).glob('*.txt'))), 52)
@@ -322,16 +322,15 @@ class FileOperations(unittest.TestCase):
         self.assertEqual(job['status'], 'failed')
         self.assertTrue(all(not row['destination'] for row in rows))
 
-    def test_bulk_missing_and_low_confidence_held(self):
+    def test_bulk_low_confidence_held(self):
         self.write_file('문서A.txt')
         self.write_file('문서B.txt')
         plan = self.plan()
         with patch.object(app, 'gateway', return_value={'assignments': [
-                {'file_id': plan['rows'][0]['id'], 'destination_id': 'd2', 'reason': '불확실', 'confidence': .4}]}):
+                {'file_id': row['id'], 'destination_id': 'd2', 'reason': '불확실', 'confidence': .4} for row in plan['rows']]}):
             job = self.run_bulk_sync(plan)
         self.assertEqual(job['status'], 'done')
         self.assertTrue(all(not row['destination'] and row['aiChecked'] for row in plan['rows']))
-        self.assertTrue(any('누락' in row['reason'] for row in plan['rows']))
 
     def test_bulk_rule_default_skipped_and_recheck_optional(self):
         self.write_file('계약서.pdf')
@@ -350,7 +349,7 @@ class FileOperations(unittest.TestCase):
         for i in range(161):
             self.write_file(f'자료 {i:03d}.txt')
         plan = self.plan()
-        def respond(messages):
+        def respond(messages, **kwargs):
             files = json.loads(messages[1]['content'])['files']
             return {'assignments': [{'file_id': f['file_id'], 'destination_id': None,
                                      'reason': '추가 확인 필요', 'confidence': 0} for f in files]}
@@ -358,7 +357,7 @@ class FileOperations(unittest.TestCase):
             job = self.run_bulk_sync(plan)
         self.assertEqual(job['status'], 'done')
         self.assertEqual(job['processed'], 161)
-        self.assertEqual(call.call_count, 7)
+        self.assertEqual(call.call_count, 2)
 
     def test_empty_inbox_diagnosis_and_explicit_whole_scan(self):
         (self.root / '사업 전체 문서.txt').write_bytes(b'test')

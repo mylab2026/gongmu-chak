@@ -15,6 +15,7 @@ files.extend(['demo_sample.py','test_demo_sample.py'])
 files.extend(['chatbot_support.py','chatbot-support.js','ui-clarity.js','test_chatbot_support.py','test_ui_clarity.py','QA-CHATBOT.md'])
 files.extend(['test_user_folder_scope.py','test_journal_batching.py','test_check_groups.py','test_user_made_folders.py','test_delete_project.py','test_contract_fixes.py'])
 files.extend(['test_large_project_performance.py','tools/performance_probe.py','QA-PERFORMANCE.md'])
+files.extend(['test_bulk_throughput.py'])
 files.extend(p.relative_to(root).as_posix() for p in sorted((root/'chatbot').glob('*')) if p.is_file())
 manifest = {}
 with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
