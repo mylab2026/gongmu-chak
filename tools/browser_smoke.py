@@ -209,17 +209,19 @@ def main():
                         mk('k5','가상관 라운지 건축음향 컨설팅 용역','가상음향','service'),mk('k6','가상관 구조도면 현행화 및 안전진단 용역','가상구조','service'),mk('k7','가상관 미디어월 구매','가상상사','material')];
                       try{ContractInput.slots=recs.map((r,i)=>({number:i+1,status:'ready',record:r,pasteOpen:false,error:''}));
                         const wasHidden=$('#contractStep').hidden;$('#contractStep').hidden=false;renderContractInput();
-                        const before=document.querySelector('#contractList').innerText;
+                        const before=document.querySelector('#contractList').innerText;const stagesShown=[...document.querySelectorAll('#contractList .ci-stage-name')].map(e=>e.textContent),kindsShown=[...[...document.querySelectorAll('#contractList .ci-stage')].at(-1).querySelectorAll('.ci-kind-head .ci-tag')].map(e=>e.textContent);
                         document.querySelector('[data-ci-out="7"]').click();const afterOut=document.querySelector('#contractList').innerText;
                         document.querySelector('[data-ci-restore="7"]').click();
                         const cardsHidden=[...document.querySelectorAll('#pendingContracts .ci-card')].filter(c=>c.id.startsWith('contract-slot-')&&Number(c.id.slice(14))<=7).every(c=>c.hidden);
                         $('#noContracts').checked=false;syncContractRecords();const synced=S.contracts.length;S.type='planning';autoTemplate();
                         const stage=S.tree.find(n=>/시공단계/.test(n.label)),design=S.tree.find(n=>/설계단계/.test(n.label));
-                        const out={synced,count:before.includes('찾은 계약 7건'),services:before.includes('용역 폴더 4개'),afterOut:afterOut.includes('찾은 계약 6건'),cardsHidden,
+                        const out={stagesShown,kindsShown,synced,count:before.includes('찾은 계약 7건'),services:before.includes('용역 폴더 4개'),afterOut:afterOut.includes('찾은 계약 6건'),cardsHidden,
                           build:stage.children.map(n=>[n.label,n.contractKind||'',n.contractId||'',(n.children||[]).length]),top:S.tree.map(n=>n.label+' > '+(n.children||[]).map(c=>c.label+'['+(c.contractId||'')+'|'+(c.contractKind||'')+']').join(', ')),plan:contractBranchPlan(S.contracts).map(p=>p.record.id+':'+p.stage+':'+p.kind+':'+p.name),design:(design?.children||[]).map(n=>[n.label,n.contractId||''])};
                         $('#contractStep').hidden=wasHidden;return out;}
                       finally{ContractInput.slots=savedSlots;S.contracts=savedContracts;S.tree=savedTree;S.type=savedType;renderContractInput();renderTree();}}""")
                     assert listed['count'] and listed['services'] and listed['afterOut'] and listed['cardsHidden'], listed
+                    # 2단계 화면 개선: 단계(설계·시공)가 위에, 그 아래 종류(공사·용역·관급자재) 순서
+                    assert listed['stagesShown']==['설계 단계','시공 단계'] and listed['kindsShown']==['공사','용역','관급자재'], listed
                     linked={c for _,_,c,_ in listed['build'] if c}
                     assert {'k1','k3','k4','k5','k6','k7'}<=linked and sum(1 for l,k,c,_ in listed['build'] if c in {'k3','k4','k5','k6'})==4, listed['build']
                     assert not any(l.split(' ',1)[-1].startswith('가상관 환경개선') for l,k,c,_ in listed['build']), listed['build']  # 건명 전체가 아닌 짧은 폴더 이름

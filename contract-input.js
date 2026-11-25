@@ -190,21 +190,59 @@ renderContractInput=function(...args){
  for(const slot of ContractInput.slots){const card=$('#contract-slot-'+slot.number);if(!card)continue;
   const open=slot.editOpen||(!slot.record&&slot.status!=='end'&&ContractInput.addOpen)||(['analyzing','error'].includes(slot.status)&&!slot.excluded);card.hidden=!open;}
  const live=listed.filter(s=>!s.excluded),plan=contractBranchPlan(live.map(s=>s.record));
- const row=slot=>{const r=slot.record,a=r.analysis||{},kind=contractKindOf(r),files=1+(r.supersededIds||[]).length,date=String(a.signed_date||'').slice(2).replace(/-/g,'.');
-  return '<tr class="'+(slot.excluded?'ci-out':'')+'"><td><b>'+esc(a.title||r.name)+'</b><div class="muted">'+esc(a.party||'상대자 미확인')+(a.long_term?' · 장기계속계약':'')+' · 계약서 '+files+'건 합침'+(r.contractDoubt?' · <span class="warn">계약서인지 확인 필요</span>':'')+'</div></td>'
-   +'<td><select data-ci-kind="'+slot.number+'" aria-label="계약 종류"'+(slot.excluded?' disabled':'')+'>'+CONTRACT_KIND_CHOICES.map(([k,v])=>'<option value="'+k+'"'+(k===kind?' selected':'')+'>'+v+'</option>').join('')+'</select><br><select data-ci-stage="'+slot.number+'" aria-label="단계"'+(slot.excluded?' disabled':'')+'>'+CONTRACT_STAGES.map(([k,v])=>'<option value="'+k+'"'+(k===contractStageOf(r)?' selected':'')+'>'+v+'</option>').join('')+'</select></td>'
-   +'<td>'+esc(date||'미확인')+'</td><td>'+(slot.excluded?'<button data-ci-restore="'+slot.number+'">되살리기</button>':'<button data-ci-out="'+slot.number+'">빼기</button> <button data-ci-edit="'+slot.number+'">고치기</button>')+'</td></tr>';};
- const order={construction:0,design:1,service:1,material:2};
- const stages=CONTRACT_STAGES.map(([k,v])=>{const items=plan.filter(p=>p.stage===k);if(!items.length)return '';
-  return '<li><b>'+v+'</b><ul>'+items.sort((x,y)=>order[x.kind]-order[y.kind]).map(p=>'<li>'+esc(p.name)+' <span class="muted">← '+CONTRACT_KIND_NAMES[p.kind]+'</span></li>').join('')+'</ul></li>';}).join('');
+ // 2단계 목록 화면(2026-11-25 LIM 요청): 단계(기획·설계·시공)를 위에, 그 아래 종류(공사·설계 용역·용역·관급자재), 계약은 카드 한 장씩.
+ // 단계 색은 3단계 마인드맵과 같다(기획 초록·설계 주황·시공 보라). 설명 글은 줄이고 건명·상대자·체결일만 크게 보인다.
+ const STAGE_COLOR={기획:'#1f9d74',설계:'#d9822b',시공:'#8a5cd6'},KIND_ORDER=['construction','design','service','material'],STAGE_NAME={기획:'기획 단계',설계:'설계 단계',시공:'시공 단계'};
+ const date=r=>{const d=String(r.analysis?.signed_date||'');return d?d.slice(2).replace(/-/g,'.')+' 체결':'체결일 미확인';};
+ const item=slot=>{const r=slot.record,a=r.analysis||{},kind=contractKindOf(r),files=1+(r.supersededIds||[]).length;
+  return '<div class="ci-item'+(r.contractDoubt?' ci-doubt':'')+'"><div class="ci-item-main"><div class="ci-title" title="'+esc(a.title||r.name)+'">'+esc(a.title||r.name)+'</div>'
+   +'<div class="ci-meta"><span class="ci-party">'+esc(a.party||'상대자 미확인')+'</span><span>'+esc(date(r))+'</span>'+(a.long_term?'<span class="ci-badge">장기계속</span>':'')+(files>1?'<span>계약서 '+files+'건 합침</span>':'')
+   +(r.contractDoubt?'<span class="ci-badge warn">계약서인지 확인</span>':'')+'</div></div>'
+   +'<div class="ci-item-side"><select data-ci-stage="'+slot.number+'" aria-label="단계" title="단계">'+CONTRACT_STAGES.map(([k])=>'<option value="'+k+'"'+(k===contractStageOf(r)?' selected':'')+'>'+STAGE_NAME[k]+'</option>').join('')+'</select>'
+   +'<select data-ci-kind="'+slot.number+'" aria-label="계약 종류" title="계약 종류">'+CONTRACT_KIND_CHOICES.map(([k,v])=>'<option value="'+k+'"'+(k===kind?' selected':'')+'>'+v+'</option>').join('')+'</select>'
+   +'<button class="ci-ghost" data-ci-edit="'+slot.number+'">고치기</button><button class="ci-ghost" data-ci-out="'+slot.number+'">빼기</button></div></div>';};
+ const liveSlots=listed.filter(s=>!s.excluded),outSlots=listed.filter(s=>s.excluded);
+ const stageBlocks=CONTRACT_STAGES.map(([k,v])=>{const slots=liveSlots.filter(s=>contractStageOf(s.record)===k);if(!slots.length)return '';
+  const kinds=KIND_ORDER.map(kind=>{const group=slots.filter(s=>contractKindOf(s.record)===kind);if(!group.length)return '';
+   return '<div class="ci-kind"><div class="ci-kind-head"><span class="ci-tag k-'+kind+'">'+CONTRACT_KIND_NAMES[kind]+'</span><span class="ci-kind-count">'+group.length+'건</span></div>'+group.map(item).join('')+'</div>';}).join('');
+  return '<div class="ci-stage" style="--c:'+STAGE_COLOR[k]+'"><div class="ci-stage-head"><span class="ci-stage-name">'+STAGE_NAME[k]+'</span><span class="ci-stage-count">'+slots.length+'건</span></div><div class="ci-stage-body">'+kinds+'</div></div>';}).join('');
+ const outBlock=outSlots.length?'<details class="ci-out-list"><summary>뺀 계약 '+outSlots.length+'건</summary>'+outSlots.map(s=>'<div class="ci-out-row"><span>'+esc(s.record.analysis?.title||s.record.name)+'</span><button class="ci-ghost" data-ci-restore="'+s.number+'">되살리기</button></div>').join('')+'</details>':'';
+ const folderBlocks=CONTRACT_STAGES.map(([k,v])=>{const items=plan.filter(p=>p.stage===k);if(!items.length)return '';
+  return '<div class="ci-fstage" style="--c:'+STAGE_COLOR[k]+'"><div class="ci-fstage-name">'+STAGE_NAME[k]+'</div>'+items.sort((x,y)=>KIND_ORDER.indexOf(x.kind)-KIND_ORDER.indexOf(y.kind)).map(p=>'<div class="ci-folder"><span class="ci-folder-icon" aria-hidden="true">📁</span><span class="ci-folder-name">'+esc(p.name)+'</span><span class="ci-tag k-'+p.kind+'">'+CONTRACT_KIND_NAMES[p.kind]+'</span></div>').join('')+'</div>';}).join('');
  const services=plan.filter(p=>p.stage==='시공'&&p.kind==='service').length;
  const summary=document.createElement('div');summary.id='contractList';
- summary.innerHTML='<style>#contractList{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin:12px 0}#contractList .ci-box{border:1px solid #d8e3f0;border-radius:12px;padding:16px;background:#fff}#contractList table{width:100%;border-collapse:collapse}#contractList td,#contractList th{padding:8px 6px;border-bottom:1px solid #edf1f7;text-align:left;vertical-align:middle}#contractList tr.ci-out td{opacity:.5}#contractList tr.ci-out td:last-child{opacity:1}#contractList ul{margin:4px 0;padding-left:18px}#contractList th{white-space:nowrap;font-size:13px}#contractList td:nth-child(2){min-width:110px}#contractList select{min-width:100px;width:auto;padding:4px 6px;font-size:13px}#contractList td:last-child{white-space:nowrap}#contractList td:last-child button{padding:5px 10px;min-height:0;font-size:13px}@media(max-width:1180px){#contractList{grid-template-columns:1fr}}</style>'
-  +'<div class="ci-box"><strong>찾은 계약 '+live.length+'건</strong><p class="muted" style="margin:4px 0 0">같은 계약의 최초·변경·사본은 하나로 합쳐 가장 나중 계약 기준으로 보여 줍니다. 필요 없는 계약은 빼고, 빠진 계약은 추가하세요.</p>'
-  +(listed.length?'<table><tr><th>계약</th><th>종류 · 단계 <span class="muted">(틀리면 고르세요)</span></th><th>최종 체결</th><th></th></tr>'+listed.map(row).join('')+'</table>':'<p class="muted">아직 찾은 계약이 없습니다.</p>')
-  +'<div class="row" style="margin-top:10px"><button id="ciAddOpen">＋ 계약서 추가</button><span class="muted">파일 선택 · 캡처 붙여넣기 · 끌어다 놓기</span></div></div>'
-  +'<div class="ci-box"><strong>이 계약으로 만들 폴더</strong><p class="muted" style="margin:4px 0 0">계약마다 폴더가 하나씩 생기고, 안에 품의서·계약서·착수계·지출서류·설계변경·완수계 같은 표준 하위 폴더가 함께 생깁니다. 다음 단계에서 이름·위치를 고칠 수 있습니다.</p>'
-  +(stages?'<ul>'+stages+'</ul>':'<p class="muted">계약이 없으면 기본 폴더 구조만 만듭니다.</p>')+(services?'<p><b>시공단계 용역 '+services+'건 → 용역 폴더 '+services+'개</b></p>':'')+'</div>';
+ summary.innerHTML='<style>'
+  +'#contractList{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:18px;margin:12px 0;align-items:start}'
+  +'#contractList .ci-box{border:1px solid #d8e3f0;border-radius:14px;padding:18px;background:#fff}'
+  +'#contractList .ci-top{display:flex;align-items:center;justify-content:space-between;gap:12px}#contractList h3{margin:0;font-size:18px;color:#1d2939}#contractList h3 b{color:#345fe2;font-size:22px}'
+  +'#contractList .ci-note{margin:4px 0 14px;font-size:13px;color:#667085}'
+  +'#contractList .ci-stage{border:1px solid color-mix(in srgb,var(--c) 30%,white);border-radius:12px;margin:0 0 14px;overflow:hidden}'
+  +'#contractList .ci-stage-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--c);color:#fff}'
+  +'#contractList .ci-stage-name{font-weight:800;font-size:17px;letter-spacing:.02em}#contractList .ci-stage-count{margin-left:auto;font-weight:700;background:#ffffff33;border-radius:999px;padding:1px 10px}'
+  +'#contractList .ci-stage-body{padding:10px 12px 4px;background:color-mix(in srgb,var(--c) 5%,white)}'
+  +'#contractList .ci-kind{margin:0 0 10px}#contractList .ci-kind-head{display:flex;align-items:center;gap:8px;margin:2px 2px 6px}#contractList .ci-kind-count{font-size:13px;color:#667085}'
+  +'#contractList .ci-tag{display:inline-block;font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px;white-space:nowrap}'
+  +'#contractList .k-construction{background:#e9edf3;color:#344054}#contractList .k-service{background:#dff4ee;color:#0b6b5c}#contractList .k-design{background:#fdecd9;color:#9a4d00}#contractList .k-material{background:#f6ecd4;color:#7a5200}'
+  +'#contractList .ci-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:#fff;border:1px solid #e4e9f1;border-left:4px solid var(--c);border-radius:10px;padding:10px 12px;margin:0 0 6px}#contractList .ci-item-main{display:contents}'
+  +'#contractList .ci-item.ci-doubt{border-left-color:#d93025}'
+  +'#contractList .ci-title{grid-column:1/-1;font-weight:700;font-size:15px;line-height:1.35;color:#101828;overflow-wrap:anywhere}'
+  +'#contractList .ci-meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:13px;color:#667085;min-width:0}#contractList .ci-party{color:#344054;font-weight:600}'
+  +'#contractList .ci-badge{font-size:12px;border-radius:999px;padding:0 8px;background:#eef3ff;color:#345fe2;font-weight:600}#contractList .ci-badge.warn{background:#fff1f0;color:#b42318}'
+  +'#contractList .ci-item-side{display:flex;gap:6px;align-items:center;flex-shrink:0}#contractList select{width:auto;min-width:0;padding:4px 6px;font-size:13px;border-radius:8px}'
+  +'#contractList .ci-ghost{padding:4px 10px;min-height:0;font-size:13px;background:#fff;border:1px solid #d0d5dd;color:#344054;border-radius:8px}#contractList [data-ci-out]{color:#b42318}'
+  +'#contractList .ci-out-list{margin-top:6px;font-size:14px;color:#667085}#contractList .ci-out-list summary{cursor:pointer}#contractList .ci-out-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid #edf1f7}#contractList .ci-out-row span{text-decoration:line-through;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
+  +'#contractList .ci-add{display:flex;gap:10px;align-items:center;margin-top:12px;font-size:13px;color:#667085}'
+  +'#contractList .ci-fstage{border-left:4px solid var(--c);padding:2px 0 2px 12px;margin:0 0 14px}#contractList .ci-fstage-name{font-weight:800;color:var(--c);margin-bottom:6px}'
+  +'#contractList .ci-folder{display:flex;align-items:center;gap:8px;padding:6px 10px;margin:0 0 5px;background:color-mix(in srgb,var(--c) 7%,white);border-radius:8px}#contractList .ci-folder-name{font-weight:600;color:#1d2939;flex:1;min-width:0;overflow-wrap:anywhere}'
+  +'#contractList .ci-sum{margin:6px 0 0;font-weight:700;color:#344054}'
+  +'@media(max-width:1180px){#contractList{grid-template-columns:1fr}}@media(max-width:720px){#contractList .ci-item{grid-template-columns:1fr}#contractList .ci-item-side{flex-wrap:wrap}}'
+  +'</style>'
+  +'<div class="ci-box"><div class="ci-top"><h3>찾은 계약 <b>'+live.length+'</b>건</h3><button id="ciAddOpen">＋ 계약서 추가</button></div>'
+  +'<p class="ci-note">같은 계약의 최초·변경·사본은 하나로 합쳤습니다. 단계나 종류가 틀리면 오른쪽에서 고르세요.</p>'
+  +(stageBlocks||'<p class="muted">아직 찾은 계약이 없습니다.</p>')+outBlock
+  +'<div class="ci-add">파일 선택 · 캡처 붙여넣기 · 끌어다 놓기로 빠진 계약서를 추가할 수 있습니다.</div></div>'
+  +'<div class="ci-box"><h3>만들 폴더</h3><p class="ci-note">계약마다 폴더 하나와 표준 하위 폴더(품의서·계약서·착수계 등)가 생깁니다. 다음 단계에서 고칠 수 있습니다.</p>'
+  +(folderBlocks||'<p class="muted">계약이 없으면 기본 폴더 구조만 만듭니다.</p>')+(services?'<p class="ci-sum">시공 단계 용역 '+services+'건 → 용역 폴더 '+services+'개</p>':'')+'</div>';
  box.prepend(summary);
  $$('[data-ci-out]').forEach(b=>b.onclick=()=>{const slot=contractSlot(Number(b.dataset.ciOut));slot.excluded=true;slot.editOpen=false;renderContractInput();});
  $$('[data-ci-restore]').forEach(b=>b.onclick=()=>{const slot=contractSlot(Number(b.dataset.ciRestore));slot.excluded=false;renderContractInput();});
