@@ -446,6 +446,8 @@ const round3Style=document.createElement('style');round3Style.textContent=`
 #mapStageChips button.drop-target{background:#e8efff;border-color:#345fe2}
 #mapTargets.pick-mode .map-target{cursor:copy}#mapTargets.pick-mode .map-target:hover{outline:2px dashed #345fe2;outline-offset:1px;background:#eef3ff}
 .map-pick-hint{display:block;margin-top:4px;color:#345fe2;font-weight:bold}
+#mapHold.hold-pick{cursor:copy;outline:2px dashed #b8852d;outline-offset:2px}#mapHold.drop-target{background:#fff4dc;outline:2px solid #b8852d}
+.map-select-all{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#344054;cursor:pointer}.map-select-all input{width:16px;height:16px}
 .map-group-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px 8px;font-size:var(--fs-meta,13px)}.map-group-actions button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px)}
 .map-group[draggable=true]{cursor:grab}
 #folderSuggest{margin:12px 0}#folderSuggest li{margin:6px 0}#folderSuggest .row{gap:6px;margin-top:4px}
@@ -532,9 +534,29 @@ function renderFolderSuggest(){if(!S.plan){suggestBox.hidden=true;return;}const 
 function applyFolderResult(result){if(result.tree&&S.project)S.project.tree=result.tree;if(result.paths)S.plan.paths=result.paths;if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;
  for(const u of result.rows||[])Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);}
 
+/* 2026-11-25: 연결도에서 '보류'도 고르기. 파일을 누른 뒤 아래 '보류 · 원래 위치 유지' 칸을 누르거나, 파일·폴더·화살표 끝을 그 칸에 놓는다.
+   체크한 파일이 있으면 함께 보류한다. */
+async function holdRows(ids){ids=[...new Set(ids)].filter(id=>S.plan.rows.some(r=>r.id===id&&!r.done));if(!ids.length)return;clearError();
+ if(ids.length>1&&!await ask('보류로 둘까요?','파일 '+ids.length+'개를 옮기지 않고 원래 위치에 둡니다. 나중에 다시 목적지를 정할 수 있습니다.')){drawMapEdges();return;}
+ try{const result=await api('/hold-rows',{plan:S.plan.id,rows:ids});for(const u of result.rows)Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);
+  $('#routeHelp').textContent=result.rows.length+'개 파일을 보류(원래 위치 유지)로 정했습니다. 실제 파일은 움직이지 않습니다.';renderReview(true);}
+ catch(e){error(e.message);drawMapEdges();}}
+function pickedOr(id){const picked=S.plan.rows.filter(r=>S.selected.has(r.id)&&!r.done).map(r=>r.id);return picked.length>1&&picked.includes(id)?picked:[id];}
+function bindHoldTarget(){const hold=$('#mapHold');if(!hold)return;const file=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done);hold.classList.toggle('hold-pick',Boolean(file));
+ hold.title=file?'누르면 고른 파일을 보류(원래 위치 유지)로 정합니다':'파일이나 폴더를 여기에 놓으면 보류(원래 위치 유지)로 정합니다';
+ hold.onclick=()=>{const f=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done);if(f)holdRows(pickedOr(f.id));};
+ hold.ondragover=e=>{if(MapReview.dragging){e.preventDefault?.();if(e.dataTransfer)e.dataTransfer.dropEffect='move';hold.classList.add('drop-target');}};hold.ondragleave=()=>hold.classList.remove('drop-target');
+ hold.ondrop=e=>{e.preventDefault?.();hold.classList.remove('drop-target');const id=MapReview.dragging;MapReview.dragging=null;if(!id)return;
+  if(id.startsWith('group:'))holdRows(folderRows(id.slice(6)).map(r=>r.id));else holdRows(pickedOr(id));};}
+/* 2026-11-25: 펼친 폴더의 파일을 한 번에 체크하는 '전체 선택'(하위 폴더 포함). 체크한 뒤 오른쪽 폴더나 보류 칸을 누르면 함께 옮겨진다. */
+function bindSelectAll(){const bar=$('.map-group-actions');if(!bar||!bar.insertAdjacentHTML||bar.querySelector?.('.map-select-all'))return;const rows=folderRows(MapReview.group);if(!rows.length)return;
+ const all=rows.every(r=>S.selected.has(r.id));bar.insertAdjacentHTML('afterbegin','<label class="map-select-all"><input type="checkbox" id="mapSelectAllBox"'+(all?' checked':'')+'> 전체 선택</label>');
+ const box=$('#mapSelectAllBox');box.indeterminate=!all&&rows.some(r=>S.selected.has(r.id));
+ box.onchange=()=>{for(const r of rows)box.checked?S.selected.add(r.id):S.selected.delete(r.id);if(rows[0]&&!MapReview.file)MapReview.file=rows[0].id;renderReview();
+  $('#routeHelp').textContent=box.checked?rows.length+'개 파일을 선택했습니다. 오른쪽 폴더를 누르면 함께 옮기고, 아래 보류 칸을 누르면 함께 보류합니다.':'선택을 해제했습니다.';};}
 function renderPickHint(){const file=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done),pane=$('#mapTargets');pane?.classList?.toggle('pick-mode',Boolean(file));
  const caption=$('#mapCaption');if(file&&caption?.insertAdjacentHTML&&!caption.querySelector?.('.map-pick-hint'))caption.insertAdjacentHTML('beforeend','<span class="map-pick-hint">오른쪽 새 폴더 구조에서 폴더를 누르면 그 폴더로 화살표가 바로 연결됩니다. 체크한 파일이 있으면 함께 옮깁니다.</span>');}
-const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();renderFolderSuggest();renderPickHint();}catch(e){console.error(e);}}return r;};
+const round3RenderReview=renderReview;renderReview=function(...args){const r=round3RenderReview(...args);if(S.plan&&!$('#reviewStep').hidden){try{renderStageChips();bindFolderDrag();bindSelectAll();renderFolderSuggest();renderPickHint();bindHoldTarget();}catch(e){console.error(e);}}return r;};
 
 // 10. 분류 못한 파일이 많으면 보류가 가장 많은 폴더 3곳을 묻고, 답을 반영해 AI 분류를 다시 돌린다(자동 2회까지). 'AI 다시 분류'는 질문 1회 후 분류.
 const questionDialog=document.createElement('dialog');questionDialog.id='questionDialog';document.body.appendChild(questionDialog);

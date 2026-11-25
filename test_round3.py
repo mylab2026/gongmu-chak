@@ -73,7 +73,7 @@ class Round3(unittest.TestCase):
         for rel in FILES[:5]:
             self.rows[rel].update(destination='', method='hold')
         unit2 = self.rows['9. 동아리실별 마감 확인/A실/사진 1.jpg']['checkUnit']
-        target = '4 시공단계/1 도급공사/8 승인요청'
+        target = '4 시공단계/1 도급공사/9 승인요청'
         result = app.dispatch('/bulk-answers', {'plan': self.plan['id'], 'answers': [
             {'unit': UNIT, 'destination': target},
             {'unit': unit2, 'newFolder': {'parent': '5 인수인계', 'name': '마감 확인'}}]})
@@ -117,8 +117,31 @@ class Round3(unittest.TestCase):
         # 4차 2번: '4 시공단계'처럼 넓은 보기는 빼고, 계약 가지 아래 '1 품의서' 같은 하위 폴더는 상위 보기 하나로 합친다.
         branch = '4 시공단계/3 설계의도 구현 용역'
         got = app.tidy_choices(['4 시공단계', branch + '/1 최초 품의 및 최초 계약서/1 품의서', branch, branch + '/1 최초 품의 및 최초 계약서',
-                                '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/13 기타공문'])
-        self.assertEqual(got, [branch, '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/13 기타공문'])
+                                '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/14 기타공문'])
+        self.assertEqual(got, [branch, '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/14 기타공문'])
+
+    def test_schedule_folder_follows_start_documents_in_templates_and_routes(self):
+        # 2026-11-25: 설계 용역 착수계·도급공사 착공계 다음 번호에 '공정표' 폴더(뒤 번호는 하나씩 밀림)
+        for typ, stage, branch, after in (('planning', '3 설계단계', '1 설계 용역', '3 착수계'), ('planning', '4 시공단계', '1 도급공사', '3 착공계'),
+                                          ('design', '2 설계단계', '1 설계 용역', '3 착수계'), ('construction', '3 시공단계', '1 도급공사 1', '3 착공계')):
+            kids = [c['label'] for s in app.TEMPLATES[typ] if s['label'] == stage for n in s['children'] if n['label'] == branch for c in n['children']]
+            self.assertEqual(kids[kids.index(after) + 1], '4 공정표', (typ, branch))
+        source = self.root / '2. 시공단계/2. 공사/5. 공정표/실시공정표 2차.xlsx'
+        source.parent.mkdir(parents=True); source.write_bytes(b'SYNTHETIC SCHEDULE')
+        plan = app.make_plan(self.project['id'], False)
+        row = next(r for r in plan['rows'] if r['relative'].endswith('실시공정표 2차.xlsx'))
+        self.assertEqual(row['destination'], '4 시공단계/1 도급공사/4 공정표')
+
+    def test_hold_rows_keeps_files_in_place_and_survives_replanning(self):
+        row = self.rows['251008 가상2차공사 공정표 ver1.pdf']
+        app.dispatch('/retarget', {'plan': self.plan['id'], 'row': row['id'], 'destination': PLAN_PARENT})
+        held = app.dispatch('/hold-rows', {'plan': self.plan['id'], 'rows': [row['id']]})['rows']
+        self.assertEqual([(r['destination'], r['method'], r['holdConfirmed']) for r in held], [('', 'manual', True)])
+        self.assertNotIn('keepSub', row)
+        again = next(r for r in app.make_plan(self.project['id'], False)['rows'] if r['relative'] == row['relative'])
+        self.assertEqual((again['destination'], again['method']), ('', 'manual'))  # 다시 계획해도 보류 유지
+        with self.assertRaises(ValueError):
+            app.dispatch('/hold-rows', {'plan': self.plan['id'], 'rows': []})
 
     def test_ai_new_folder_suggestion_is_validated(self):
         folders = {'d1': PLAN_PARENT}

@@ -50,7 +50,7 @@ class CheckGroups(unittest.TestCase):
         confirmed = app.dispatch('/confirm-route', {'plan': self.plan['id'], 'rows': held})['rows']
         self.assertEqual({r['id'] for r in confirmed}, set(held))
         self.assertTrue(all(r['holdConfirmed'] for r in confirmed))
-        target = '4 시공단계/1 도급공사/8 승인요청'
+        target = '4 시공단계/1 도급공사/9 승인요청'
         changed = app.dispatch('/retarget-many', {'plan': self.plan['id'], 'rows': held, 'destination': target, 'keepFolder': UNIT})['rows']
         subs = {r['relative']: r.get('keepSub', '') for r in changed}
         self.assertRegex(subs[UNIT + '/A 검토서/구조계산.dwg'], r'^(?:[A-Z] )?실외기 구조 검토/A 검토서$')

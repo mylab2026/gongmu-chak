@@ -292,6 +292,15 @@ def main():
                       await changeRoute(row.id,original);return {pick,hint,moved,restored:row.destination===original};}""")
                     assert clicked['pick'] and clicked['hint'] and clicked['moved'] and clicked['restored'], clicked
                     result['click_file_then_folder_routes']=clicked
+                    # 2026-11-25: 연결도에서 '보류' 고르기(파일 누른 뒤 보류 칸 누르기)와 펼친 폴더 '전체 선택'. 확인 후 원래대로 돌린다.
+                    held_pick=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup);const original=row.destination;
+                      MapReview.group=parentFolder(row);mapFocusFile(row.id);await new Promise(r=>requestAnimationFrame(()=>r()));const pick=$('#mapHold').classList.contains('hold-pick');
+                      $('#mapHold').click();for(let i=0;i<50&&row.destination;i++)await new Promise(r=>setTimeout(r,100));const held=!row.destination&&row.holdConfirmed&&row.method==='manual';
+                      await changeRoute(row.id,original);
+                      const box=$('#mapSelectAllBox'),count=folderRows(MapReview.group).length;box.click();const selected=S.selected.size;$('#mapSelectAllBox').click();const cleared=S.selected.size;
+                      return {pick,held,restored:row.destination===original,count,selected,cleared};}""")
+                    assert held_pick['pick'] and held_pick['held'] and held_pick['restored'] and held_pick['selected']==held_pick['count']>0 and held_pick['cleared']==0, held_pick
+                    result['hold_pick_and_select_all']=held_pick
                     # 3차 6번: 새 폴더 제안 카드(규칙·AI 제안). 만들기는 서버 검사(test_round3)에서 확인한다.
                     suggested=page.evaluate("""()=>{const row=S.plan.rows.find(r=>!r.done&&r.method!=='manual');const parent=S.plan.paths[0];row.folderSuggestion={parent,name:'내부검토',reason:'가상 근거'};
                       try{renderReview();const box=$('#folderSuggest');return {shown:!box.hidden,text:box.innerText,make:!!document.querySelector('[data-suggest-make]')};}

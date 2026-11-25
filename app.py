@@ -3542,6 +3542,33 @@ def execute(plan_id, choices):
     return journal
 
 
+def hold_rows(plan_id, row_ids):
+    """연결도에서 '보류'를 고른 파일: 목적지를 비우고 원래 위치에 두기로 확정한다(사용자 선택이라 자동 규칙이 덮지 않는다)."""
+    plan = get_plan(plan_id)
+    if plan.get('finished') or any(j['planId'] == plan_id and j['status'] in ('pending', 'running') for j in JOBS.values()):
+        fail('정리안을 확인하거나 AI 검토가 끝난 후 바꿔주세요.')
+    if not isinstance(row_ids, list) or not row_ids:
+        fail('보류할 파일을 선택해주세요.')
+    by_id = {r['id']: r for r in plan['rows']}
+    rows = [by_id.get(row_id) for row_id in dict.fromkeys(row_ids)]
+    if any(not r or r['done'] for r in rows):
+        fail('이동 전 파일만 보류할 수 있습니다. 선택을 확인해주세요.')
+    groups = {r.get('folderGroup') for r in rows if r.get('folderGroup')}
+    rows = list({r['id']: r for r in rows + [r for r in plan['rows'] if not r['done'] and r.get('folderGroup') in groups]}.values())
+    project = get_project(plan['projectId'])
+    change = {'destination': '', 'method': 'manual', 'aiChecked': True, 'confidence': 1, 'reviewRequired': False, 'reviewed': True,
+              'holdConfirmed': True, 'contextOverride': True, 'historyReview': False, 'reason': '사용자가 원래 위치에 두기(보류)로 정했습니다.'}
+    for row in rows:
+        project.setdefault('classificationCache', {})[cache_key(plan, row)] = change
+        row.update(change)
+        for key in ('keepSub', 'keepSubFor', 'executionError', 'unitKeep', 'folderSuggestion'):
+            row.pop(key, None)
+        if not row.get('canonicalAttachment'):
+            row.pop('attachTo', None)
+    store_project(project)
+    return {'rows': rows}
+
+
 def retarget(plan_id, row_id, destination):
     result=retarget_many(plan_id,[row_id],destination)
     row=next(r for r in result['rows'] if r['id']==row_id)
@@ -5299,6 +5326,8 @@ def dispatch(action, payload):
         return retarget(payload['plan'], payload['row'], payload['destination'])
     if action == '/attach':
         return attach_rows(payload['plan'], payload['main'], payload.get('rows'), bool(payload.get('attach', True)))
+    if action == '/hold-rows':
+        return hold_rows(payload['plan'], payload.get('rows'))
     if action == '/retarget-many':
         return retarget_many(payload['plan'], payload.get('rows'), payload['destination'], str(payload.get('keepFolder') or ''))
     if action == '/execute-all':
