@@ -55,7 +55,7 @@ label{cursor:pointer}#rootPath{word-break:break-all}
 #homeProjects .project-delete{float:right;margin:0 0 0 12px;padding:4px 12px;font-size:var(--fs-meta,13px);color:#b42318;background:#fff;border:1px solid #f1c0bb;border-radius:8px}
 #homeProjects .project-delete:hover{background:#fef3f2}
 </style></head><body>
-<header><b>공무착착</b><span>Windows 시험판 0.11.3 · 사업 문서 정리 도우미</span><button id="homeButton">시작 화면</button><button id="usageBadge" title="AI 연결 설정 열기">AI 확인 중</button><button id="settingsButton">AI 연결 설정</button></header>
+<header><b>공무착착</b><span>Windows 시험판 0.11.4 · 사업 문서 정리 도우미</span><button id="homeButton">시작 화면</button><button id="usageBadge" title="AI 연결 설정 열기">AI 확인 중</button><button id="settingsButton">AI 연결 설정</button></header>
 <main>
 <div id="error" class="error" role="alert" hidden></div>
 <section id="home"><h1>어떤 문서를 정리할까요?</h1><div class="choices"><button id="initialButton"><b>처음 문서 정리</b><br><small>전체 사업 폴더를 연결하고 정리 구조를 만듭니다.</small></button><button id="ongoingButton"><b>계속 문서 정리</b><br><small>사업의 ‘0 정리할 문서 모음’에 넣은 문서를 정리합니다.</small></button></div><div class="card"><h2>등록된 사업</h2><div id="homeProjects"></div></div><div class="card" id="historyDownloadCard"><h2>누적 정리 이력</h2><p id="historyDownloadHint">챗봇의 도움이 필요할 때 누적 정리 이력을 ZIP으로 내려받아 주세요. 압축을 풀고 해당 날짜·회차의 정리 이력.txt를 챗봇에 첨부하면 됩니다. 정리할 때마다 이동·보류·되돌리기 기록이 쌓입니다.</p><label for="historyProject">사업 선택</label><div class="row"><select id="historyProject" style="flex:1;min-width:180px" disabled><option value="">등록된 사업이 없습니다</option></select><button id="downloadHistory" aria-describedby="historyDownloadHint" disabled>누적 정리 이력 ZIP 다운로드</button></div></div><p class="muted">이 시험판은 확정한 실제 파일을 이동합니다. 이동 전 확인 팝업을 표시하며 동일 이름의 파일은 덮어쓰지 않습니다.</p></section>

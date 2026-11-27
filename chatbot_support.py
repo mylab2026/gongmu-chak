@@ -3,7 +3,7 @@ import datetime
 import platform
 import re
 
-BUILD = '0.11.3-test / chatbot-support.1'
+BUILD = '0.11.4-test / chatbot-support.1'
 # SNU AI Chat 공무착착 챗봇. ?prefill= 은 입력칸만 채우고 보내지 않는다(?q= 는 바로 보내므로 쓰지 않는다).
 CHATBOT_URL = 'https://aichat.snu.ac.kr/dashboard/chat/33601'
 BRIEF_ERROR_LIMIT = 300
