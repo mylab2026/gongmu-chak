@@ -1404,7 +1404,7 @@ def photo_look_candidates(pid, query, kinds, dates, candidates):
     order = [c['relative'] for c in candidates if file_kind(c['name']) == 'image']
     rest = sorted((r for r, rec in files.items() if file_kind(r) == 'image' and r not in order
                    and (not start or (rec.get('mtime') or 0) >= start) and (not stop or (rec.get('mtime') or 0) < stop)),
-                  key=lambda r: -(files[r].get('mtime') or 0))
+                  key=lambda r: (-(files[r].get('mtime') or 0), r))
     picked = []
     for relative in order + rest:
         record = files.get(relative) or {}

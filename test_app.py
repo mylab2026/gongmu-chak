@@ -698,7 +698,7 @@ class FileOperations(unittest.TestCase):
         from PIL import Image
         for n, (name, color) in enumerate((('KakaoTalk_20251014_08.jpg', 'green'), ('KakaoTalk_20251014_09.jpg', 'gray'))):
             path = self.root / '3 시공단계/현장' / name; path.parent.mkdir(parents=True, exist_ok=True)
-            Image.new('RGB', (900, 600), color).save(path, 'JPEG'); os.utime(path, ns=(10**18 + n, 10**18 + n))
+            Image.new('RGB', (900, 600), color).save(path, 'JPEG'); os.utime(path, ns=(10**18 + n * 10**9, 10**18 + n * 10**9))  # Windows 수정 시각은 100ns 단위
         (self.root / '3 시공단계/공문/착공계.txt').parent.mkdir(parents=True, exist_ok=True)
         (self.root / '3 시공단계/공문/착공계.txt').write_bytes('착공계'.encode())
         self.index()

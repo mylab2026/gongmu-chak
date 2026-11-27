@@ -1,6 +1,7 @@
 // 사진은 원래 위치에서 모아 보고, 문장 검색은 문서 발췌를 AI로 확인합니다.
 const Collect={data:null,tab:'photo',phase:'all',limit:120,thumbs:new Map(),plan:null,cid:'',run:null,draft:null,recheck:null,repair:null,generation:0,job:null};
 const collectStyle=document.createElement('style');collectStyle.textContent=`
+.dev-tag{display:inline-block;font-size:12px;font-weight:700;color:#8a4b00;background:#fff1d6;border:1px solid #f0c36d;border-radius:99px;padding:1px 8px;vertical-align:middle;margin-left:4px}.dev-note{margin:6px 0 8px;color:#8a4b00;font-size:var(--fs-meta,13px)}
 .photo-period{border:1px solid #dbe3f0;background:#f7f9fd;border-radius:12px;padding:14px 16px;margin-bottom:14px}.photo-period p{margin:0 0 10px}
 .pp-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:8px 0}.pp-label{font-weight:700;min-width:220px}.pp-label small{font-weight:400;margin-left:6px}
 .pp-row label{display:flex;align-items:center;gap:6px;white-space:nowrap}.pp-row input[type=date]{padding:6px 8px}.photo-period .pp-help{margin:6px 0 0;font-size:var(--fs-meta)}
@@ -47,7 +48,7 @@ const collectButton=document.createElement('button');collectButton.id='collectBu
 const collection=document.createElement('section');collection.id='collection';collection.hidden=true;
 collection.innerHTML='<button id="collectBack">뒤로가기</button><h1>모아보기</h1>'
 +'<div class="card"><label for="collectProject">사업</label><div class="row"><select id="collectProject"></select><button id="collectRefresh">새로 고침</button><button id="collectHome">처음 화면</button></div><p class="muted">파일의 원래 위치는 그대로 둡니다. 내 모아보기에 문장을 입력하면 AI가 문서 본문 발췌·이미지와 폴더 맥락을 확인합니다.</p></div>'
-+'<div class="row ctabs"><button data-ctab="photo" aria-pressed="true">사진</button><button data-ctab="saved" aria-pressed="false">내 모아보기</button><button data-ctab="recheck" aria-pressed="false">정리 결과 점검</button><div class="export-tab"><button data-ctab="export" aria-pressed="false" aria-describedby="exportUsageHint">준공·인수인계 내보내기</button><p class="muted" id="exportUsageHint">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요.</p></div></div>'
++'<div class="row ctabs"><button data-ctab="photo" aria-pressed="true">사진</button><button data-ctab="saved" aria-pressed="false">내 모아보기</button><button data-ctab="recheck" aria-pressed="false">정리 결과 점검</button><div class="export-tab"><button data-ctab="export" aria-pressed="false" aria-describedby="exportUsageHint">준공·인수인계 내보내기 <span class="dev-tag">개발 중</span></button><p class="muted" id="exportUsageHint">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요.</p></div></div>'
 +'<div id="collectNotice"></div><div id="collectBody"></div>';
 $('#home').after(collection);
 const collectBaseShow=show;show=function(step){collection.hidden=true;return collectBaseShow(step);};
@@ -176,7 +177,7 @@ function wireRecheck(){const run=$('#recheckRun');if(run)run.onclick=()=>task('�
   await task('바로잡는 중…',async()=>{Collect.repair=await api('/execute-all',{plan:Collect.recheck.id,choices:rows.map(x=>({id:x.id,destination:x.destination}))});Collect.recheck=null;collectRender();});};
  const undo=$('#repairUndo');if(undo)undo.onclick=()=>task('되돌리는 중…',async()=>{await api('/undo',{id:Collect.repair.id});Collect.repair=null;collectRender();});}
 function collectExport(){const p=Collect.plan,r=Collect.report;
- let out='<div class="card"><strong>준공·인수인계 내보내기</strong><p class="muted">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요. 원본 파일은 옮기지 않습니다.</p><button class="primary" id="exportCheck">내보낼 내용 확인</button></div>';
+ let out='<div class="card"><strong>준공·인수인계 내보내기 <span class="dev-tag">개발 중</span></strong><p class="dev-note">아직 다듬는 중인 기능입니다(2026-11 시험판). 만든 바로가기·안내 파일은 언제든 지워도 원본에는 영향이 없습니다.</p><p class="muted">인수인계를 해야 하거나 사업이 종료됐을 때 한 번만 눌러주세요. 중복되는 자료를 바로가기로 연결해 찾아보기 쉽게 도와줍니다. 평상시에는 누르지 마세요. 원본 파일은 옮기지 않습니다.</p><button class="primary" id="exportCheck">내보낼 내용 확인</button></div>';
  if(p){const c=p.checks;out+='<div class="card"><strong>내보내기 전 확인</strong>'
   +(c.photoCheck||c.officialCheck||c.missing.length||c.inboxLeft?'<ul>'+(c.photoCheck?'<li class="warn">전·중·후가 정해지지 않은 사진 '+c.photoCheck+'장 · 바로가기를 만들지 않습니다</li>':'')+(c.officialCheck?'<li class="warn">공문인지 확인할 문서 '+c.officialCheck+'건</li>':'')+(c.missing.length?'<li class="warn">이전 위치에서 사라진 자료 '+c.missing.length+'개</li>':'')+(c.inboxLeft?'<li class="warn">‘0 정리할 문서 모음’에 남은 파일 '+c.inboxLeft+'개</li>':'')+'</ul>':'<p>확인할 항목이 없습니다.</p>')
   +'<p>만들 바로가기 '+p.links.length+'개 · 안내문·자료 목록 2개</p><details><summary>바로가기 목록</summary>'+p.links.slice(0,300).map(l=>'<p class="path">'+esc(l.kind)+' · '+esc(l.target)+'<br>→ '+esc(l.folder)+'</p>').join('')+'</details>'
