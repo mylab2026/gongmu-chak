@@ -90,6 +90,9 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal($('#finishReview').disabled,true);
  evaluate('drawMapEdges()');assert($('#mapEdges').innerHTML.includes('data-file-edge="f1"'));assert($('#mapCaption').textContent.includes('a.pdf'));assert.equal($('#reviewTabs').hidden,true);
  await $('#ongoingButton').click();$('#projectSelect').value='p1';$('#projectSelect').onchange();$('#newContracts').checked=true;await $('#projectNext').click();assert.equal($('#heading').textContent,'계약서 등록');assert($('#progress').textContent.startsWith('2 / 3'));
+ // 2026-11-28 LIM: 자동으로 찾은 계약이 모두 기존·뺀 계약이라 새 계약이 0건이어도 ‘다음’으로 넘어간다.
+ evaluate('S.contracts=[]');await $('#contractNext').click();await tick();assert.equal($('#heading').textContent,'파일 이동');assert(!$('#errorBox')?.textContent?.includes('새 계약서를 추가'));
+ await $('#ongoingButton').click();$('#projectSelect').value='p1';$('#projectSelect').onchange();$('#newContracts').checked=true;await $('#projectNext').click();assert.equal($('#heading').textContent,'계약서 등록');
  evaluate('S.mode="ongoing";S.plan={id:"plan1",paths:["공통"],rows:[{id:"f1",name:"a.pdf",relative:"00/a.pdf",destination:"공통",method:"rule",done:false}]};');
  const promise=evaluate('moveRows(["f1"])');assert.equal($('#confirm').open,true);assert.equal(calls.filter(c=>c[0]==='/execute').length,0);$('#confirmNo').click();await promise;assert.equal(calls.filter(c=>c[0]==='/execute').length,0);
  $('#aiModel').value='__manual__';$('#aiModel').onchange();assert.equal($('#manualModelArea').hidden,false);$('#manualModel').value='provider/arbitrary-model';$('#apiKey').value='';await $('#saveKey').click();const configured=calls.filter(c=>c[0]==='/configure').at(-1);assert.equal(configured[1].model,'provider/arbitrary-model');assert.equal(configured[1].key,'');

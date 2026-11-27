@@ -2952,6 +2952,104 @@ def plan_progress(stage, done=0, total=0, started=None):
                         'startedAt': started, 'elapsed': round(elapsed), 'remaining': remaining}
 
 
+SAFETY_LEDGER=re.compile(r'(기본|설계|공사|시공)?\s*안전\s*보건\s*대장')
+SAFETY_TYPE_WORD=re.compile(r'^[\s\d.()\-_]*(기본|설계|공사|시공)(?![가-힣])')
+SAFETY_KINDS={'기본':'1 기본안전보건대장','설계':'2 설계안전보건대장','공사':'3 시공안전보건대장','시공':'3 시공안전보건대장'}
+
+
+def safety_segment(part):
+    """폴더·파일 이름 한 칸의 안전보건대장 종류. ('generic', None)=종류 없는 '안전보건대장', None=해당 없음.
+    '…기술지도, 안전보건대장 관련 용역'처럼 용역(계약) 이름에 들어간 것은 대장 자체가 아니다."""
+    m=SAFETY_LEDGER.search(part)
+    if not m or '용역' in part or '기술지도' in part:
+        return None
+    return m.group(1) or 'generic'
+
+
+def safety_ledger_route(relative):
+    """(종류, 묶음 시작 칸 번호) 또는 None. 종류가 적힌 가장 바깥 칸부터 묶음째 옮긴다.
+    종류 없는 '안전보건대장' 폴더 안에서는 '1. 기본'·'설계' 같은 하위 폴더 이름으로 종류를 읽는다."""
+    parts=PurePosixPath(relative).parts
+    generic=False
+    for k,part in enumerate(parts):
+        kind=safety_segment(part)
+        if kind and kind!='generic':
+            return kind,k
+        if kind=='generic':
+            generic=True
+            continue
+        if generic:
+            m=SAFETY_TYPE_WORD.match(part)
+            if m:
+                return m.group(1),k
+    return None
+
+
+def safety_ledger_root(tree):
+    return next((n['label'] for n in tree if re.search(r'안전\s*보건\s*대장',n.get('label',''))),'')
+
+
+def ensure_safety_ledger_tree(project, files):
+    """2026-11-28 LIM: 63동을 수동 정리했듯이, 사업에 안전보건대장이 보이면 대분류에 'N 안전보건대장'을 넣고
+    기본·설계·시공 안전보건대장을 따로 모은다. 이미 있으면 그대로 둔다."""
+    if safety_ledger_root(project['tree']) or not any(safety_ledger_route(f['relative']) for f in files):
+        return False
+    numbers=[int(m.group(1)) for n in project['tree'] for m in [re.match(r'(\d+)\s',n.get('label',''))] if m]
+    label=str(max(numbers,default=0)+1)+' 안전보건대장'
+    project['tree'].append({'label':label,'children':[{'label':v} for v in dict.fromkeys(SAFETY_KINDS.values())]})
+    store_project(project)
+    return True
+
+
+def route_safety_ledgers(project, rows, paths):
+    """안전보건대장 파일·폴더를 종류별 폴더로. 폴더는 이름과 안쪽 구조를 그대로 두고 A·B·C 묶음 이름을 받는다.
+    사용자가 직접 정한 목적지(manual)는 덮지 않는다."""
+    root=safety_ledger_root(project['tree'])
+    if not root:
+        return
+    # 묶음째 보류된 사용자 폴더('251216 기본안전보거대장 보완')는 안의 대장이 모두 같은 종류면 묶음째 그 종류로.
+    held=collections.defaultdict(list)
+    for row in rows:
+        if row.get('bundleHold') and not row.get('done') and row.get('method')!='manual':
+            held[row['bundleHold']].append(row)
+    whole={}
+    for folder,members in held.items():
+        depth=len(PurePosixPath(folder).parts)
+        kinds={f[0] for f in map(lambda r:safety_ledger_route(r['relative']),members) if f and f[1]>=depth-1}
+        if len(kinds)==1:
+            whole[folder]=kinds.pop()
+    for row in rows:
+        if row.get('done') or row.get('method')=='manual':
+            continue
+        parts=PurePosixPath(row['relative']).parts
+        last=len(parts)-(0 if row.get('kind')=='directory' else 1)
+        if row.get('bundleHold') in whole:
+            kind,k=whole[row['bundleHold']],len(PurePosixPath(row['bundleHold']).parts)-1
+        else:
+            found=safety_ledger_route(row['relative'])
+            if not found:
+                continue
+            kind,k=found
+            destination=row.get('destination') or ''
+            sub=row.get('keepSub','') if destination and row.get('keepSubFor')==destination else ''
+            if sub and k>=last-len(sub.split('/')) and (k==last or (destination.count('/')>=2 and not branch_root(destination,paths))):
+                # 이미 한 묶음에 든 대장은 묶음을 깨지 않는다(63동 수동 정리와 같이):
+                # 기술지도 공문 'B 251215 검토의견' 속 검토의견서, 설계 '최종 성과품' 속 '9 설계안전보건대장'.
+                continue
+        target=root+'/'+SAFETY_KINDS[kind]
+        if target not in paths:
+            continue
+        for key in ('attachTo','canonicalAttachment','bundleHold','bundleSplit','proposedName','signedDate','nameReviewRequired'):
+            row.pop(key,None)
+        row.update(destination=target,method='rule',aiChecked=True,roleMapped=True,scopeMapped=True,contractReview=False,
+                   reviewRequired=False,secondaryFolders=[],safetyLedger=True,
+                   reason='안전보건대장 · '+parts[k]+' → '+SAFETY_KINDS[kind])
+        if k<last:
+            row.update(keepSub='/'.join(parts[k:last]),keepSubFor=target,letterBundle=True)
+        else:
+            row.pop('keepSub',None);row.pop('keepSubFor',None);row.pop('letterBundle',None)
+
+
 def make_plan(pid, ongoing, virtual=None):
     project = get_project(pid)
     root = root_available(project)
@@ -2964,6 +3062,14 @@ def make_plan(pid, ongoing, virtual=None):
     if user_folders:
         prefixes = tuple(f['path'] + '/' for f in user_folders)
         files = [f for f in files if not f['relative'].startswith(prefixes)]
+    if ensure_safety_ledger_tree(project, files):
+        paths = work_paths(project)
+    all_paths = paths
+    ledger = safety_ledger_root(project['tree'])
+    if ledger:
+        # 안전보건대장 폴더는 이름 맞추기('9 설계안전보건대장' ↔ '2 설계안전보건대장')로 채우지 않는다.
+        # 전용 규칙(route_safety_ledgers)이 묶음을 깨지 않는 범위에서만 넣는다.
+        paths = [p for p in paths if p != ledger and not p.startswith(ledger + '/')]
     plan_progress('classify', 0, len(files))
     rows = []
     history = project.get('rules', [])
@@ -2990,7 +3096,7 @@ def make_plan(pid, ongoing, virtual=None):
                      'reason': reason, 'method': 'rule' if destination else 'hold', 'done': False,
                      'fingerprint': f"{file['size']}:{file['mtime']}"})
     plan = {'id': secrets.token_hex(16), 'projectId': pid, 'root': str(root), 'rows': rows,
-            'paths': paths, 'ongoing': ongoing, 'at': now(),
+            'paths': all_paths, 'ongoing': ongoing, 'at': now(),
             'scanInfo': {'sourcePath': str(root / inbox if ongoing else root), 'inbox': inbox,
                          'sourceExists': (root / inbox if ongoing else root).is_dir(),
                          'scannedCount': len(files), 'alreadyInPlaceCount': len(files) - len(rows),
@@ -3006,7 +3112,7 @@ def make_plan(pid, ongoing, virtual=None):
         if record and record.get('fp') == row['fingerprint']:
             indexed[relative] = record
         saved = cache.get(cache_key(plan, row))
-        if saved and (saved.get('method')=='manual' or row['method']=='hold') and (not saved.get('destination') or saved['destination'] in paths):
+        if saved and (saved.get('method')=='manual' or row['method']=='hold') and (not saved.get('destination') or saved['destination'] in all_paths):
             row.update(saved)
         elif row['method'] == 'hold' and row['size'] and len(reading) < 400:
             reading.append(row)
@@ -3028,6 +3134,7 @@ def make_plan(pid, ongoing, virtual=None):
     rows[:]=[r for r in rows if not r['name'].lower().endswith('.lnk') or r.get('coverageContext') or meeting_source(paths,r['relative'])[1]]
     preserve_meeting_context(rows,paths)
     bind_attachments(rows)
+    route_safety_ledgers(project,rows,all_paths)
     if virtual is None:rows.extend(add_empty_meeting_folders(root,paths,ongoing,inbox))
     apply_folder_names(project,plan)
     if virtual is None:rows.extend(add_empty_bundle_folders(root,rows,ongoing,inbox))
