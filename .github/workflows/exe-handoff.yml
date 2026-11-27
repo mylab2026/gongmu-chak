@@ -1,0 +1,26 @@
+# 임시: 만든 EXE를 exe-handoff 브랜치에 올려 받기 위한 설정(받은 뒤 삭제).
+name: EXE handoff
+on:
+  push:
+    branches: ['claude/windows-exe']
+permissions:
+  contents: write
+jobs:
+  handoff:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements.txt -r requirements-exe.txt
+      - run: python tools/build_exe.py --output dist
+      - run: python tools/exe_smoke.py dist/GongmuChak-0.11.4.exe
+      - shell: bash
+        run: |
+          mkdir handoff && cp dist/GongmuChak-0.11.4.exe handoff/ && cd handoff
+          git init -q && git checkout -q -b exe-handoff
+          git config user.name "github-actions" && git config user.email "github-actions@users.noreply.github.com"
+          git add GongmuChak-0.11.4.exe && git commit -qm "EXE handoff (temporary)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" exe-handoff
