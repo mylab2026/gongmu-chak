@@ -172,7 +172,7 @@ function renderContracts(){$('#pendingContracts').innerHTML=S.contracts.map((c,i
 $('#contractBack').onclick=backStep;
 $('#contractNext').onclick=()=>task('등록 내용 확인 중…',async()=>{if(resumeReview())return;
  if(S.mode==='initial'&&!$('#noContracts').checked){if(!S.contracts.length)throw Error('계약서를 추가하거나 “계약서 없음”을 선택해주세요.');if(S.contracts.some(c=>!c.analysis))throw Error('자동 추출이 완료되지 않은 계약서가 있습니다. 해당 계약서의 상태를 확인해주세요.');if(!$('#contractAck').checked)throw Error('보유한 계약서를 빠짐없이 등록했는지 확인하고 체크해주세요.');}
- if(S.mode==='ongoing'){if(!S.contracts.length)throw Error('새 계약서를 추가해주세요. 추가할 계약이 없으면 이전 화면에서 체크를 해제해주세요.');if(S.contracts.some(c=>!c.analysis))throw Error('추가한 계약서의 자동 추출 상태를 확인해주세요.');
+ if(S.mode==='ongoing'){if(!S.contracts.length){await openPlan();return;}/* 2026-11-28 LIM: 새 계약이 없으면(자동으로 찾은 계약이 모두 기존 계약·뺀 계약) 기존 계약 그대로 다음으로 */if(S.contracts.some(c=>!c.analysis))throw Error('추가한 계약서의 자동 추출 상태를 확인해주세요.');
   if(!await ask('새 계약 정보를 등록할까요?','기존 폴더 구조는 유지합니다. 구조 변경이 필요하면 다음 화면에서 폴더 구조 검토를 선택해주세요.'))return;
   S.project=await api('/save-project',{id:S.project.id,name:S.project.name,tree:S.project.tree,contracts:S.contracts.map(c=>c.id)});await openPlan();return;}
  const proposed=S.contracts.find(c=>c.analysis?.project_name)?.analysis.project_name;

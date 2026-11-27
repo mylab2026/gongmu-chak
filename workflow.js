@@ -348,16 +348,24 @@ const editWithUndo=editStructure.onclick;editStructure.onclick=(...a)=>{resetStr
 /* 8. PC에서 직접 만든 폴더: 정리 뒤 사용자가 탐색기에서 새로 만든 폴더를 알려 주고, 사업 폴더 구조에 추가할지 묻는다.
    추가하지 않아도 그 안의 파일은 옮기지 않는다(서버에서 제외). 추가하면 비슷한 이름의 새 파일을 그 폴더로 제안한다. */
 const userFolderPanel=document.createElement('div');userFolderPanel.id='userFolderPanel';userFolderPanel.className='card';userFolderPanel.hidden=true;
-$('#reviewMap').before(userFolderPanel);
-function renderUserFolders(){const list=(S.plan&&S.plan.userFolders)||[];userFolderPanel.hidden=!list.length;if(!list.length){userFolderPanel.innerHTML='';return;}
- const key=list.map(f=>f.path).join('|');if(userFolderPanel.dataset.key===key)return;userFolderPanel.dataset.key=key;
- userFolderPanel.innerHTML='<strong>PC에서 새로 만든 폴더 '+list.length+'개를 찾았어요</strong>'
-  +'<p class="muted">사업 폴더 구조에 추가하면 폴더 안의 파일은 그대로 두고, 앞으로 비슷한 이름의 파일을 이 폴더로 제안합니다. 추가하지 않아도 이 폴더 안의 파일은 옮기지 않습니다.</p>'
-  +list.map(f=>'<label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" checked data-user-folder="'+esc(f.path)+'"><span class="path">'+esc(f.path)+' <small class="muted">· 파일 '+f.files+'개</small></span></label>').join('')
-  +'<div class="row"><button id="registerUserFolders" class="primary">선택한 폴더를 구조에 추가</button></div>';
+($('#checkPanel')||$('#reviewMap')).before(userFolderPanel);
+function renderUserFolders(){const list=(S.plan&&S.plan.userFolders)||[];const key=list.map(f=>f.path).join('|');
+ // 2026-11-28 LIM: ‘폴더 구조에 반영할까요?’가 잘 안 보인다 → 빨간 질문 카드, 추가/취소를 분명히.
+ if(!list.length||userFolderPanel.dataset.dismissed===key){userFolderPanel.hidden=true;userFolderPanel.innerHTML='';return;}
+ userFolderPanel.hidden=false;if(userFolderPanel.dataset.key===key)return;userFolderPanel.dataset.key=key;
+ userFolderPanel.innerHTML='<div class="uf-head"><span class="uf-badge">확인 필요</span><strong>PC에서 직접 만든 폴더 '+list.length+'개를 폴더 구조에 추가할까요?</strong></div>'
+  +'<p class="uf-help">추가하면 오른쪽 폴더 구조에 나타나고, 앞으로 이 폴더로도 파일을 정리할 수 있습니다. 취소해도 이 폴더 안의 파일은 옮기지 않습니다.</p>'
+  +list.map(f=>'<label class="uf-row"><input type="checkbox" checked data-user-folder="'+esc(f.path)+'"><span><b>'+esc(f.path.split('/').pop())+'</b> <small>'+esc(f.path)+' · 파일 '+f.files+'개</small></span></label>').join('')
+  +'<div class="row uf-actions"><button id="registerUserFolders" class="primary">추가</button><button id="dismissUserFolders">취소</button></div>';
+ $('#dismissUserFolders').onclick=()=>{userFolderPanel.dataset.dismissed=key;userFolderPanel.hidden=true;userFolderPanel.innerHTML='';};
  $('#registerUserFolders').onclick=()=>{const folders=[...userFolderPanel.querySelectorAll('[data-user-folder]:checked')].map(x=>x.dataset.userFolder);if(!folders.length){error('추가할 폴더를 선택해주세요.','#registerUserFolders');return;}
   task('폴더 구조에 추가 중…',async()=>{await api('/register-folders',{id:S.project.id,folders});await refresh();const fresh=S.status.projects.find(p=>p.id===S.project.id);if(fresh){S.project=fresh;if(fresh.tree)S.tree=fresh.tree;}
-   S.plan=await api('/plan',{id:S.project.id,ongoing:S.plan.ongoing});S.selected.clear();userFolderPanel.dataset.key='';renderReview(true);});};}
+   S.plan=await api('/plan',{id:S.project.id,ongoing:S.plan.ongoing});S.selected.clear();userFolderPanel.dataset.key='';renderReview(true);});};
+ requestAnimationFrame(()=>userFolderPanel.scrollIntoView?.({block:'center',behavior:'smooth'}));}
+const userFolderStyle=document.createElement('style');userFolderStyle.textContent=`#userFolderPanel{border:2px solid #d93025;background:#fff4f3;border-radius:14px;padding:18px 20px}
+#userFolderPanel .uf-head{display:flex;align-items:center;gap:10px;font-size:1.1em;color:#a4262c}#userFolderPanel .uf-badge{background:#d93025;color:#fff;border-radius:99px;padding:3px 10px;font-size:.8em;font-weight:700}
+#userFolderPanel .uf-help{margin:8px 0 12px;color:#5f2120}#userFolderPanel .uf-row{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid #f1b8b4;border-radius:10px;padding:10px 12px;margin:6px 0}
+#userFolderPanel .uf-row small{color:#8a5a58;margin-left:6px}#userFolderPanel .uf-actions{margin-top:12px;gap:10px}#userFolderPanel #registerUserFolders{background:#d93025;border-color:#d93025}`;document.body.appendChild(userFolderStyle);
 const userFolderReview=renderReview;
 renderReview=function(...args){const result=userFolderReview(...args);renderUserFolders();return result;};
 
