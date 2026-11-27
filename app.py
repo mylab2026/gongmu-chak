@@ -4317,6 +4317,34 @@ def cleanup_empty_old_folders(project, plan, journal):
             relative = (Path(parent) / name).relative_to(root).as_posix()
             if relative.casefold() not in protected:
                 candidates.append(relative)
+    if plan['ongoing']:
+        # 2026-11-28 LIM 연간단가 시연: 처음 정리 뒤 비어 있는 옛 폴더(계약·기성…)가 남으면 '계속 문서 정리'는 정리할 문서 모음만 보므로
+        # 영영 지워지지 않았다. 앞선 정리에서 파일을 꺼낸 원래 폴더 중 지금 완전히 빈 것(파일 0개)만 함께 rmdir 한다.
+        inbox = inbox_of(project)
+        old = set()
+        for item in (DATA / 'history').glob('*.json'):
+            previous = read_json(item)
+            if not previous or previous.get('projectId') != project['id'] or previous.get('id') == journal['id']:
+                continue
+            for entry in previous.get('entries', []) + previous.get('inboxMoves', []):
+                if entry.get('status') != 'moved':
+                    continue
+                parent = PurePosixPath(entry['source']).parent
+                while str(parent) not in ('.', ''):
+                    old.add(str(parent)); parent = parent.parent
+        for relative in sorted(old):
+            top = relative.split('/')[0]
+            if relative.casefold() in protected or top in INBOXES or top == inbox or relative in candidates or top.startswith('.'):
+                continue
+            try:
+                folder = safe_path(root, relative)
+                if folder.is_dir() and not folder.is_symlink() and not any(f.is_file() or f.is_symlink() for f in folder.rglob('*')):
+                    for inner in [folder] + [d for d in folder.rglob('*') if d.is_dir()]:  # 빈 하위 폴더도 함께(깊은 것부터 지운다)
+                        name = inner.relative_to(root).as_posix()
+                        if name not in candidates:
+                            candidates.append(name)
+            except (OSError, ValueError):
+                continue
     journal['cleanupCandidates'] = candidates
     path = DATA / 'history' / (journal['id'] + '.json')
     # Every candidate is on disk before any rmdir; undo recreates cleanupCandidates ∪ removedFolders,

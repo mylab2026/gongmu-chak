@@ -274,6 +274,18 @@ class HeldFilesGoToInbox(unittest.TestCase):
         self.assertFalse((self.root/'가').exists());self.assertFalse((self.root/'다 빈 폴더').exists())
         self.assertTrue((self.root/'나/잠긴 문서.pdf').is_file())  # 실패한 파일과 그 폴더만 남는다
 
+    def test_continue_organizing_removes_old_folders_left_empty_by_the_first_run(self):
+        # 2026-11-28 LIM 연간단가 시연: 처음 정리 뒤 빈 '계약' 폴더가 남았는데 계속 문서 정리로는 지워지지 않았다.
+        self.write('계약/계약서.pdf',b'K');self.write('기성/청구.hwp',b'G')
+        plan,first=self.run_all({'계약/계약서.pdf':'1 공통/1 사업계획서','기성/청구.hwp':'3 시공단계/1 공문'})
+        (self.root/'계약').mkdir();(self.root/'기성'/'빈 하위').mkdir(parents=True)  # 남은 빈 옛 폴더(지우지 못했던 상황 재현)
+        (self.root/'사용자 폴더').mkdir();(self.root/'사용자 폴더'/'메모.txt').write_bytes(b'U')  # 파일이 있는 폴더는 그대로
+        self.write(app.INBOX+'/새 공문.pdf',b'N')
+        plan,second=self.run_all({app.INBOX+'/새 공문.pdf':'3 시공단계/1 공문'},ongoing=True)
+        self.assertFalse((self.root/'계약').exists());self.assertFalse((self.root/'기성').exists())
+        self.assertTrue((self.root/'사용자 폴더'/'메모.txt').is_file())
+        app.undo(second['id']);self.assertTrue((self.root/'계약').is_dir() and (self.root/'기성'/'빈 하위').is_dir())
+
     def test_continue_organizing_leaves_held_files_in_inbox(self):
         self.write(app.INBOX+'/낱개 메모.txt',b'M');self.write(app.INBOX+'/받은 폴더/회의록.hwp',b'H');self.write(app.INBOX+'/공문.pdf',b'P')
         plan,journal=self.run_all({app.INBOX+'/공문.pdf':'3 시공단계/1 공문'},ongoing=True)
