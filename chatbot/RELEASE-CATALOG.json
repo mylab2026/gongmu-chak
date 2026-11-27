@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updatedAt": "2026-11-20",
-  "supportBuild": "0.11.2-test / chatbot-support.1",
+  "supportBuild": "0.11.3-test / chatbot-support.1",
   "sourceBranch": "codex/chatbot-support-handoff",
   "baseCommit": "676606823a5425f62e3a11b7fcfea9572a29b011",
   "releases": [],

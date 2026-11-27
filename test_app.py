@@ -646,6 +646,71 @@ class FileOperations(unittest.TestCase):
         sent = json.dumps(gateway.call_args_list[1][0][0], ensure_ascii=False)
         self.assertNotIn(str(self.root), sent)
 
+    def test_keyword_search_photo_word_finds_photo_files_and_ignores_one_letter_noise(self):
+        # 2026-11-28 LIM: '사진'을 찾았는데 '현장대리인 선임계', '안전관리계획서'가 나오고 사진 파일은 안 나옴.
+        for relative in ('3 시공단계/착공계/붙임1_현장대리인 선임계.txt','3 시공단계/착공계/붙임3_안전관리계획서.txt',
+                         '3 시공단계/현장/KakaoTalk_0101.jpg','3 시공단계/현장/IMG_0002.png'):
+            path=self.root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'synthetic')
+        self.index()
+        result=app.search_files(self.project['id'],'사진')
+        self.assertEqual({r['name'] for r in result['results']},{'KakaoTalk_0101.jpg','IMG_0002.png'})
+        self.assertTrue(all(r['kind']=='사진' for r in result['results']))
+        self.assertEqual(app.query_terms('착공 전 사진'),['착공','사진'])  # 한 글자 '전'은 검색어가 아니다
+        # AI가 넓힌 '공사 사진대지'는 낱말로 쪼개지 않고, 흔한 말은 결과를 흐리지 않는다.
+        noisy=app.search_files(self.project['id'],'선임계',['공사 사진대지','시공'])
+        self.assertEqual([r['name'] for r in noisy['results']],['붙임1_현장대리인 선임계.txt'])
+
+    def test_keyword_search_hides_files_that_match_only_an_upper_folder_name(self):
+        # 2026-11-28 LIM: '계약서'를 찾았는데 '…최초 계약서/1 품의서/A 구매품의/붙임1_자재목록.xlsx'까지 나옴.
+        base='3 시공단계/1 도급공사/1 최초 품의 및 최초 계약서'
+        for relative,body in ((base+'/2 계약서/260201 공사 계약서.txt',b'contract'),(base+'/2 계약서/scan001.pdf',b''),
+                              (base+'/1 품의서/A 구매품의/붙임1_자재목록.txt',b'list'),(base+'/1 품의서/B 시행품의/붙임1_설계내역서.txt',b'bill')):
+            path=self.root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body)
+        self.index()
+        result=app.search_files(self.project['id'],'계약서')
+        self.assertEqual({r['name'] for r in result['results']},{'260201 공사 계약서.txt','scan001.pdf'})
+        self.assertEqual(result['hiddenFolderOnly'],2)
+        # 파일명·본문이 맞는 파일이 하나도 없으면 상위 폴더만 맞는 파일이라도 보여 준다.
+        only=app.search_files(self.project['id'],'구매품의')
+        self.assertEqual([r['name'] for r in only['results']],['붙임1_자재목록.txt'])
+
+    def test_ai_search_suggests_one_narrowing_question_with_options(self):
+        for relative in ('3 시공단계/계약/최초 계약서.txt','3 시공단계/계약/1차 변경계약서.txt'):
+            path=self.root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes('계약서'.encode())
+        self.index()
+        answers=[{'keywords':['계약서']},{'picks':[{'id':'c1','reason':'계약서','confidence':.6}],
+                  'narrow':{'question':'어느 계약서인가요?','options':['최초 계약서','1차 변경계약서','최초 계약서',3]}}]
+        with patch.object(app,'gateway',side_effect=answers):
+            result=app.search_ai(self.project['id'],'도급공사 계약서 찾아줘')
+        self.assertEqual(result['ai']['narrow'],{'question':'어느 계약서인가요?','options':['최초 계약서','1차 변경계약서']})
+        self.assertIsNone(app.narrow_question({'question':'어느?','options':['하나']}))
+        self.assertIsNone(app.narrow_question('질문'))
+
+    def test_keyword_search_drops_candidates_far_weaker_than_the_best_match(self):
+        for relative,body in (('3 시공단계/착공/착공계 제출.txt',b'x'),('3 시공단계/일보/작업일보.txt','착공 이후 작업'.encode())):
+            path=self.root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body)
+        self.index()
+        result=app.search_files(self.project['id'],'착공계 제출')
+        self.assertEqual([r['name'] for r in result['results']],['착공계 제출.txt'])
+
+    def test_ai_search_turns_a_detailed_question_into_keywords_kinds_and_dates(self):
+        for relative,body in (('3 시공단계/현장/누수 현장.jpg',b'x'),('3 시공단계/공문/누수 보수 요청.txt','누수 보수 요청 공문'.encode()),
+                              ('3 시공단계/공문/착공계.txt','착공계'.encode())):
+            path=self.root/relative;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(body)
+        self.index()
+        answers=[{'keywords':['누수','보수 요청'],'kinds':['image','pdf','nope'],'date_from':'2026-11-01','date_to':'bad'},
+                 {'picks':[{'id':'c1','reason':'누수 현장 사진','confidence':.8}]}]
+        with patch.object(app,'gateway',side_effect=answers) as gateway:
+            result=app.search_ai(self.project['id'],'11월에 받은 누수 관련 현장 사진이랑 보수 요청 공문 찾아줘')
+        self.assertEqual(gateway.call_count,2)
+        self.assertEqual(result['ai']['plan'],{'keywords':['누수','보수 요청'],'kinds':['사진','PDF'],'dateFrom':'2026-11-01','dateTo':''})
+        self.assertEqual({r['name'] for r in result['results']},{'누수 현장.jpg','누수 보수 요청.txt'})
+        self.assertEqual(result['ai']['picks'][0]['name'],result['results'][0]['name'])  # c1 = PC 검색 1순위 후보
+        self.assertIn('사진 파일',next(r for r in result['results'] if r['name']=='누수 현장.jpg')['reasons'])
+        self.assertNotIn('착공계.txt',[r['name'] for r in result['results']])
+        first=json.dumps(gateway.call_args_list[0][0][0],ensure_ascii=False)
+        self.assertIn('11월에 받은 누수',first);self.assertNotIn(str(self.root),first)
+
     def test_hwp_and_hwpx_text_extraction(self):
         import doctext, zipfile
         hwpx = self.base / '문서.hwpx'

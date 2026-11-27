@@ -96,6 +96,31 @@ class UserRequirements(unittest.TestCase):
             self.assertEqual(Path(actual).name,'참고 계약서.pdf')
         finally:fixture.tearDown()
 
+    def test_11a_shooting_date_against_contract_period_comes_before_folder_name(self):
+        # 2026-11-28 LIM: 사진은 날짜로 정확히 나뉜다. 계약서 공사기간 2026-08-01~09-30 기준.
+        self.photo('3 시공단계/2 사진/1 공사전/IMG_0815.jpg','2026:08:15')  # 폴더는 '공사전'이지만 촬영일은 공사 중
+        self.photo('3 시공단계/2 사진/2 공사중/IMG_0725.jpg','2026:07:25')  # 계약 후·착공 전
+        p=self.root/'3 시공단계/2 사진/3 공사후/무날짜.jpg';p.parent.mkdir(parents=True);Image.new('RGB',(20,20),'blue').save(p,'JPEG')
+        got=self.photos()
+        self.assertEqual(got['IMG_0815.jpg']['phase'],'during');self.assertIn('2026-08-01~2026-09-30',got['IMG_0815.jpg']['evidence'])
+        self.assertEqual(got['IMG_0725.jpg']['phase'],'before')
+        self.assertEqual(got['무날짜.jpg']['phase'],'after');self.assertIn('폴더 이름으로',got['무날짜.jpg']['evidence'])
+
+    def test_11b_user_can_correct_the_construction_period_and_reset_it(self):
+        self.photo('3 시공단계/2 사진/IMG_0815.jpg','2026:08:15')
+        periods=app.collect(self.project['id'])['periods']
+        self.assertEqual([(x['scope'],x['start'],x['end'],x['edited']) for x in periods],[('construction','2026-08-01','2026-09-30',False)])
+        app.set_photo_period(self.project['id'],'construction','2026-08-20','2026-10-31')
+        self.assertEqual(self.photos()['IMG_0815.jpg']['phase'],'before')
+        again=app.collect(self.project['id'])['periods'][0]
+        self.assertEqual((again['start'],again['end'],again['edited'],again['contractStart']),('2026-08-20','2026-10-31',True,'2026-08-01'))
+        with self.assertRaises(ValueError):app.set_photo_period(self.project['id'],'construction','2026-11-01','2026-10-01')
+        with self.assertRaises(ValueError):app.set_photo_period(self.project['id'],'nope','2026-08-01','2026-09-01')
+        app.set_photo_phase(self.project['id'],'3 시공단계/2 사진/IMG_0815.jpg','after')  # 직접 고른 구분은 유지
+        app.set_photo_period(self.project['id'],'construction','','')
+        self.assertFalse(app.collect(self.project['id'])['periods'][0]['edited'])
+        self.assertEqual(self.photos()['IMG_0815.jpg']['phase'],'after')
+
     def test_11_thirty_days_after_completion_is_an_estimate(self):
         self.photo('3 시공단계/2 사진/IMG_1030.jpg','2026:10:30');item=self.photos()['IMG_1030.jpg']
         self.assertEqual(item['phase'],'after');self.assertIn('추정',item['evidence'])
@@ -504,6 +529,27 @@ class AnnualTemplates(unittest.TestCase):
                 self.assertEqual(row['destination'],'1 품의 및 계약서/2 계약서',row['reason'])
 
 
+class AIBranchRootIsHeld(unittest.TestCase):
+    """AI가 '3 시공단계/1 도급공사'처럼 가지 맨 위를 답하면 묶음을 거기 쌓지 않고 보류한다."""
+
+    def test_ai_answer_at_contract_branch_root_is_held_and_leaf_is_kept(self):
+        folders = {'d1': '3 시공단계', 'd2': '3 시공단계/1 도급공사', 'd3': '3 시공단계/1 도급공사/1 착공',
+                   'd4': '3 시공단계/1 도급공사/3 자재승인', 'd5': '0 정리할 문서 모음'}
+        rows = [{'id': 'f1'}, {'id': 'f2'}, {'id': 'f3'}, {'id': 'f4'}]
+        answer = {'assignments': [
+            {'file_id': 'f1', 'destination_id': 'd2', 'confidence': .9, 'reason': '착공계 제출 공문'},
+            {'file_id': 'f2', 'destination_id': 'd1', 'confidence': .9, 'reason': '시공 단계 자료'},
+            {'file_id': 'f3', 'destination_id': 'd4', 'confidence': .9, 'reason': '자재승인 요청'},
+            {'file_id': 'f4', 'destination_id': 'd5', 'confidence': .9, 'reason': '판단 어려움'}]}
+        result = app.validate_bulk(answer, rows, folders)
+        for held in ('f1', 'f2'):
+            self.assertEqual(result[held]['destination'], '')
+            self.assertEqual(result[held]['method'], 'hold')
+            self.assertIn('가지 맨 위', result[held]['reason'])
+        self.assertEqual(result['f3']['destination'], '3 시공단계/1 도급공사/3 자재승인')
+        self.assertEqual(result['f4']['destination'], '0 정리할 문서 모음')
+
+
 class OldFolderRemovalOnBusyPC(unittest.TestCase):
     """2026-11-28 LIM 연간단가 시연(OneDrive 폴더): 파일은 다 빠졌는데 옛 폴더가 남음. 합성 자료."""
     def test_briefly_locked_empty_folder_is_retried_then_removed(self):
@@ -517,6 +563,23 @@ class OldFolderRemovalOnBusyPC(unittest.TestCase):
             with patch.object(Path,'rmdir',busy),patch.object(app.time,'sleep'):
                 app.remove_empty_folder(target)
             self.assertFalse(target.exists());self.assertEqual(len(calls),3)
+
+    @unittest.skipUnless(os.name=='nt','Windows 폴더 읽기 전용 속성')
+    def test_read_only_empty_folder_on_windows_is_removed(self):
+        # 2026-11-28 LIM 공사부터 시연(C 드라이브): 빈 옛 폴더 12개가 모두 WinError 5. 읽기 전용 속성이 붙은 폴더는 Windows가 지우지 못한다.
+        import ctypes
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'공문'/'2026-11-06 착공계 제출';target.mkdir(parents=True)
+            self.assertTrue(ctypes.windll.kernel32.SetFileAttributesW(str(target),0x1))
+            with self.assertRaises(PermissionError):os.rmdir(target)  # 원인 확인: 읽기 전용 폴더는 rmdir만으로는 지워지지 않는다
+            app.remove_empty_folder(target);self.assertFalse(target.exists())
+
+    def test_read_only_flag_is_only_cleared_on_an_empty_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'기성';target.mkdir();(target/'남은.hwp').write_bytes(b'x')
+            with patch.object(app,'readonly_folder',return_value=True) as flag,self.assertRaises(OSError):
+                app.remove_empty_folder(target)
+            self.assertTrue((target/'남은.hwp').is_file())
 
     def test_kept_folder_reason_names_what_is_left(self):
         with tempfile.TemporaryDirectory() as folder:

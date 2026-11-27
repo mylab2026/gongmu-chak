@@ -1,6 +1,9 @@
 // 사진은 원래 위치에서 모아 보고, 문장 검색은 문서 발췌를 AI로 확인합니다.
 const Collect={data:null,tab:'photo',phase:'all',limit:120,thumbs:new Map(),plan:null,cid:'',run:null,draft:null,recheck:null,repair:null,generation:0,job:null};
 const collectStyle=document.createElement('style');collectStyle.textContent=`
+.photo-period{border:1px solid #dbe3f0;background:#f7f9fd;border-radius:12px;padding:14px 16px;margin-bottom:14px}.photo-period p{margin:0 0 10px}
+.pp-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:8px 0}.pp-label{font-weight:700;min-width:220px}.pp-label small{font-weight:400;margin-left:6px}
+.pp-row label{display:flex;align-items:center;gap:6px;white-space:nowrap}.pp-row input[type=date]{padding:6px 8px}.photo-period .pp-help{margin:6px 0 0;font-size:var(--fs-meta)}
 #home .choices{grid-template-columns:repeat(2,1fr)}
 #collection .ctabs{align-items:flex-start}#collection .export-tab{max-width:32rem}#collection #exportUsageHint{font-size:14px;line-height:1.5;margin:6px 0 0}
 #collection textarea{box-sizing:border-box;width:100%;min-height:100px;font:inherit;padding:12px;border:1px solid #bdcbe3;border-radius:8px}
@@ -20,29 +23,26 @@ const collectStyle=document.createElement('style');collectStyle.textContent=`
 #collection .photo-card .noimg{display:flex;align-items:center;justify-content:center;color:#778}
 #collection .photo-card.check{border-color:#d94141;box-shadow:inset 0 3px #d94141}
 #collection table{width:100%;border-collapse:collapse}#collection td,#collection th{border-bottom:1px solid var(--line-soft);padding:8px 6px;text-align:left;font-size:var(--fs-help);vertical-align:top}#collection th{font-size:var(--fs-meta);color:var(--ink-3);font-weight:700}
-.done-guide{margin-top:14px;border:1px solid #cfdaf5;background:#f6f8ff;border-radius:12px;padding:12px}
-.done-guide p{margin:4px 0}
 #collection .doc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
 #collection .doc-card{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fff}#collection .doc-card .noimg{height:200px;background:#eef1f6;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#778;overflow:hidden}
 #collection .doc-card img{width:100%;height:200px;object-fit:contain;background:#fff}#collection .doc-card dl{display:grid;grid-template-columns:70px 1fr;gap:2px 6px;font-size:13px;margin:6px 0}#collection .doc-card dt{color:var(--ink-3)}
 #collection .cond{display:grid;grid-template-columns:120px 1fr;gap:6px 10px;align-items:center}#collection .cond input{width:100%}#collection .cond input[type=checkbox]{width:auto;margin:0 3px 0 0}#collection .cond label{display:inline-flex;align-items:center;margin-right:12px;font-weight:400}
 #collection .badge{display:inline-block;border-radius:10px;padding:1px 8px;font-size:12px;background:#eef1f6}#collection .badge.ok{background:#e3f6e5;color:#1b5e20}#collection .badge.no{background:#fde8e8;color:#9b1c1c}
-.done-anim{position:relative;width:380px;max-width:100%;height:205px;margin:12px auto 0;border:2px dashed #e0c96b;border-radius:12px;background:#fffaf0;overflow:hidden}
-.da-title{position:absolute;left:10px;top:6px;font-size:13px;font-weight:700;color:#8a6d00}
-.da-folder{position:absolute;top:118px;width:96px;height:46px;border-radius:6px;background:#dfe8ff;border:1px solid #9fb5ee;font-size:15px;font-weight:700;text-align:center;line-height:20px;padding-top:24px;box-sizing:border-box}
-.da-plan{left:14px}.da-design{left:142px}.da-build{left:270px;animation:daHit .4s 3.6s forwards}
-.da-check{color:#1b7e2a;opacity:0;animation:daShow .3s 3.7s forwards}
-.da-doc{position:absolute;left:92px;top:32px;width:196px;height:40px;padding:4px 8px;box-sizing:border-box;background:#fff;border:1px solid #889;border-radius:4px;box-shadow:0 2px 4px #0002;opacity:0;transform-origin:center;animation:daShow .4s .1s forwards,daMove 1s 2.6s ease-in-out forwards}
-.da-doc::before{content:'';position:absolute;left:8px;top:8px;width:13px;height:17px;border:1.5px solid #667;border-radius:2px;background:linear-gradient(#667,#667) 3px 5px/7px 1.5px no-repeat,linear-gradient(#667,#667) 3px 9px/7px 1.5px no-repeat}
-.da-old,.da-new{position:absolute;left:28px;right:6px;top:10px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.da-old{color:#555;animation:daOut .3s 1.2s forwards}.da-new{color:#1f4fd1;font-weight:700;opacity:0;animation:daShow .3s 1.4s forwards,daFlash .8s 1.4s}
-.da-tag{position:absolute;left:92px;top:80px;font-size:13px;background:#e8f5e9;color:#1b5e20;border-radius:10px;padding:2px 10px;opacity:0;animation:daShow .3s 1.9s forwards}
-.da-final{position:absolute;left:0;right:0;top:174px;text-align:center;font-size:15px;font-weight:700;color:#1f2d4d;opacity:0;animation:daShow .4s 3.9s forwards}
-@keyframes daShow{to{opacity:1}}@keyframes daOut{to{opacity:0;text-decoration:line-through}}
-@keyframes daFlash{0%{background:#fff3a6}100%{background:transparent}}
-@keyframes daMove{to{transform:translate(130px,72px) scale(.45);opacity:.9}}
-@keyframes daHit{to{background:#c8f7c5;border-color:#56b866}}
-@media (prefers-reduced-motion:reduce){.done-anim *{animation:none!important}.da-doc{opacity:1;transform:translate(130px,72px) scale(.45)}.da-old{opacity:0}.da-new,.da-tag,.da-final,.da-check{opacity:1}.da-build{background:#c8f7c5}}`;document.body.appendChild(collectStyle);
+.done-summary{font-size:15px;margin:6px 0 12px}
+.done-stats{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.done-stat{flex:1 1 120px;border:1px solid var(--line,#d9dee8);border-radius:10px;padding:10px 12px;background:#fff;display:flex;flex-direction:column}
+.done-stat b{font-size:24px;line-height:1.1}.done-stat span{font-size:13px;color:#5b6576}
+.done-stat.ok b{color:#1a7f4b}.done-stat.hold b{color:#a76a00}.done-stat.warn{border-color:#f0c6c6;background:#fff7f7}.done-stat.warn b{color:#b42318}
+.done-kept{border:1px solid #f0c6c6;background:#fff7f7;border-radius:10px;padding:8px 12px;margin:0 0 12px;font-size:14px}.done-kept p{margin:2px 0}
+.done-kept ul{margin:6px 0 0;padding-left:18px;max-height:160px;overflow:auto;font-size:13px}
+.done-guide{margin-top:4px;border:1px solid #cfdaf5;background:#f6f8ff;border-radius:12px;padding:12px 14px}
+.dg-title{margin:0 0 10px;font-weight:700}
+.dg-flow{list-style:none;display:flex;gap:10px;margin:0;padding:0;counter-reset:none}
+.dg-flow li{flex:1;position:relative;background:#fff;border:1px solid #cfdaf5;border-radius:10px;padding:10px 10px 10px 40px;display:flex;flex-direction:column;gap:3px;font-size:14px}
+.dg-flow li+li::before{content:'→';position:absolute;left:-12px;top:50%;transform:translate(-50%,-50%);color:#3b5bdb;font-weight:700}
+.dg-flow small{color:#5b6576;font-size:12.5px}.dg-flow code{font-size:12px}
+.dg-no{position:absolute;left:10px;top:10px;width:22px;height:22px;border-radius:50%;background:#3b5bdb;color:#fff;font-size:13px;display:grid;place-items:center;font-weight:700}
+@media (max-width:640px){.dg-flow{flex-direction:column}.dg-flow li+li::before{content:'↓';left:24px;top:-6px}}`;document.body.appendChild(collectStyle);
 const collectButton=document.createElement('button');collectButton.id='collectButton';collectButton.innerHTML='<b>모아보기</b><br><small>파일의 원래 위치는 두고 공무착착이 원하는 파일들을 모아서 보여줍니다.</small>';$('#findButton').after(collectButton);
 const collection=document.createElement('section');collection.id='collection';collection.hidden=true;
 collection.innerHTML='<button id="collectBack">뒤로가기</button><h1>모아보기</h1>'
@@ -59,7 +59,7 @@ function collectOpenButtons(relative){return '<button data-copen="'+esc(relative
 function collectWire(){
  $$('[data-copen]').forEach(b=>b.onclick=()=>task('파일 여는 중…',()=>api('/open',{id:collectId(),relative:b.dataset.copen,reveal:false})));
  $$('[data-creveal]').forEach(b=>b.onclick=()=>task('폴더 여는 중…',()=>api('/open',{id:collectId(),relative:b.dataset.creveal,reveal:true})));
- $$('[data-phase-of]').forEach(s=>s.onchange=()=>task('사진 구분 저장 중…',async()=>{await api('/photo-phase',{id:collectId(),relative:s.dataset.phaseOf,phase:s.value});await collectLoad();}));
+ bindPhotoPeriod();$$('[data-phase-of]').forEach(s=>s.onchange=()=>task('사진 구분 저장 중…',async()=>{await api('/photo-phase',{id:collectId(),relative:s.dataset.phaseOf,phase:s.value});await collectLoad();}));
  $$('[data-official-of]').forEach(b=>b.onclick=()=>task('공문 구분 저장 중…',async()=>{await api('/official-mark',{id:collectId(),relative:b.dataset.officialOf,value:b.dataset.value==='yes'});await collectLoad();}));
  $$('[data-cphase]').forEach(b=>b.onclick=()=>{Collect.phase=b.dataset.cphase;Collect.limit=120;collectRender();});
  $$('[data-cmore]').forEach(b=>b.onclick=()=>{Collect.limit+=120;collectRender();});}
@@ -70,8 +70,18 @@ function photoCard(p){return '<article class="photo-card'+(p.phase==='check'?' c
  +'<p class="muted">'+esc(phaseNames[p.phase])+' · '+esc(p.evidence)+'</p>'+(p.bundle?'<p class="muted">자료 묶음: '+esc(p.bundle)+'</p>':'')+'<p class="path">'+esc(p.folder)+'</p>'
  +(p.copies?'<p class="muted">같은 이름·크기 사본 '+p.copies.length+'곳 더 있음 · 지우거나 합치지 않습니다</p>':'')
  +'<label>구분 <select data-phase-of="'+esc(p.relative)+'">'+Object.entries(phaseNames).map(([k,v])=>'<option value="'+k+'"'+(k===p.phase?' selected':'')+'>'+v+'</option>').join('')+'</select></label><div class="row">'+collectOpenButtons(p.relative)+'</div></article>';}
+function photoPeriodBox(d){const list=d.periods||[];
+ return '<div class="photo-period"><p><b>사진 '+d.photos.length+'장을 공사기간 기준으로 나눴습니다.</b> 촬영일(사진 속 촬영 정보, 없으면 파일명 날짜)이 공사 시작 전이면 <b>공사 전</b>, 기간 안이면 <b>공사 중</b>, 종료 후면 <b>공사 후</b>입니다. 날짜가 없는 사진만 폴더 이름(공사전·중·후)으로 나눕니다.</p>'
+ +list.map((p,i)=>'<div class="pp-row"><span class="pp-label">'+esc(p.label)+' 공사기간 <small class="muted">'+(p.edited?'직접 고침'+(p.contractStart?' · 계약서 '+esc(p.contractStart)+'~'+esc(p.contractEnd):''):p.start?'계약서 기준':'계약서에 기간이 없음')+'</small></span>'
+  +'<label>공사 시작 <input type="date" data-pp-start="'+i+'" value="'+esc(p.start)+'"></label><label>공사 종료 <input type="date" data-pp-end="'+i+'" value="'+esc(p.end)+'"></label>'
+  +'<button data-pp-save="'+i+'">이 기간으로 다시 나누기</button>'+(p.edited?'<button data-pp-reset="'+i+'">계약서 기간으로</button>':'')+'</div>').join('')
+ +'<p class="muted pp-help">실제 공사기간이 계약서와 다르면 날짜를 고치세요. 직접 고른 사진 구분은 바뀌지 않습니다.</p></div>';}
+function bindPhotoPeriod(){const list=Collect.data?.periods||[];
+ const save=(i,start,end)=>task('공사기간 저장 중…',async()=>{await api('/photo-period',{id:collectId(),scope:list[i].scope,start,end});await collectLoad();});
+ $$('[data-pp-save]').forEach(b=>b.onclick=()=>{const i=+b.dataset.ppSave;save(i,$('[data-pp-start="'+i+'"]').value,$('[data-pp-end="'+i+'"]').value);});
+ $$('[data-pp-reset]').forEach(b=>b.onclick=()=>save(+b.dataset.ppReset,'',''));}
 function collectPhotos(){const d=Collect.data;const list=Collect.phase==='all'?d.photos:d.photos.filter(p=>p.phase===Collect.phase);
- return '<div class="card"><p class="muted">사진 '+d.photos.length+'장 · 명시된 전·중·후와 해당 공사 촬영일을 확인합니다. 기준 기간: '+(d.period&&d.period.start?esc(d.period.source)+' '+esc(d.period.start)+'~'+esc(d.period.end):'공사기간(계약서에 기간이 없어 확인 필요)')+'을 사용하며 원 공사계약일 이전은 공사 전, 사용자가 확인한 완료일 이후는 같은 공사의 공사 후로 분류합니다. 준공 직후는 확인 필요, 30일 이후는 공사 후 추정입니다. 공문에 첨부된 실제 사진은 유지합니다.</p><div class="chips"><button data-cphase="all" aria-pressed="'+(Collect.phase==='all')+'">전체 '+d.photos.length+'</button>'
+ return '<div class="card">'+photoPeriodBox(d)+'<div class="chips"><button data-cphase="all" aria-pressed="'+(Collect.phase==='all')+'">전체 '+d.photos.length+'</button>'
  +Object.entries(phaseNames).map(([k,v])=>'<button data-cphase="'+k+'" aria-pressed="'+(Collect.phase===k)+'">'+v+' '+d.counts[k]+'</button>').join('')+'</div>'
  +(list.length?'<div class="photo-grid">'+list.slice(0,Collect.limit).map(photoCard).join('')+'</div>'+(list.length>Collect.limit?'<button data-cmore>더 보기 ('+(list.length-Collect.limit)+'장 남음)</button>':''):'<p class="muted">해당하는 사진이 없습니다.</p>')+'</div>';}
 function collectOfficials(){const d=Collect.data;
@@ -191,10 +201,11 @@ collectButton.onclick=()=>task('등록된 사업 확인 중…',async()=>{await 
 $('#collectProject').onchange=()=>task('자료 모으는 중…',()=>{Collect.generation++;Collect.plan=null;Collect.report=null;Collect.run=null;Collect.cid='';Collect.draft=null;Collect.recheck=null;Collect.repair=null;return collectLoad();});
 $('#collectRefresh').onclick=()=>task('사진·공문 모으는 중…',collectLoad);
 $('#collectHome').onclick=()=>goHome();$('#collectBack').onclick=()=>{if(Collect.draft){Collect.draft=null;Collect.assist=null;collectRender();}else if(Collect.cid){Collect.cid='';Collect.run=null;collectRender();}else goHome();};
-// 정리 완료 화면: 고정 안내문 + 4~5초 무음 애니메이션 한 번(동작 줄이기 설정에서는 정지 화면).
+// 정리 완료 화면 안내(2026-11-28 LIM: 줄글·애니메이션이 눈에 안 들어옴): 다음부터 할 일을 세 칸 흐름 그림 한 장으로.
 function completionGuide(){const old=document.querySelector('#doneGuide');if(old)old.remove?.();const box=document.createElement('div');box.id='doneGuide';box.className='done-guide';
- box.innerHTML='<p><b>모든 파일을 꼼꼼히 정리하지 않아도 괜찮아요.</b></p><p>기획·설계·시공 단계별로 모아두고, 파일명에 <b>날짜와 내용</b>만 남겨주세요.<br>예: <code>260813 설계변경 검토서.pdf</code></p><p>다음 정리에 드는 <b>시간과 AI 크레딧을 줄일 수 있어요.</b></p>'
- +'<div class="done-anim" aria-hidden="true"><span class="da-title">정리할 문서 모음</span><div class="da-folder da-plan">기획</div><div class="da-folder da-design">설계</div><div class="da-folder da-build">시공 <span class="da-check">✓</span></div>'
- +'<div class="da-doc"><span class="da-old">스캔_0012(최종).pdf</span><span class="da-new">260813 설계변경 검토서.pdf</span></div><span class="da-tag">시공 중 발생한 문서</span><p class="da-final">단계만 나누고, 이름만 간단하게.</p></div>';
- $('#moveDoneText').after(box);}
+ box.innerHTML='<p class="dg-title">다음부터는 이렇게 하면 됩니다</p><ol class="dg-flow">'
+  +'<li><span class="dg-no">1</span><b>새 문서는 한 곳에</b><small>‘0 정리할 문서 모음’에 넣기</small></li>'
+  +'<li><span class="dg-no">2</span><b>파일 이름은 날짜+내용</b><small><code>260813 설계변경 검토서.pdf</code></small></li>'
+  +'<li><span class="dg-no">3</span><b>‘계속 문서 정리’</b><small>단계별 폴더로 알아서 옮김</small></li></ol>';
+ $('#moveDoneKept').after(box);}
 const doneBaseShow=moveDone.showModal.bind(moveDone);moveDone.showModal=function(){completionGuide();return doneBaseShow();};

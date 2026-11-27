@@ -50,7 +50,7 @@ const leads={
  projectStep:()=>['정리할 사업을 고른 뒤 ‘다음’을 누르세요','새로 생긴 계약이 있을 때만 아래 칸을 체크하세요.'],
  contractStep:()=>S.mode==='ongoing'?['새로 생긴 계약서를 등록하세요','등록한 계약은 기존 사업에 더해집니다.']:S.status?.configured?['사업 폴더에서 찾은 계약서를 확인하세요','내가 관리하지 않는 계약이나 중복된 계약은 ‘내 계약 아님 · 제외’로 빼고 ‘다음’을 누르세요. 아직 계약이 없으면 아래 ‘계약서 없음’을 고르세요.']:['먼저 AI를 연결해주세요','계약서 자동 읽기와 문서 분류에 학내 AI 연결이 필요합니다.'],
  treeStep:()=>['사업유형을 고르면 기본 폴더 구조가 자동으로 만들어집니다','폴더 이름은 필요할 때만 고치고 ‘다음’을 누르세요.'],
- reviewStep:()=>{const left=S.plan?S.plan.rows.filter(mapNeedsCheck).length:0;return left?['아래 화살표에서 목적지를 확인하고 ‘파일 이동 실행’을 누르세요','빨간 !가 붙은 파일 '+left+'개는 확인이 필요합니다. 폴더째 끌어 옮길 수 있고, 보류 파일은 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮깁니다.']:['연결도를 훑어본 뒤 ‘파일 이동 실행’을 누르세요','목적지를 정한 파일만 이동하며, 보류 파일은 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮깁니다.'];}
+ reviewStep:()=>{const left=S.plan?S.plan.rows.filter(mapNeedsCheck).length:0;return left?['아래 화살표에서 목적지를 확인하고 ‘파일 이동 실행’을 누르세요','빨간 ! '+left+'개는 AI가 헷갈린 파일입니다. 다르면 오른쪽 폴더로 옮기고, 맞으면 그대로 두세요. 그대로 두면 지금 화살표대로 정리되고, 보류는 ‘정리할 문서 모음’으로 갑니다.']:['연결도를 훑어본 뒤 ‘파일 이동 실행’을 누르세요','목적지를 정한 파일만 이동하며, 보류 파일은 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮깁니다.'];}
 };
 for(const id of Object.keys(leads)){const section=$('#'+id);if(!section)continue;const lead=document.createElement('div');lead.className='lead';lead.id='lead-'+id;lead.setAttribute('role','note');section.prepend(lead);}
 function updateLead(){for(const [id,make] of Object.entries(leads)){const section=$('#'+id),lead=$('#lead-'+id);if(!section||!lead||section.hidden)continue;const [main,sub]=make();lead.innerHTML='<span class="lead-tag">지금 할 일</span><div>'+esc(main)+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>';}}
@@ -113,11 +113,11 @@ function renderCheckProgress(){
  if(progressState.plan!==S.plan.id){progressState.plan=S.plan.id;progressState.ids=new Set();}
  const open=S.plan.rows.filter(mapNeedsCheck);open.forEach(r=>progressState.ids.add(r.id));
  const total=progressState.ids.size;if(!total)return;
- const done=total-open.length,pct=Math.round(done/total*100);
- panel.innerHTML=open.length?'<div class="check-progress"><b>경로 확인 '+done+' / '+total+'</b><span class="bar" aria-hidden="true"><i style="width:'+pct+'%"></i></span><button class="primary" id="nextCheck">다음 확인할 파일</button></div><p class="muted check-hint">'+open.length+'개 남음 · 아래 화살표와 !를 보고 경로를 확정해주세요. 맞으면 ‘맞아요’, 다르면 파일을 오른쪽 폴더로 끌어 옮기면 됩니다.</p>'
-  :'<p class="success" style="margin:0">경로 확인을 마쳤습니다 ('+total+'개). 아래 ‘파일 이동 실행’을 누르세요.</p>';
+ 
+ panel.innerHTML=open.length?'<div class="check-progress"><b>! 표시 '+open.length+'개</b><button class="primary" id="nextCheck">다음 ! 파일 보기</button></div><p class="muted check-hint">AI가 헷갈린 파일입니다. 다르면 오른쪽 폴더로 옮기고, 맞으면 그대로 두세요.</p>'
+  :'<p class="success" style="margin:0">! 표시 파일을 모두 옮기거나 정했습니다. 아래 ‘파일 이동 실행’을 누르세요.</p>';
  const next=$('#nextCheck');if(next)next.onclick=()=>{const order=open.findIndex(r=>r.id===MapReview.inspection);const row=open[(order+1)%open.length]||open[0];mapFocusFile(row.id,true);
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{$$('[data-map-file]').find(e=>e.dataset.mapFile===row.id)?.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(()=>revealAboveSticky($('.map-route-ok')),350);}));};
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{$$('[data-map-file]').find(e=>e.dataset.mapFile===row.id)?.scrollIntoView({behavior:'smooth',block:'center'});}));};
 }
 /* 긴 원래 위치는 마지막 폴더 이름만 크게, 상위 경로는 작게 */
 function shortenGroups(){$$('#mapSources .map-group > span:first-child').forEach(span=>{if(span.dataset.short)return;const m=span.textContent.match(/^([▾▸] )?(.*?)( · 폴더 묶음 이동)?$/);if(!m||!m[2].includes('/'))return;const parts=m[2].split('/');span.dataset.short='1';span.title=m[2];span.innerHTML=esc((m[1]||'')+parts.at(-1)+(m[3]||''))+'<span class="map-parent">'+esc(parts.slice(0,-1).join(' › '))+'</span>';});}

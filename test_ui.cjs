@@ -119,7 +119,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  execution=$('#bulkMove').click();await tick();assert.equal($('#confirmText').hidden,true);assert($('#confirmTitle').textContent.includes('1개를 이동할까요?'));$('#confirmYes').click();await execution;const partial=calls.filter(c=>c[0]==='/execute-all').at(-1)[1];assert.deepEqual(partial.choices.map(c=>c.id),['r1']);assert.equal(partial.autoRename,true);
  await $('#findButton').click();assert.equal($('#finder').hidden,false);assert.equal($('#home').hidden,true);assert(calls.some(c=>c[0]==='/index-start'&&c[1].id==='p1'));
  $('#finderQuery').value='계약서';await $('#finderSearch').click();assert(registry.some(e=>e.dataset.openFile==='01 공통/계약서.pdf'&&!e.removed));
- const aiSearch=$('#finderAI').click();await tick();assert.equal($('#confirm').open,true);$('#confirmYes').click();await aiSearch;assert.equal(calls.filter(c=>c[0]==='/search-ai').length,1);
+ $('#finderAsk').value='배수로 공사 계약한 서류 찾아줘';const aiSearch=$('#finderAI').click();await tick();assert.equal($('#confirm').open,true);$('#confirmYes').click();await aiSearch;assert.equal(calls.filter(c=>c[0]==='/search-ai').length,1);
  $('#initialButton').click();assert.equal($('#finder').hidden,true);
  evaluate('S.project=null;S.tree=[{label:"0 정리할 문서 모음",children:[]},{label:"1 공통",children:[{label:"1 사업계획서"},{label:"2 예산관리"},{label:"3 주요 보고자료"}]},{label:"2 설계단계",children:[]}];S.tree[1].children.splice(0,1);renderTree();');
  assert.deepEqual(evaluate('S.tree[1].children.map(n=>n.label)'),['1 예산관리','2 주요 보고자료']);assert.equal(evaluate('S.tree[0].label'),'0 정리할 문서 모음');
@@ -141,11 +141,10 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert(!registry.some(e=>!e.removed&&e.dataset.mapFile==='h'));
  const heldMarker=registry.filter(e=>!e.removed&&e.dataset.mapReview==='h').at(-1);assert(heldMarker);heldMarker.click();evaluate('drawMapEdges()');
  assert.equal(evaluate('MapReview.file'),'h');assert.equal(evaluate('MapReview.retargeting'),true);
- assert($('#mapCaption').innerHTML.includes('보류할 파일이면'));
- assert($('#mapApprovals').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
- const heldConfirm=registry.filter(e=>!e.removed&&e.dataset.routeConfirm==='h').at(-1);await heldConfirm.click();
- assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');assert.equal(evaluate('needsCheck(S.plan.rows.find(r=>r.id==="h"))'),false);
- assert(!registry.some(e=>!e.removed&&e.dataset.mapReview==='h'));assert.equal(evaluate('MapReview.retargeting'),false);
+ // 0.11.3 LIM: ‘맞아요’ 없이 그대로 두면 지금 화살표대로 간다는 짧은 안내만 보인다.
+ assert($('#mapCaption').innerHTML.includes('그대로 두면 ‘정리할 문서 모음’으로 갑니다'));
+ assert(!$('#mapApprovals').innerHTML.includes('맞아요'));assert(!$('#mapSources').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
+ assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');
  assert.equal(calls.filter(c=>c[0]==='/attach').length,0);
 
  // A valid stored path does not prompt or open the picker. A missing path does.
