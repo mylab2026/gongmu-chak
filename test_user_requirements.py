@@ -452,4 +452,42 @@ class BundleLettersByCreationDate(unittest.TestCase):
         self.assertIsNone(app.folder_created(self.root,'없는 폴더/1. 가',[rows[1]]))
 
 
+class AnnualTemplates(unittest.TestCase):
+    """2026-11-28 LIM: 연간단가 표준 트리(합성 자료)."""
+    def labels(self,nodes):return [n['label'] for n in nodes]
+
+    def test_annual_types_have_no_common_branch(self):
+        for name in [k for k in app.TEMPLATES if k.startswith('annual-')]:
+            self.assertFalse(any('공통' in n['label'] for n in app.TEMPLATES[name]),name)
+
+    def test_direct_construction_gets_schedule_and_defects_like_other_types(self):
+        branch=app.TEMPLATES['annual-construction-direct'][0]['children'][0]
+        kids=self.labels(branch['children'])
+        self.assertEqual(kids[kids.index('3 착공계')+1],'4 공정표')
+        self.assertEqual(kids[-1],'14 하자')
+        self.assertIn('2 시공사에 제공 한 자료',kids)
+        self.assertNotIn('하도급 통보',' '.join(kids));self.assertNotIn('승인요청',' '.join(kids))
+
+    def test_work_only_types_sit_directly_under_the_project_folder(self):
+        for name,orders in (('annual-construction-workOnly',['1 현장1','2 현장2']),('annual-service-workOnly',['1 작업지시서 1차 및 계약서','2 작업지시서 2차 및 계약서'])):
+            tree=app.TEMPLATES[name]
+            self.assertEqual(self.labels(tree),['1 품의 및 계약서','2 회의 및 협의기록','3 작업지시서'],name)
+            self.assertEqual(self.labels(tree[0]['children']),['1 품의서','2 계약서'],name)
+            self.assertEqual(self.labels(tree[2]['children']),orders,name)
+
+    def test_work_only_contract_goes_to_the_top_level_contract_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            base=Path(folder);root=base/'연간단가 사업';data=base/'data';data.mkdir()
+            source=root/'받은 자료/연간단가 계약서.pdf';source.parent.mkdir(parents=True);source.write_bytes(b'SYNTHETIC annual contract')
+            with patch.object(app,'DATA',data),patch.object(app,'gateway',side_effect=AssertionError('no AI')):
+                app.SELECTIONS['annual']=str(root)
+                tree=[{'label':app.INBOX}]+__import__('copy').deepcopy(app.TEMPLATES['annual-construction-workOnly'])
+                project=app.save_project({'selection':'annual','name':'가상 연간단가','type':'annual','tree':tree},False)
+                project['contracts']=[{'id':'a','name':source.name,'sourceRelative':'받은 자료/'+source.name,'sourceHash':app.file_hash(source),
+                    'analysis':{'kind':'construction','kind_confirmed':True,'title':'가상 시설물 보수공사 연간단가','party':'가상건설','signed_date':'2026-01-05','annual':True}}]
+                app.store_project(project)
+                row=app.make_plan(project['id'],False)['rows'][0]
+                self.assertEqual(row['destination'],'1 품의 및 계약서/2 계약서',row['reason'])
+
+
 if __name__=='__main__':unittest.main()

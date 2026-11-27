@@ -1585,6 +1585,14 @@ def apply_contract_routes(project,rows,paths,file_hashes=None):
             if m:
                 leaves=[p for p in paths if p.startswith(branch+'/') and round_key(PurePosixPath(p).name,PurePosixPath(p).parts[:-1])==('작업지시',int(m.group(1)))]
         common=[p for p in paths if p.count('/')==1 and semantic_label(PurePosixPath(p).name)=='계약서' and '공통' in p]
+        if node is None and not leaves:
+            # 2026-11-28: 연간단가 작업지시만 관리형은 계약 가지 없이 사업 폴더 바로 아래 '품의 및 계약서/계약서'.
+            # 작업지시 n차 계약서는 '작업지시서 n차 및 계약서'가 있으면 그곳.
+            text=' '.join([row['name'],str(PurePosixPath(row['relative']).parent.name)])
+            m=re.search(r'(?<!\d)(\d{1,2})\s*차',text)
+            orders=[p for p in paths if m and round_key(PurePosixPath(p).name,PurePosixPath(p).parts[:-1])==('작업지시',int(m.group(1)))] if m else []
+            flat=[p for p in paths if p.count('/')==1 and semantic_label(PurePosixPath(p).name)=='계약서' and semantic_label(PurePosixPath(p).parent.name).startswith('품의')]
+            leaves=orders if len(orders)==1 else flat if len(flat)==1 else []
         destination=leaves[0] if len(leaves)==1 else common[0] if node is None and len(common)==1 and sum(semantic_label(PurePosixPath(p).name)=='계약서' for p in paths)==1 else ''
         if destination not in paths:
             row.update(destination='',method='hold',aiChecked=True,contractReview=True,reviewRequired=True,reviewed=False,reason='이 계약에 대응하는 계약서 보관 폴더를 확인해주세요.')

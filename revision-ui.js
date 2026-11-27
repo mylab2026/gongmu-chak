@@ -3,7 +3,12 @@
 // because a work-order-only 기술지도 has no contract to upload. 기획·설계 용역 and other 부수 용역(감리 등) are never asked.
 const ASKED_SERVICE=/재해|기술지도/,SERVICE_SLOT=/^용역\s*\d*$/;
 function serviceBranches(){const found=[],stage=S.tree.findIndex(n=>/시공단계/.test(n.label));if(stage<0)return found;function walk(list,key){list.forEach((n,i)=>{const path=key+'.'+i,name=baseName(n.label);if(!name.includes('정보')&&(ASKED_SERVICE.test(name)||SERVICE_SLOT.test(name))){n.serviceRole=true;found.push({node:n,key:path});}else walk(n.children||[],path);});}walk(S.tree[stage].children||[],String(stage));return found;}
-function serviceTemplate(mode){const t=mode==='workOnly'?S.status.templates['annual-service-workOnly']:S.status.templates.construction;const stage=t.find(n=>n.label.includes('시공단계'));return stage?.children?.find(n=>/용역\s*\d*$/.test(baseName(n.label)));}
+function serviceTemplate(mode){
+ // 2026-11-28: 연간단가 작업지시만 관리형 표준 트리는 단계·계약 가지 없이 사업 폴더 바로 아래(품의 및 계약서·회의·작업지시서)다.
+ // 일반 사업 안의 부수 용역(작업지시만) 가지는 예전처럼 '회의 및 협의기록 · 작업지시서'만 둔다.
+ if(mode==='workOnly'){const kids=structuredClone(S.status.templates['annual-service-workOnly']||[]).filter(n=>!/품의/.test(baseName(n.label)));
+  kids.forEach((n,i)=>n.label=(i+1)+' '+baseName(n.label));return kids.length?{label:'용역',children:kids}:undefined;}
+ const t=S.status.templates.construction;const stage=t.find(n=>n.label.includes('시공단계'));return stage?.children?.find(n=>/용역\s*\d*$/.test(baseName(n.label)));}
 renderAncillary=function(){
  normalizeKinds();const branches=serviceBranches();
  // Other 부수 용역 (감리·석면조사 등) are direct contracts without a question.

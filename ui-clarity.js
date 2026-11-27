@@ -102,7 +102,7 @@ $('#home h1').after(homeNote);$('#homeAIConnect').onclick=()=>$('#settingsButton
 function updateHome(){homeNote.hidden=Boolean(S.status?.configured);const ready=Boolean(S.status?.configured),hasProjects=Boolean(S.status?.projects?.length);$('#initialButton').classList.toggle('recommended',ready&&!hasProjects);$('#ongoingButton').classList.toggle('recommended',ready&&hasProjects);}
 
 /* 사업유형 카드: 고르기 전에 차이를 알 수 있게 */
-const typeInfo={planning:['사업 구상·예산 단계부터 맡은 사업','기획 → 설계 → 시공 → 인수인계'],design:['설계용역을 직접 발주·관리하는 사업','설계(용역 관리) → 시공 → 인수인계'],construction:['설계가 끝나고 공사부터 맡은 사업','설계(성과품 보관) → 시공 → 인수인계'],annual:['연간단가 계약으로 작업지시·검수하는 업무','공통 → 시공(작업지시)']};
+const typeInfo={planning:['사업 구상·예산 단계부터 맡은 사업','기획 → 설계 → 시공 → 인수인계'],design:['설계용역을 직접 발주·관리하는 사업','설계(용역 관리) → 시공 → 인수인계'],construction:['설계가 끝나고 공사부터 맡은 사업','설계(성과품 보관) → 시공 → 인수인계'],annual:['연간단가 계약으로 작업지시·검수하는 업무','품의·계약서 → 회의·협의 → 작업지시']};
 const baseRenderTypes=renderTypes;
 renderTypes=function(...args){const result=baseRenderTypes(...args);$$('[data-type]').forEach(b=>{const info=typeInfo[b.dataset.type];if(!info||b.querySelector('.type-desc'))return;b.innerHTML='<b>'+esc(b.textContent)+'</b><span class="type-desc">'+esc(info[0])+'</span><span class="type-flow">'+esc(info[1])+'</span>';});return result;};
 
