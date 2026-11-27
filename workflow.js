@@ -18,6 +18,15 @@ function autoTemplate(){if(!S.type||!S.status)return;if(S.type==='annual'&&(!S.a
 renderTypes=function(){baseRenderTypes();$$('[data-type]').forEach(button=>button.onclick=()=>{rememberStructure();S.type=button.dataset.type;S.typeConfirmed=true;autoTemplate();renderTypes();});};
 $$('input[name=annualKind]').forEach(input=>input.addEventListener('change',()=>{rememberStructure();S[input.name]=input.value;autoTemplate();markRequired();}));
 $$('input[name=annualManagement]').forEach(input=>input.addEventListener('change',()=>{rememberStructure();S[input.name]=input.value;autoTemplate();markRequired();}));
+// 2026-11-28 LIM: 연간단가는 공사·용역 × 직접 계약 관리·작업지시 관리만 = 4가지 중 하나를 고른다(카드 하나가 두 값을 함께 정한다).
+function syncAnnualCards(){$$('[data-annual]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.annual===(S.annualKind||'')+'|'+(S.annualManagement||''))));}
+$$('[data-annual]').forEach(b=>b.onclick=()=>{const [kind,management]=b.dataset.annual.split('|');rememberStructure();S.annualKind=kind;S.annualManagement=management;
+ $$('input[name=annualKind]').forEach(x=>x.checked=x.value===kind);$$('input[name=annualManagement]').forEach(x=>x.checked=x.value===management);syncAnnualCards();autoTemplate();markRequired();});
+const annualStyle=document.createElement('style');annualStyle.textContent=`#annualChoices .annual-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#annualChoices [data-annual]{text-align:left;display:flex;flex-direction:column;gap:4px;padding:12px 14px;border:1px solid #cfd8e6;border-radius:12px;background:#fff;min-height:0}
+#annualChoices [data-annual] b{font-size:var(--fs-sub,16px)}#annualChoices [data-annual] span{color:#3d4a5c}#annualChoices [data-annual] small{color:#6b7a90}
+#annualChoices [data-annual][aria-pressed=true]{border:2px solid #345fe2;background:#eef3ff}#annualChoices [data-annual][aria-pressed=true] b{color:#1d3fbf}
+@media (max-width:720px){#annualChoices .annual-grid{grid-template-columns:1fr}}`;document.body.appendChild(annualStyle);
 const beforeTreeNext=$('#treeNext').onclick;
 $('#treeNext').onclick=async()=>{
  if(resumeReview())return;
@@ -264,8 +273,7 @@ function markRequired(){
  set($('label[for=projectName]'),!$('#projectName').value.trim());
  set($('#typeChoices')?.previousElementSibling,!S.typeConfirmed);
  const headings=$$('#annualChoices h3');
- set(headings[0],S.type==='annual'&&!S.annualKind);
- set(headings[1],S.type==='annual'&&!S.annualManagement);
+ set(headings[0],S.type==='annual'&&(!S.annualKind||!S.annualManagement));syncAnnualCards();
  $$('[data-service-node],[data-service-contract],[data-management]').forEach(input=>{
   const group=input.closest?.('.path');if(!group)return;
   const selected=group.querySelector('input:checked')||group.querySelector('select')?.value;
@@ -463,7 +471,10 @@ const round3Style=document.createElement('style');round3Style.textContent=`
 .map-group-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px 8px;font-size:var(--fs-meta,13px)}.map-group-actions button{padding:3px 10px;min-height:0;font-size:var(--fs-meta,13px)}
 .map-group[draggable=true]{cursor:grab}
 #folderSuggest{margin:12px 0}#folderSuggest li{margin:6px 0}#folderSuggest .row{gap:6px;margin-top:4px}
-#questionDialog{max-width:640px;width:calc(100vw - 32px)}#questionDialog .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}#questionDialog h2{margin:0}#questionDialog .q-step{font-weight:bold;color:#345fe2;white-space:nowrap}#questionDialog .q-intro{margin:6px 0 12px}#questionDialog .q-card{background:#f5f8fd;border:1px solid #d8e3f0;border-radius:10px;padding:10px 14px}#questionDialog .q-title{font-weight:bold;font-size:16px}#questionDialog .q-from,#questionDialog .q-samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere;margin-top:2px}#questionDialog .q-ask{margin:14px 0 6px;font-size:15px}#questionDialog .q-options{display:grid;gap:6px}#questionDialog .q-option{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;border:1px solid #d8e3f0;border-radius:10px;padding:8px 12px;cursor:pointer;overflow-wrap:anywhere}#questionDialog .q-option.on{border-color:#345fe2;background:#eef3ff}#questionDialog .q-option select{flex:1 1 100%;max-width:100%}#questionDialog .q-new{display:flex;flex:1 1 100%;gap:6px;align-items:center;flex-wrap:wrap}#questionDialog .q-new select{flex:1 1 220px}#questionDialog .q-new input{flex:1 1 160px}#questionDialog .q-option:not(.on) select,#questionDialog .q-option:not(.on) .q-new{display:none}#questionDialog .q-tag{font-size:12px;background:#345fe2;color:#fff;border-radius:999px;padding:1px 8px}#questionDialog .q-why{flex-basis:100%}
+#questionDialog .q-from-label{display:inline-block;font-size:13px;font-weight:700;color:#345fe2;background:#e8eeff;border-radius:99px;padding:3px 10px;margin-bottom:6px}
+#questionDialog .q-from{font-size:17px;line-height:1.5;color:#1d2433;background:#fff;border:1px solid #c9d6f5;border-radius:10px;padding:10px 12px;margin-bottom:10px;word-break:keep-all;overflow-wrap:anywhere}
+#questionDialog .q-from b{color:#1d3fbf}#questionDialog .q-sep{color:#8a94a8;margin:0 6px}#questionDialog .q-card .q-title{font-size:15px!important;font-weight:700;margin-bottom:4px}
+#questionDialog{max-width:640px;width:calc(100vw - 32px)}#questionDialog .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}#questionDialog h2{margin:0}#questionDialog .q-step{font-weight:bold;color:#345fe2;white-space:nowrap}#questionDialog .q-intro{margin:6px 0 12px}#questionDialog .q-card{background:#f5f8fd;border:1px solid #d8e3f0;border-radius:10px;padding:10px 14px}#questionDialog .q-title{font-weight:bold;font-size:16px}#questionDialog .q-samples{font-size:var(--fs-meta,13px);color:#5b6b82;overflow-wrap:anywhere;margin-top:2px}#questionDialog .q-ask{margin:14px 0 6px;font-size:15px}#questionDialog .q-options{display:grid;gap:6px}#questionDialog .q-option{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;border:1px solid #d8e3f0;border-radius:10px;padding:8px 12px;cursor:pointer;overflow-wrap:anywhere}#questionDialog .q-option.on{border-color:#345fe2;background:#eef3ff}#questionDialog .q-option select{flex:1 1 100%;max-width:100%}#questionDialog .q-new{display:flex;flex:1 1 100%;gap:6px;align-items:center;flex-wrap:wrap}#questionDialog .q-new select{flex:1 1 220px}#questionDialog .q-new input{flex:1 1 160px}#questionDialog .q-option:not(.on) select,#questionDialog .q-option:not(.on) .q-new{display:none}#questionDialog .q-tag{font-size:12px;background:#345fe2;color:#fff;border-radius:999px;padding:1px 8px}#questionDialog .q-why{flex-basis:100%}
 #subFolderDialog label{display:block;margin-top:8px}`;document.body.appendChild(round3Style);
 
 // 1. 사업 이름: 간결하게 정하도록 안내한다(이름을 바꿔도 연결한 실제 사업 폴더 이름은 그대로다).
@@ -575,17 +586,23 @@ const questionDialog=document.createElement('dialog');questionDialog.id='questio
 /* 4차 2번: 질문 창을 한 번에 하나씩, 고를 수 있는 것이 분명하게 보이도록 바꿨다.
    - 질문은 늘 같은 형식: 'OO 폴더(파일 n개)를 어디로 옮길까요?' (AI가 만든 자유 질문은 보기와 맞지 않아 쓰지 않는다)
    - 보기는 폴더 경로를 번호 없이 한 번만 보여 준다. 다른 폴더·새 폴더는 펼쳐서 고른다. 기본값은 '잘 모르겠어요'. */
-function crumb(path){return String(path||'').split('/').map(x=>x.replace(/^\d+(?:[-.]\d+)*[.)]?\s*/,'')||x).join(' › ');}
+// 앞 번호('2. ', '3109-1 ')만 지운다. '1차 설계변경'의 '1'은 이름이다(2026-11-28 LIM 화면: '차 설계변경'으로 보였다).
+function crumb(path){return String(path||'').split('/').map(x=>x.replace(/^\d+(?:[-.]\d+)*(?:[.)]\s*|\s+)/,'')||x).join(' › ');}
+function fromPath(path){const parts=String(path||'').split('/');return parts.map((x,i)=>i===parts.length-1?'<b>'+esc(x)+'</b>':esc(x)).join('<span class="q-sep">›</span>');}
 function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.paths||[],items=q.questions,answers=items.map(()=>({pick:'skip'}));let at=0;
+ // 2026-11-28 LIM: 폴더째 옮길 곳이 아니라 이미 표준 트리 칸에 나눠 넣으면 되는 폴더 → '표준 트리에 맞춰 파일별로 재배치'.
  const pathOptions=selected=>'<option value="">폴더 고르기…</option>'+paths.map(p=>'<option value="'+esc(p)+'"'+(p===selected?' selected':'')+'>'+esc(crumb(p))+'</option>').join('');
  const draw=()=>{const item=items[at],a=answers[at],last=at===items.length-1,folder=String(item.unit).split('/').pop();
   const option=(value,label,extra='')=>'<label class="q-option'+(a.pick===value?' on':'')+'"><input type="radio" name="qpick" value="'+value+'"'+(a.pick===value?' checked':'')+'> <span>'+label+'</span>'+extra+'</label>';
   questionDialog.innerHTML='<div class="q-head"><h2>분류 못한 파일이 많아 몇 가지 여쭤볼게요</h2><span class="q-step">'+(at+1)+' / '+items.length+'</span></div>'
    +'<p class="muted q-intro">폴더마다 <b>옮길 곳 하나</b>를 골라 주세요. 그 폴더의 파일이 하위 폴더째 옮겨지고, 답을 참고해 나머지 보류 파일('+q.held+'개)을 AI가 다시 분류합니다. 모르면 ‘잘 모르겠어요’를 두면 됩니다.</p>'
-   +'<div class="q-card"><div class="q-title">‘'+esc(folder)+'’ 폴더 <span class="muted">· 파일 '+item.count+'개</span></div><div class="q-from">원래 위치: '+esc(crumb(item.unit))+'</div>'
-   +'<div class="q-samples">예: '+esc(item.samples.slice(0,3).join(', '))+(item.count>3?' 등':'')+'</div></div>'
+   +'<div class="q-card"><div class="q-from-label">📁 원래 있던 곳</div><div class="q-from">'+fromPath(item.unit)+'</div>'
+   +'<div class="q-title">이 ‘'+esc(folder)+'’ 폴더(파일 '+item.count+'개)는 옮길 표준 폴더를 찾지 못했어요.</div>'
+   +'<div class="q-samples">들어 있는 파일: '+esc(item.samples.slice(0,3).join(', '))+(item.count>3?' 등':'')+'</div></div>'
    +'<h3 class="q-ask">이 폴더를 어디로 옮길까요?</h3><div class="q-options">'
-   +item.choices.map((c,k)=>option('c'+k,'<b>'+esc(crumb(c))+'</b>'+(k===0?' <span class="q-tag">추천</span>':'')+(k===0&&item.reason?'<small class="muted q-why">'+esc(item.reason)+'</small>':''))).join('')
+   +(item.split?option('split','<b>표준 트리에 맞춰 파일별로 재배치</b> <span class="q-tag">추천</span>','<small class="muted q-why">폴더째 옮기지 않고 안의 파일을 하나씩 표준 폴더에 넣습니다. PC 규칙으로 '+item.split.files+'개가 '+item.split.folders+'개 표준 폴더로 나뉘고, 나머지는 AI가 다시 분류합니다.</small>'):'')
+   +item.choices.map((c,k)=>option('c'+k,'<b>'+esc(crumb(c))+'</b>'+(k===0&&!item.split?' <span class="q-tag">추천</span>':'')+(k===0&&item.reason&&!item.split?'<small class="muted q-why">'+esc(item.reason)+'</small>':''))).join('')
+   +(item.split?'':option('split','표준 트리에 맞춰 파일별로 재배치','<small class="muted q-why">폴더째 옮기지 않고 안의 파일을 하나씩 표준 폴더에 넣습니다.</small>'))
    +option('other','목록에 없는 다른 폴더','<select data-q-other>'+pathOptions(a.destination)+'</select>')
    +option('new','새 폴더를 만들어 넣기','<span class="q-new"><select data-q-parent>'+pathOptions(a.parent)+'</select><span>아래에</span><input type="text" data-q-name placeholder="새 폴더 이름 (예: 내부검토)" value="'+esc(a.name||'')+'"></span>')
    +option('hold','보류 (정리할 문서 모음으로)')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
@@ -598,7 +615,7 @@ function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.p
  const save=()=>{const a=answers[at],other=$('[data-q-other]'),parent=$('[data-q-parent]'),name=$('[data-q-name]');if(other)a.destination=other.value;if(parent)a.parent=parent.value;if(name)a.name=(name.value||'').trim();};
  const check=a=>a.pick==='other'&&!a.destination?'옮길 폴더를 골라 주세요.':a.pick==='new'&&(!a.parent||!a.name)?'새 폴더를 만들 위치와 이름을 정해 주세요.':a.pick==='new'&&/[\\/:*?"<>|]/.test(a.name)?'폴더 이름에 \\ / : * ? " < > | 는 쓸 수 없습니다.':'';
  const toAnswer=(item,a)=>a.pick.startsWith('c')?{unit:item.unit,destination:item.choices[Number(a.pick.slice(1))]}:a.pick==='other'?{unit:item.unit,destination:a.destination}
-  :a.pick==='new'?{unit:item.unit,newFolder:{parent:a.parent,name:a.name}}:a.pick==='hold'?{unit:item.unit,hold:true}:{unit:item.unit,skip:true};
+  :a.pick==='new'?{unit:item.unit,newFolder:{parent:a.parent,name:a.name}}:a.pick==='hold'?{unit:item.unit,hold:true}:a.pick==='split'?{unit:item.unit,split:true}:{unit:item.unit,skip:true};
  const done=value=>{questionDialog.close();resolve(value);};questionDialog.oncancel=e=>{e.preventDefault?.();done(null);};
  draw();questionDialog.showModal?.();});}
 async function answerQuestions(answers){const result=await api('/bulk-answers',{plan:S.plan.id,answers});applyFolderResult(result);S.plan.askedUnits=result.askedUnits;S.selected.clear();renderReview(true);return result;}

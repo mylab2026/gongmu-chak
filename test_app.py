@@ -693,6 +693,58 @@ class FileOperations(unittest.TestCase):
         result=app.search_files(self.project['id'],'착공계 제출')
         self.assertEqual([r['name'] for r in result['results']],['착공계 제출.txt'])
 
+    def test_ai_search_looks_at_photo_previews_and_keeps_captions_for_keyword_search(self):
+        # 2026-11-28 LIM: 'AI로 찾기'에서 "교보문고 사진"을 못 찾음 — 사진엔 글자가 없고 파일명은 KakaoTalk_….
+        from PIL import Image
+        for n, (name, color) in enumerate((('KakaoTalk_20251014_08.jpg', 'green'), ('KakaoTalk_20251014_09.jpg', 'gray'))):
+            path = self.root / '3 시공단계/현장' / name; path.parent.mkdir(parents=True, exist_ok=True)
+            Image.new('RGB', (900, 600), color).save(path, 'JPEG'); os.utime(path, ns=(10**18 + n, 10**18 + n))
+        (self.root / '3 시공단계/공문/착공계.txt').parent.mkdir(parents=True, exist_ok=True)
+        (self.root / '3 시공단계/공문/착공계.txt').write_bytes('착공계'.encode())
+        self.index()
+        answers = [{'keywords': ['교보문고'], 'kinds': ['image']},
+                   {'picks': [{'id': 'p2', 'reason': '교보문고 간판이 보임', 'confidence': .9}],
+                    'captions': {'p1': '공사 현장 회색 벽', 'p2': '교보문고 입구, 신한은행 간판', 'p9': '없는 사진'}}]
+        with patch.object(app, 'gateway', side_effect=answers) as gateway:
+            result = app.search_ai(self.project['id'], '교보문고 사진 찾아줘')
+        sent = gateway.call_args_list[1][0][0][1]['content']
+        images = [part for part in sent if isinstance(part, dict) and part.get('type') == 'image_url']
+        self.assertEqual(len(images), 2)
+        self.assertNotIn(str(self.root), json.dumps([p for p in sent if p.get('type') == 'text'], ensure_ascii=False))
+        self.assertEqual(result['ai']['photosSeen'], 2)
+        self.assertEqual([p['name'] for p in result['ai']['picks']], ['KakaoTalk_20251014_08.jpg'])  # 최근 사진이 p1… 순서
+        # 다음부터는 AI 없이 키워드 찾기로도 나온다.
+        found = app.search_files(self.project['id'], '교보문고')
+        self.assertEqual([r['name'] for r in found['results']], ['KakaoTalk_20251014_08.jpg'])
+        self.assertIn('교보문고', found['results'][0]['snippet'])
+        # 이미 설명이 있는 사진은 다시 보내지 않는다.
+        with patch.object(app, 'gateway', side_effect=[{'keywords': ['현장'], 'kinds': ['image']}, {'picks': []}]) as gateway:
+            app.search_ai(self.project['id'], '현장 사진')
+        self.assertFalse(any(isinstance(p, dict) and p.get('type') == 'image_url'
+                             for p in (gateway.call_args_list[1][0][0][1]['content'] if len(gateway.call_args_list) > 1 and isinstance(gateway.call_args_list[1][0][0][1]['content'], list) else [])))
+
+    def test_found_file_can_be_downloaded_as_a_copy(self):
+        path = self.root / '3 시공단계/공문/착공계 제출.hwp'; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'SYNTHETIC HWP')
+        server = app.ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        base = f'http://127.0.0.1:{server.server_port}'
+        try:
+            body = json.dumps({'id': self.project['id'], 'relative': '3 시공단계/공문/착공계 제출.hwp'}).encode()
+            with urllib.request.urlopen(urllib.request.Request(base + '/download', data=body, headers={'X-App-Token': app.TOKEN})) as response:
+                self.assertEqual(response.read(), b'SYNTHETIC HWP')
+                self.assertIn("filename*=UTF-8''", response.headers['Content-Disposition'])
+            self.assertEqual(path.read_bytes(), b'SYNTHETIC HWP')  # 원본은 그대로
+            for relative in ('../밖.txt', '3 시공단계/없음.hwp'):
+                bad = json.dumps({'id': self.project['id'], 'relative': relative}).encode()
+                with self.assertRaises(urllib.error.HTTPError) as caught:
+                    urllib.request.urlopen(urllib.request.Request(base + '/download', data=bad, headers={'X-App-Token': app.TOKEN}))
+                self.assertEqual(caught.exception.code, 400)
+            with self.assertRaises(urllib.error.HTTPError) as caught:  # 토큰 없으면 거부
+                urllib.request.urlopen(urllib.request.Request(base + '/download', data=body))
+            self.assertEqual(caught.exception.code, 403)
+        finally:
+            server.shutdown(); server.server_close()
+
     def test_ai_search_turns_a_detailed_question_into_keywords_kinds_and_dates(self):
         for relative,body in (('3 시공단계/현장/누수 현장.jpg',b'x'),('3 시공단계/공문/누수 보수 요청.txt','누수 보수 요청 공문'.encode()),
                               ('3 시공단계/공문/착공계.txt','착공계'.encode())):

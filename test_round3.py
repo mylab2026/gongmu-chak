@@ -160,6 +160,29 @@ class Round3(unittest.TestCase):
         row = next(r for r in plan['rows'] if r['relative'].endswith('실시공정표 2차.xlsx'))
         self.assertEqual(row['destination'], '4 시공단계/1 도급공사/4 공정표')
 
+    def test_split_answer_places_each_file_into_the_standard_tree(self):
+        # 2026-11-28 LIM: 사업 폴더 통째('2026년 시설보수 연간단가 - 63동 현장')를 '계약서'로 옮기자는 AI 보기는 틀렸다.
+        # 이미 표준 트리 칸에 나눠 넣으면 되는 폴더 → '표준 트리에 맞춰 파일별로 재배치'.
+        unit = '2026년 시설보수 연간단가 - 63동 현장'
+        for name in ('260225 공정표(최종).xlsx', '260226 작업일보.hwpx', '착공계 제출.hwp', '미비사항 목록.xlsx'):
+            path = self.root / unit / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'SYNTHETIC')
+        plan = app.make_plan(self.project['id'], False)
+        rows = [r for r in plan['rows'] if r['relative'].startswith(unit + '/')]
+        for row in rows:
+            row.update(destination='', method='hold', aiChecked=True, checkUnit=unit)
+        question = next(q for q in app.bulk_questions(plan['id'])['questions'] if q['unit'] == unit)
+        self.assertGreaterEqual(question['split']['folders'], 2, question)
+        app.dispatch('/bulk-answers', {'plan': plan['id'], 'answers': [{'unit': unit, 'split': True}]})
+        got = {r['name']: r for r in rows}
+        self.assertTrue(got['260225 공정표(최종).xlsx']['destination'].endswith('공정표'), got['260225 공정표(최종).xlsx'])
+        self.assertTrue(got['260226 작업일보.hwpx']['destination'].endswith('작업일보'))
+        self.assertTrue(got['착공계 제출.hwp']['destination'].endswith('착공계'))
+        self.assertEqual(len({got[n]['destination'] for n in ('260225 공정표(최종).xlsx', '260226 작업일보.hwpx', '착공계 제출.hwp')}), 3)
+        self.assertFalse(any(r.get('keepSub') for r in rows))  # 폴더째가 아니라 파일별
+        left = got['미비사항 목록.xlsx']  # 규칙으로 못 정한 파일은 AI 다시 분류 대상
+        self.assertEqual((left['destination'], left['method'], left['aiChecked']), ('', 'hold', False))
+        self.assertIn(left['id'], [r['id'] for chunk in app.bulk_batches(plan, retry=True) for r in chunk])
+
     def test_hold_rows_keeps_files_in_place_and_survives_replanning(self):
         row = self.rows['251008 가상2차공사 공정표 ver1.pdf']
         app.dispatch('/retarget', {'plan': self.plan['id'], 'row': row['id'], 'destination': PLAN_PARENT})

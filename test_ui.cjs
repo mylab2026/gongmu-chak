@@ -137,6 +137,17 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert.deepEqual(evaluate('S.tree[1].children[1].children.map(n=>n.label)'),['1 예산 수립 및 변경 이력','2 연도별 집행 메모']);
  registry.filter(e=>e.dataset.mmNode==='1.0'&&!e.removed).at(-1).onclick({target:{tagName:'DIV'}});assert(!registry.some(e=>e.dataset.mmRename==='1.0'&&!e.removed));
  registry.filter(e=>e.dataset.mmDelete==='1.0'&&!e.removed).at(-1).onclick({});assert.deepEqual(evaluate('S.tree[1].children.map(n=>n.label)'),['1 예산관리']);
+ // 2026-11-28 LIM: 연간단가는 4가지(공사·용역 × 직접 계약 관리·작업지시 관리만) 카드 중 하나. 카드 하나가 두 값을 함께 정한다.
+ assert.equal(registry.filter(e=>!e.removed&&e.dataset?.annual).length>=4||$('#annualChoices').innerHTML.split('data-annual=').length-1===4,true);
+ evaluate('S.type="annual";S.annualKind="";S.annualManagement="";markRequired()');
+ for(const [kind,management] of [['construction','direct'],['construction','workOnly'],['service','direct'],['service','workOnly']]){
+  const card=registry.filter(e=>!e.removed&&e.dataset?.annual===kind+'|'+management).at(-1);assert(card,kind+management);card.click();
+  assert.equal(evaluate('S.annualKind'),kind);assert.equal(evaluate('S.annualManagement'),management);assert.equal(evaluate('templateKey()'),'annual-'+kind+'-'+management);assert.equal(card.getAttribute('aria-pressed'),'true');}
+ evaluate('S.type="construction"');
+ // 2026-11-28 LIM: 질문 창의 ‘원래 있던 곳’은 실제 폴더 이름 그대로 크게. 경로 줄이기는 앞 번호만 지운다('1차'는 유지).
+ assert.equal(evaluate('crumb("0 정리할 문서 모음/2. 시공단계/2. 공사/설계변경/1차 설계변경")'),'정리할 문서 모음 › 시공단계 › 공사 › 설계변경 › 1차 설계변경');
+ assert.equal(evaluate('crumb("3 시공단계/1 도급공사/3109-1 설계변경1차")'),'시공단계 › 도급공사 › 설계변경1차');
+ assert(evaluate('fromPath("0 정리할 문서 모음/2. 시공단계/설계변경/1차 설계변경")').includes('<b>1차 설계변경</b>'));
  // 2026-11-28 LIM: PC에서 직접 만든 폴더(예: 17 실외기 구조 검토)는 빨간 질문 카드로 ‘추가/취소’를 묻는다.
  $('#reviewStep').hidden=false;evaluate('userFolderPanel.dataset.key="";userFolderPanel.dataset.dismissed="";S.project={id:"p1",tree:[{label:"공통"}]};S.plan={id:"uf",paths:["공통"],ongoing:true,rows:[],userFolders:[{path:"3 시공단계/1 도급공사/17 실외기 구조 검토",files:2}]};renderReview();');
  assert.equal($('#userFolderPanel').hidden,false);assert($('#userFolderPanel').innerHTML.includes('폴더 구조에 추가할까요?'));assert($('#userFolderPanel').innerHTML.includes('17 실외기 구조 검토'));

@@ -327,7 +327,7 @@ def main():
                       finally{api=savedApi;}}""")
                     assert asked['open'] and '분류 못한 파일이 많아' in asked['title'] and asked['answered'] and asked['closed'], asked
                     f=asked['first'];assert f['step']=='1 / 2' and '어디로 옮길까요' in f['ask'] and f['checked']=='skip' and f['hiddenSelect'] and asked['needFolder'] and asked['second']=='2 / 2', asked
-                    assert not any('/' in o for o in f['options']) and len(f['options'])==6, f  # 보기 2 + 다른 폴더·새 폴더·원래 위치·모르겠어요
+                    assert not any('/' in o for o in f['options']) and len(f['options'])==7, f  # 보기 2 + 파일별 재배치·다른 폴더·새 폴더·보류·모르겠어요
                     assert asked['answers']==[{'unit':'가상/폴더 A','destination':page.evaluate('S.plan.paths[1]')},{'unit':'가상/폴더 B','hold':True}], asked
                     result['question_round_before_reclassify']=asked
                     # 3차 3번: AI 분류 진행은 개수·묶음·막대·남은 시간을 보여 주고, 앞 작업의 막대가 남지 않는다.
