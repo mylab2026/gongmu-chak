@@ -118,7 +118,30 @@ class Round3(unittest.TestCase):
         branch = '4 시공단계/3 설계의도 구현 용역'
         got = app.tidy_choices(['4 시공단계', branch + '/1 최초 품의 및 최초 계약서/1 품의서', branch, branch + '/1 최초 품의 및 최초 계약서',
                                 '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/14 기타공문'])
-        self.assertEqual(got, [branch, '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/14 기타공문'])
+        # 2026-11-28 LIM: 가지 맨 위(branch)로 합치면 표준 폴더 밖에 남는다 → 하위 보기는 가지 안의 표준 폴더로 합친다.
+        self.assertEqual(got, [branch + '/1 최초 품의 및 최초 계약서', '2 기획 및 기본구상/2 공사 전 건물 정보/3 석면조사 보고서', '4 시공단계/1 도급공사/14 기타공문'])
+
+    def test_answer_at_contract_branch_root_goes_into_the_matching_standard_folder(self):
+        # 2026-11-28 LIM 63동 시연: 추가 질문 답으로 '준공'·'지출' 폴더가 '1 도급공사' 맨 위에 'A 준공'·'지출'로 남았다.
+        branch = '4 시공단계/1 도급공사'
+        for rel in ('기타/준공/준공계 제출.hwp', '기타/준공/준공 사진.jpg', '기타/지출/1회 기성 청구.pdf', '기타/잡동사니/메모.txt'):
+            path = self.root / rel; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'SYNTHETIC')
+        plan = app.make_plan(self.project['id'], False)
+        rows = {r['relative']: r for r in plan['rows'] if r.get('kind') != 'directory'}
+        for rel in ('기타/준공/준공계 제출.hwp', '기타/준공/준공 사진.jpg', '기타/지출/1회 기성 청구.pdf', '기타/잡동사니/메모.txt'):
+            rows[rel].update(destination='', method='hold', checkUnit=str(Path(rel).parent).replace('\\', '/'))
+        self.assertNotIn(branch, app.tidy_choices([branch, branch + '/12 준공계'], paths=plan['paths']))
+        for question in app.bulk_questions(plan['id'])['questions']:
+            self.assertFalse(any(app.branch_root(c, plan['paths']) for c in question['choices']), question)
+        app.dispatch('/bulk-answers', {'plan': plan['id'], 'answers': [
+            {'unit': '기타/준공', 'destination': branch}, {'unit': '기타/지출', 'destination': branch},
+            {'unit': '기타/잡동사니', 'destination': branch}]})
+        self.assertTrue(rows['기타/준공/준공계 제출.hwp']['destination'].startswith(branch + '/') and
+                        rows['기타/준공/준공계 제출.hwp']['destination'].endswith('준공계'), rows['기타/준공/준공계 제출.hwp']['destination'])
+        self.assertEqual(rows['기타/준공/준공 사진.jpg']['destination'], rows['기타/준공/준공계 제출.hwp']['destination'])
+        self.assertTrue(rows['기타/지출/1회 기성 청구.pdf']['destination'].startswith(branch + '/5 지출서류'), rows['기타/지출/1회 기성 청구.pdf']['destination'])
+        junk = rows['기타/잡동사니/메모.txt']  # 맞는 표준 폴더가 없으면 가지 맨 위가 아니라 정리할 문서 모음으로
+        self.assertEqual(junk['destination'], ''); self.assertTrue(junk['holdConfirmed'])
 
     def test_schedule_folder_follows_start_documents_in_templates_and_routes(self):
         # 2026-11-25: 설계 용역 착수계·도급공사 착공계 다음 번호에 '공정표' 폴더(뒤 번호는 하나씩 밀림)
