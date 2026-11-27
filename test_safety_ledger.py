@@ -44,14 +44,14 @@ class SafetyLedger(unittest.TestCase):
         root = next(label for label in top if label.endswith('안전보건대장'))
         self.assertRegex(root, r'^\d+ 안전보건대장$')
         self.assertEqual(int(root.split()[0]), max(int(t.split()[0]) for t in top if t[0].isdigit() and t != root) + 1)
-        for kid in ('1 기본안전보건대장', '2 설계안전보건대장', '3 시공안전보건대장'):
+        for kid in ('1 기본안전보건대장', '2 설계안전보건대장', '3 공사안전보건대장'):
             self.assertIn(root + '/' + kid, plan['paths'])
         rows = {r['relative']: r for r in plan['rows']}
         basic = rows['251216 기본안전보건대장 보완/본문.hwp']
         self.assertEqual(basic['destination'], root + '/1 기본안전보건대장')
         self.assertEqual(rows['251216 기본안전보건대장 보완/붙임/현장사진.jpg']['destination'], basic['destination'])  # 안쪽 사진도 묶음째
         self.assertEqual(rows['2. 설계/설계안전보건대장_최종.pdf']['destination'], root + '/2 설계안전보건대장')
-        self.assertEqual(rows['3. 시공/공사안전보건대장/1차/대장.hwp']['destination'], root + '/3 시공안전보건대장')
+        self.assertEqual(rows['3. 시공/공사안전보건대장/1차/대장.hwp']['destination'], root + '/3 공사안전보건대장')
         self.assertEqual(rows['안전보건대장/2. 설계/검토의견.hwp']['destination'], root + '/2 설계안전보건대장')
         contract = rows.get('2. 시공단계/3. 용역/1. 재해예방기술지도/2. 계약/원인행위(가상관 재해예방 기술지도 안전보건대장 관련 용역).pdf')
         self.assertFalse(contract and contract['destination'].startswith(root), contract)  # 용역 계약 이름은 대장이 아니다
@@ -61,7 +61,7 @@ class SafetyLedger(unittest.TestCase):
         self.assertEqual(sorted(moved.values()), [b'BASIC', b'PHOTO'])
         self.assertTrue(any(k.endswith('기본안전보건대장 보완/붙임/현장사진.jpg') for k in moved), moved)  # 폴더 이름·하위 구조 유지
         self.assertTrue(any(p.name == '빈 폴더' for p in (self.root / root / '1 기본안전보건대장').rglob('*') if p.is_dir()))
-        self.assertTrue(any(k.startswith(root + '/3 시공안전보건대장/') and k.endswith('공사안전보건대장/1차/대장.hwp') for k in after), after.keys())
+        self.assertTrue(any(k.startswith(root + '/3 공사안전보건대장/') and k.endswith('공사안전보건대장/1차/대장.hwp') for k in after), after.keys())
         self.assertEqual(sorted(after.values()), sorted(before.values()))
         app.undo(journal['id'])
         self.assertEqual(self.files(), before)
@@ -91,6 +91,16 @@ class SafetyLedger(unittest.TestCase):
                          ['251111 기본안전보건대장.hwp', '보완_날인본.pdf'])
         app.undo(journal['id'])
         self.assertEqual({k: v for k, v in self.files().items()}, extra)
+
+    def test_existing_ledger_folder_gets_the_three_kind_folders(self):
+        # 2026-11-28 LIM 화면: '7 안전보건대장'만 생기고 안이 나뉘지 않았다 → 이미 있는 대분류에도 종류 폴더를 채운다.
+        p = app.get_project(self.project['id']); p['tree'].append({'label': '7 안전보건대장', 'children': [{'label': '1 시공안전보건대장'}]}); app.store_project(p)
+        plan = app.make_plan(self.project['id'], False)
+        kids = [c['label'] for c in app.safety_ledger_node(app.get_project(self.project['id'])['tree'])['children']]
+        self.assertEqual(kids, ['1 시공안전보건대장', '1 기본안전보건대장', '2 설계안전보건대장'])  # 사용자가 붙인 '시공' 이름은 공사 대장 칸으로 인정
+        rows = {r['relative']: r for r in plan['rows']}
+        self.assertEqual(rows['3. 시공/공사안전보건대장/1차/대장.hwp']['destination'], '7 안전보건대장/1 시공안전보건대장')
+        self.assertEqual(rows['2. 설계/설계안전보건대장_최종.pdf']['destination'], '7 안전보건대장/2 설계안전보건대장')
 
     def test_no_ledger_no_folder(self):
         for rel in list(FILES):
