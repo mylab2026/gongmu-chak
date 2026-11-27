@@ -144,6 +144,10 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
   const card=registry.filter(e=>!e.removed&&e.dataset?.annual===kind+'|'+management).at(-1);assert(card,kind+management);card.click();
   assert.equal(evaluate('S.annualKind'),kind);assert.equal(evaluate('S.annualManagement'),management);assert.equal(evaluate('templateKey()'),'annual-'+kind+'-'+management);assert.equal(card.getAttribute('aria-pressed'),'true');}
  evaluate('S.type="construction"');
+ // 2026-11-28 LIM: 문서 찾기 결과도 미리보기 칸(사진은 크게), AI 찾기 안내는 짧게(최대 2번·사진 12장씩·자세할수록 빨리).
+ const fcard=evaluate('finderCard({name:"게시판.jpg",relative:"현장/게시판.jpg",folder:"현장",kind:"사진",reasons:[]},[],false)');
+ assert(fcard.includes('data-fthumb="현장/게시판.jpg"'));assert(fcard.includes('is-photo'));
+ assert($('#finder')?.innerHTML?.includes('사진은 한 번에 12장씩')??true);
  // 2026-11-28 LIM: 질문 창의 ‘원래 있던 곳’은 실제 폴더 이름 그대로 크게. 경로 줄이기는 앞 번호만 지운다('1차'는 유지).
  assert.equal(evaluate('crumb("0 정리할 문서 모음/2. 시공단계/2. 공사/설계변경/1차 설계변경")'),'정리할 문서 모음 › 시공단계 › 공사 › 설계변경 › 1차 설계변경');
  assert.equal(evaluate('crumb("3 시공단계/1 도급공사/3109-1 설계변경1차")'),'시공단계 › 도급공사 › 설계변경1차');

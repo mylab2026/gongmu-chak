@@ -1,6 +1,7 @@
 // 사진은 원래 위치에서 모아 보고, 문장 검색은 문서 발췌를 AI로 확인합니다.
 const Collect={data:null,tab:'photo',phase:'all',limit:120,thumbs:new Map(),plan:null,cid:'',run:null,draft:null,recheck:null,repair:null,generation:0,job:null};
 const collectStyle=document.createElement('style');collectStyle.textContent=`
+.scope-note{margin:6px 0;padding:8px 12px;border-radius:10px;background:#eef3ff;color:#1d3fbf;font-size:var(--fs-meta,13px)}
 .dev-tag{display:inline-block;font-size:12px;font-weight:700;color:#8a4b00;background:#fff1d6;border:1px solid #f0c36d;border-radius:99px;padding:1px 8px;vertical-align:middle;margin-left:4px}.dev-note{margin:6px 0 8px;color:#8a4b00;font-size:var(--fs-meta,13px)}
 .photo-period{border:1px solid #dbe3f0;background:#f7f9fd;border-radius:12px;padding:14px 16px;margin-bottom:14px}.photo-period p{margin:0 0 10px}
 .pp-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:8px 0}.pp-label{font-weight:700;min-width:220px}.pp-label small{font-weight:400;margin-left:6px}
@@ -115,7 +116,7 @@ function collectSaved(){const list=Collect.data.collections||[],r=Collect.run;
  }
  if(r){const e=r.estimate;if(r.excludedEmployment)out+='<p class="muted">근로계약서 '+r.excludedEmployment+'건은 제외했습니다.</p>';let summary=r.collection.conditions.text||r.collection.name;
   try{summary=JSON.parse(r.collection.conditions.semanticQuery).summary||summary;}catch{}
-  out+='<div class="card"><b>'+esc(r.collection.name)+'</b><p>'+esc(summary)+'</p><p class="muted">확인한 문서 '+e.cached+'건 · 아직 확인하지 않은 문서 '+e.candidates+'건</p>'
+  out+='<div class="card"><b>'+esc(r.collection.name)+'</b><p>'+esc(summary)+'</p><p class="muted">확인한 문서 '+e.cached+'건 · 아직 확인하지 않은 문서 '+e.candidates+'건</p>'+(r.scopeNote?'<p class="scope-note">📁 '+esc(r.scopeNote)+'</p>':'')
    +(r.collection.conditions.unresolved?'<p class="warn">아직 모호한 조건: '+esc(r.collection.conditions.unresolved)+' · 단정하지 않고 확인 필요로 표시합니다.</p>':'')
    +(e.candidates?'<button id="verifyRun">'+(r.collection.conditions.semanticQuery?'남은 문서 계속 찾기':'AI로 후보 확인')+'</button>':'')+' <button id="editCollection">문장으로 조건 바꾸기</button>'
    +(r.failed?.length?'<p class="warn">'+r.failed.length+'건은 본문을 읽지 못했거나 AI 확인에 실패했습니다. 누락된 일치 자료가 있을 수 있으니 원본을 확인해주세요.</p>':'')+'</div>';
