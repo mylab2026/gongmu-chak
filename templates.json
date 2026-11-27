@@ -212,11 +212,15 @@
               "children": []
             },
             {
-              "label": "4 공정표",
+              "label": "4 공사전 사진",
               "children": []
             },
             {
-              "label": "5 지출서류",
+              "label": "5 공정표",
+              "children": []
+            },
+            {
+              "label": "6 지출서류",
               "children": [
                 {
                   "label": "1 선금",
@@ -233,11 +237,11 @@
               ]
             },
             {
-              "label": "6 회의 및 협의기록",
+              "label": "7 회의 및 협의기록",
               "children": []
             },
             {
-              "label": "7 설계변경",
+              "label": "8 설계변경",
               "children": [
                 {
                   "label": "1 1차 설계변경",
@@ -250,7 +254,7 @@
               ]
             },
             {
-              "label": "8 완수계",
+              "label": "9 완수계",
               "children": [
                 {
                   "label": "1 완수계 공문 및 검사 조서",
@@ -263,7 +267,7 @@
               ]
             },
             {
-              "label": "9 기타공문",
+              "label": "10 기타공문",
               "children": [
                 {
                   "label": "1 수신",
@@ -491,6 +495,10 @@
             },
             {
               "label": "15 작업일보",
+              "children": []
+            },
+            {
+              "label": "16 하자",
               "children": []
             }
           ]
@@ -799,11 +807,15 @@
               "children": []
             },
             {
-              "label": "4 공정표",
+              "label": "4 공사전 사진",
               "children": []
             },
             {
-              "label": "5 지출서류",
+              "label": "5 공정표",
+              "children": []
+            },
+            {
+              "label": "6 지출서류",
               "children": [
                 {
                   "label": "1 선금",
@@ -820,11 +832,11 @@
               ]
             },
             {
-              "label": "6 회의 및 협의기록",
+              "label": "7 회의 및 협의기록",
               "children": []
             },
             {
-              "label": "7 설계변경",
+              "label": "8 설계변경",
               "children": [
                 {
                   "label": "1 1차 설계변경",
@@ -837,7 +849,7 @@
               ]
             },
             {
-              "label": "8 완수계",
+              "label": "9 완수계",
               "children": [
                 {
                   "label": "1 완수계 공문 및 검사 조서",
@@ -850,7 +862,7 @@
               ]
             },
             {
-              "label": "9 기타공문",
+              "label": "10 기타공문",
               "children": [
                 {
                   "label": "1 수신",
@@ -992,6 +1004,10 @@
             },
             {
               "label": "15 작업일보",
+              "children": []
+            },
+            {
+              "label": "16 하자",
               "children": []
             }
           ]
@@ -1408,6 +1424,10 @@
             {
               "label": "15 작업일보",
               "children": []
+            },
+            {
+              "label": "16 하자",
+              "children": []
             }
           ]
         },
@@ -1628,45 +1648,7 @@
   ],
   "annual-construction-direct": [
     {
-      "label": "1 공통",
-      "children": [
-        {
-          "label": "1 주요 보고자료(내부보고 자료)",
-          "children": []
-        },
-        {
-          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
-          "children": [
-            {
-              "label": "1 공문 및 협의기록",
-              "note": "별도 계약이 체결된 용역 및 공사는 제외",
-              "children": [
-                {
-                  "label": "1 수신",
-                  "children": []
-                },
-                {
-                  "label": "2 발신",
-                  "children": []
-                }
-              ]
-            },
-            {
-              "label": "2 학내 안내",
-              "note": "공고문, 홈페이지 게시글 등",
-              "children": []
-            },
-            {
-              "label": "3 민원",
-              "note": "국민신문고, 유선·방문 민원 대응 이력",
-              "children": []
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "label": "2 시공단계",
+      "label": "1 시공단계",
       "children": [
         {
           "label": "1 도급공사 1",
@@ -1685,7 +1667,7 @@
               ]
             },
             {
-              "label": "2 시공사에 제공한 자료",
+              "label": "2 시공사에 제공 한 자료",
               "children": []
             },
             {
@@ -1694,7 +1676,11 @@
               "children": []
             },
             {
-              "label": "4 지출서류",
+              "label": "4 공정표",
+              "children": []
+            },
+            {
+              "label": "5 지출서류",
               "children": [
                 {
                   "label": "1 선금",
@@ -1711,11 +1697,11 @@
               ]
             },
             {
-              "label": "5 회의 및 협의기록",
+              "label": "6 회의 및 협의기록",
               "children": []
             },
             {
-              "label": "6 작업지시서",
+              "label": "7 작업지시서",
               "children": [
                 {
                   "label": "1 현장1",
@@ -1730,7 +1716,7 @@
               ]
             },
             {
-              "label": "7 설계변경",
+              "label": "8 설계변경",
               "children": [
                 {
                   "label": "1 1차 설계변경",
@@ -1743,17 +1729,17 @@
               ]
             },
             {
-              "label": "8 안전관리비 사용 현황",
+              "label": "9 안전관리비 사용 현황",
               "note": "산업안전보건관리비 사용 내역",
               "children": []
             },
             {
-              "label": "9 준공계",
+              "label": "10 준공계",
               "note": "준공계 공문 및 검사조서, 준공도서, 보험료·폐기물 증빙자료, 합의서, 하자보증서, 사진대지 등",
               "children": []
             },
             {
-              "label": "10 준공정산",
+              "label": "11 준공정산",
               "children": [
                 {
                   "label": "1 품의서",
@@ -1766,7 +1752,7 @@
               ]
             },
             {
-              "label": "11 기타공문",
+              "label": "12 기타공문",
               "note": "착공계, 준공계, 기성, 설계변경, 안전관리비, 하도급 통보 관련 공문 제외",
               "children": [
                 {
@@ -1780,7 +1766,11 @@
               ]
             },
             {
-              "label": "12 작업일보",
+              "label": "13 작업일보",
+              "children": []
+            },
+            {
+              "label": "14 하자",
               "children": []
             }
           ]
@@ -1790,123 +1780,50 @@
   ],
   "annual-construction-workOnly": [
     {
-      "label": "1 공통",
+      "label": "1 품의 및 계약서",
       "children": [
         {
-          "label": "1 주요 보고자료(내부보고 자료)",
+          "label": "1 품의서",
           "children": []
         },
         {
-          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
-          "children": [
-            {
-              "label": "1 공문 및 협의기록",
-              "note": "별도 계약이 체결된 용역 및 공사는 제외",
-              "children": [
-                {
-                  "label": "1 수신",
-                  "children": []
-                },
-                {
-                  "label": "2 발신",
-                  "children": []
-                }
-              ]
-            },
-            {
-              "label": "2 학내 안내",
-              "note": "공고문, 홈페이지 게시글 등",
-              "children": []
-            },
-            {
-              "label": "3 민원",
-              "note": "국민신문고, 유선·방문 민원 대응 이력",
-              "children": []
-            }
-          ]
+          "label": "2 계약서",
+          "children": []
         }
       ]
     },
     {
-      "label": "2 시공단계",
+      "label": "2 회의 및 협의기록",
       "children": [
         {
-          "label": "1 도급공사 1",
-          "children": [
-            {
-              "label": "1 회의 및 협의기록",
-              "children": [
-                {
-                  "label": "1 현장1",
-                  "children": []
-                },
-                {
-                  "label": "2 현장2",
-                  "children": []
-                }
-              ]
-            },
-            {
-              "label": "2 작업지시서",
-              "children": [
-                {
-                  "label": "1 현장1",
-                  "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
-                  "children": []
-                },
-                {
-                  "label": "2 현장2",
-                  "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
-                  "children": []
-                }
-              ]
-            }
-          ]
+          "label": "1 현장1",
+          "children": []
+        },
+        {
+          "label": "2 현장2",
+          "children": []
+        }
+      ]
+    },
+    {
+      "label": "3 작업지시서",
+      "children": [
+        {
+          "label": "1 현장1",
+          "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
+          "children": []
+        },
+        {
+          "label": "2 현장2",
+          "note": "보수시행(안), 작업지시서, 내역서, 도면, 공사 완료 확인서, 사진대지 등",
+          "children": []
         }
       ]
     }
   ],
   "annual-service-direct": [
     {
-      "label": "1 공통",
-      "children": [
-        {
-          "label": "1 주요 보고자료(내부보고 자료)",
-          "children": []
-        },
-        {
-          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
-          "children": [
-            {
-              "label": "1 공문 및 협의기록",
-              "note": "별도 계약이 체결된 용역 및 공사는 제외",
-              "children": [
-                {
-                  "label": "1 수신",
-                  "children": []
-                },
-                {
-                  "label": "2 발신",
-                  "children": []
-                }
-              ]
-            },
-            {
-              "label": "2 학내 안내",
-              "note": "공고문, 홈페이지 게시글 등",
-              "children": []
-            },
-            {
-              "label": "3 민원",
-              "note": "국민신문고, 유선·방문 민원 대응 이력",
-              "children": []
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "label": "2 시공단계",
+      "label": "1 시공단계",
       "children": [
         {
           "label": "1 용역 1",
@@ -1925,7 +1842,7 @@
               ]
             },
             {
-              "label": "2 용역사에 제공한 자료",
+              "label": "2 용역사에 제공 한 자료",
               "children": []
             },
             {
@@ -2015,67 +1932,32 @@
   ],
   "annual-service-workOnly": [
     {
-      "label": "1 공통",
+      "label": "1 품의 및 계약서",
       "children": [
         {
-          "label": "1 주요 보고자료(내부보고 자료)",
+          "label": "1 품의서",
           "children": []
         },
         {
-          "label": "2 타기관 협의자료(공문, 공지, 민원 등)",
-          "children": [
-            {
-              "label": "1 공문 및 협의기록",
-              "note": "별도 계약이 체결된 용역 및 공사는 제외",
-              "children": [
-                {
-                  "label": "1 수신",
-                  "children": []
-                },
-                {
-                  "label": "2 발신",
-                  "children": []
-                }
-              ]
-            },
-            {
-              "label": "2 학내 안내",
-              "note": "공고문, 홈페이지 게시글 등",
-              "children": []
-            },
-            {
-              "label": "3 민원",
-              "note": "국민신문고, 유선·방문 민원 대응 이력",
-              "children": []
-            }
-          ]
+          "label": "2 계약서",
+          "children": []
         }
       ]
     },
     {
-      "label": "2 시공단계",
+      "label": "2 회의 및 협의기록",
+      "children": []
+    },
+    {
+      "label": "3 작업지시서",
       "children": [
         {
-          "label": "1 용역 1",
-          "children": [
-            {
-              "label": "1 회의 및 협의기록",
-              "children": []
-            },
-            {
-              "label": "2 작업지시서",
-              "children": [
-                {
-                  "label": "1 작업지시서 1차 및 계약서",
-                  "children": []
-                },
-                {
-                  "label": "2 작업지시서 2차 및 계약서",
-                  "children": []
-                }
-              ]
-            }
-          ]
+          "label": "1 작업지시서 1차 및 계약서",
+          "children": []
+        },
+        {
+          "label": "2 작업지시서 2차 및 계약서",
+          "children": []
         }
       ]
     }

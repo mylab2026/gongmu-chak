@@ -102,8 +102,10 @@ refresh().catch(()=>{});
 function baseName(label){return String(label).replace(/^\d+(?:[-.]\d+)*[\s_]+/,'').trim();}
 function standardNames(){const names=new Set();const walk=list=>list.forEach(n=>{names.add(baseName(n.label));walk(n.children||[]);});Object.values(S.status?.templates||{}).forEach(walk);return names;}
 function markFixed(list){list.forEach(n=>{n.fixed=true;markFixed(n.children||[]);});}
+/* 2026-11-28 LIM: 아직 디스크에 만들지 않은 폴더(fixed 아님)는 지우거나 옮기면 번호를 다시 매긴다('1 공통'을 지우면 '2 시공단계' → '1 시공단계').
+   이미 만들어진 폴더(fixed)의 번호만 그대로 두고, 새 폴더는 그 뒤 번호부터 차례로 붙인다. */
 function numberTree(list){const edit=Boolean(S.project);let i=0,next=Math.max(0,...list.filter(n=>n.fixed&&!INBOX_NAMES.includes(n.label)).map(n=>Number(String(n.label).match(/^\d+/)?.[0]||0)));
- for(const n of list){if(!INBOX_NAMES.includes(n.label)){if(edit){if(!n.fixed){n.num??=++next;n.label=n.num+' '+baseName(n.label);}}else n.label=(++i)+' '+baseName(n.label);}numberTree(n.children||[]);}}
+ for(const n of list){if(!INBOX_NAMES.includes(n.label)){if(edit){if(!n.fixed){n.num=++next;n.label=n.num+' '+baseName(n.label);}}else n.label=(++i)+' '+baseName(n.label);}numberTree(n.children||[]);}}
 const DIAGRAM_COLORS=['#345fe2','#1f9d74','#d9822b','#8a5cd6','#c2477a','#2b8fb3'];
 function structureDiagram(tree,clickable,selectable){const inbox=tree.find(n=>INBOX_NAMES.includes(n.label)),tops=tree.filter(n=>!INBOX_NAMES.includes(n.label));if(!tops.length)return '<p class="muted">사업유형을 선택하면 폴더 구조 그림이 나타납니다.</p>';
  const tag=(path,cls,inner,title)=>clickable?'<button class="'+cls+'" data-browse="'+esc(path)+'" title="'+esc(title||'이 폴더의 문서 보기')+'">'+inner+'</button>':'<span class="'+cls+'" title="'+esc(title||'')+'">'+inner+'</span>';
@@ -162,7 +164,9 @@ function renderMindMap(){const tops=mmTops();if(!tops.length){mindMap.innerHTML=
  if(S.mmRoot===null||!S.tree[S.mmRoot]||INBOX_NAMES.includes(S.tree[S.mmRoot].label))S.mmRoot=tops[0][1];
  const color=DIAGRAM_COLORS[Math.max(0,tops.findIndex(([,i])=>i===S.mmRoot))%DIAGRAM_COLORS.length],standard=standardNames();
  const draw=(n,key)=>{const kids=n.children||[],closed=kids.length&&mmCollapsed(key),selected=S.mmSelected===key,std=standard.has(baseName(n.label));
-  const editable=!std||(/용역|도급공사|관급자재/.test(baseName(n.label))&&mmDepth(key)===2); const text=editable?'<input class="mm-label-input" data-mm-direct="'+key+'" value="'+esc(baseName(n.label))+'" aria-label="폴더 이름 바로 수정" size="'+Math.max(8,baseName(n.label).length+2)+'">':esc(n.label);
+  // 2026-11-28: '설계용역 정보' 같은 정보 폴더는 계약 가지가 아니다(이름에 '용역'이 있어도). 바로 고치는 칸에도 앞 번호를 그대로 보여 준다.
+  const editable=!std||(/용역|도급공사|관급자재/.test(baseName(n.label))&&!/정보/.test(baseName(n.label))&&mmDepth(key)===2); const num=(String(n.label).match(/^\d+(?=\s)/)||[''])[0];
+  const text=editable?(num?'<span class="mm-num">'+esc(num)+'</span> ':'')+'<input class="mm-label-input" data-mm-direct="'+key+'" value="'+esc(baseName(n.label))+'" aria-label="폴더 이름 바로 수정" size="'+Math.max(8,baseName(n.label).length+2)+'">':esc(n.label);
   const tools=selected?'<span class="mm-tools">'+(kids.length?'<button data-mm-toggle="'+key+'">'+(closed?'펼치기':'접기')+'</button>':'')+''+'<button data-mm-child="'+key+'">+ 하위 폴더</button><button data-mm-up="'+key+'" title="위로">↑</button><button data-mm-down="'+key+'" title="아래로">↓</button><button data-mm-delete="'+key+'">제외</button></span>':'';
   return '<li><div class="mm-node depth-'+Math.min(mmDepth(key),4)+(selected?' sel':'')+(std?'':' custom')+'" data-mm-node="'+key+'">'+(kids.length?'<button class="mm-caret-button" data-mm-toggle="'+key+'" aria-label="'+esc(n.label)+(closed?' 펼치기':' 접기')+'">'+(closed?'▶':'▼')+'</button>':'')+text+(closed?'<span class="mm-count">'+kids.length+'</span>':'')+tools+'</div>'+(kids.length&&!closed?'<ul>'+kids.map((c,i)=>draw(c,key+'.'+i)).join('')+'</ul>':'')+'</li>';};
  mindMap.innerHTML='<p class="muted">계약 폴더 이름은 글자 부분을 눌러 바로 수정합니다. 삼각형은 한 번 누를 때마다 펼치거나 접습니다.</p><div class="mm-wrap" style="--c:'+color+';--line:color-mix(in srgb,'+color+' 45%,white)"><ul class="mm">'+draw(S.tree[S.mmRoot],String(S.mmRoot))+'</ul></div>';
@@ -534,16 +538,16 @@ function renderFolderSuggest(){if(!S.plan){suggestBox.hidden=true;return;}const 
 function applyFolderResult(result){if(result.tree&&S.project)S.project.tree=result.tree;if(result.paths)S.plan.paths=result.paths;if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;
  for(const u of result.rows||[])Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);}
 
-/* 2026-11-25: 연결도에서 '보류'도 고르기. 파일을 누른 뒤 아래 '보류 · 원래 위치 유지' 칸을 누르거나, 파일·폴더·화살표 끝을 그 칸에 놓는다.
+/* 2026-11-25: 연결도에서 '보류'도 고르기. 파일을 누른 뒤 아래 '보류' 칸을 누르거나, 파일·폴더·화살표 끝을 그 칸에 놓는다.
    체크한 파일이 있으면 함께 보류한다. */
 async function holdRows(ids){ids=[...new Set(ids)].filter(id=>S.plan.rows.some(r=>r.id===id&&!r.done));if(!ids.length)return;clearError();
- if(ids.length>1&&!await ask('보류로 둘까요?','파일 '+ids.length+'개를 옮기지 않고 원래 위치에 둡니다. 나중에 다시 목적지를 정할 수 있습니다.')){drawMapEdges();return;}
+ if(ids.length>1&&!await ask('보류로 둘까요?','파일 '+ids.length+'개를 표준 폴더로 옮기지 않습니다. 파일 이동 실행 때 원래 폴더 이름째 ‘정리할 문서 모음’으로 갑니다. 나중에 다시 목적지를 정할 수 있습니다.')){drawMapEdges();return;}
  try{const result=await api('/hold-rows',{plan:S.plan.id,rows:ids});for(const u of result.rows)Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);
-  $('#routeHelp').textContent=result.rows.length+'개 파일을 보류(원래 위치 유지)로 정했습니다. 실제 파일은 움직이지 않습니다.';renderReview(true);}
+  $('#routeHelp').textContent=result.rows.length+'개 파일을 보류로 정했습니다. 파일 이동 실행 때 정리할 문서 모음으로 옮깁니다.';renderReview(true);}
  catch(e){error(e.message);drawMapEdges();}}
 function pickedOr(id){const picked=S.plan.rows.filter(r=>S.selected.has(r.id)&&!r.done).map(r=>r.id);return picked.length>1&&picked.includes(id)?picked:[id];}
 function bindHoldTarget(){const hold=$('#mapHold');if(!hold)return;const file=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done);hold.classList.toggle('hold-pick',Boolean(file));
- hold.title=file?'누르면 고른 파일을 보류(원래 위치 유지)로 정합니다':'파일이나 폴더를 여기에 놓으면 보류(원래 위치 유지)로 정합니다';
+ hold.title=file?'누르면 고른 파일을 보류(정리할 문서 모음으로)로 정합니다':'파일이나 폴더를 여기에 놓으면 보류(정리할 문서 모음으로)로 정합니다';
  hold.onclick=()=>{const f=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done);if(f)holdRows(pickedOr(f.id));};
  hold.ondragover=e=>{if(MapReview.dragging){e.preventDefault?.();if(e.dataTransfer)e.dataTransfer.dropEffect='move';hold.classList.add('drop-target');}};hold.ondragleave=()=>hold.classList.remove('drop-target');
  hold.ondrop=e=>{e.preventDefault?.();hold.classList.remove('drop-target');const id=MapReview.dragging;MapReview.dragging=null;if(!id)return;
@@ -576,7 +580,7 @@ function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.p
    +item.choices.map((c,k)=>option('c'+k,'<b>'+esc(crumb(c))+'</b>'+(k===0?' <span class="q-tag">추천</span>':'')+(k===0&&item.reason?'<small class="muted q-why">'+esc(item.reason)+'</small>':''))).join('')
    +option('other','목록에 없는 다른 폴더','<select data-q-other>'+pathOptions(a.destination)+'</select>')
    +option('new','새 폴더를 만들어 넣기','<span class="q-new"><select data-q-parent>'+pathOptions(a.parent)+'</select><span>아래에</span><input type="text" data-q-name placeholder="새 폴더 이름 (예: 내부검토)" value="'+esc(a.name||'')+'"></span>')
-   +option('hold','옮기지 않고 원래 위치에 두기')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
+   +option('hold','보류 (정리할 문서 모음으로)')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
    +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionStop">그만 묻기</button>'+(at?'<button id="questionPrev">이전</button>':'')
    +'<button class="primary" id="questionNext">'+(last?'답하고 다시 분류':'다음 질문')+'</button></div>';
   $$('input[name="qpick"]').forEach(r=>r.onchange=()=>{save();a.pick=r.value;draw();});

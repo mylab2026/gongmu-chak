@@ -141,7 +141,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert(!registry.some(e=>!e.removed&&e.dataset.mapFile==='h'));
  const heldMarker=registry.filter(e=>!e.removed&&e.dataset.mapReview==='h').at(-1);assert(heldMarker);heldMarker.click();evaluate('drawMapEdges()');
  assert.equal(evaluate('MapReview.file'),'h');assert.equal(evaluate('MapReview.retargeting'),true);
- assert($('#mapCaption').innerHTML.includes('원래 위치에 둘 파일'));
+ assert($('#mapCaption').innerHTML.includes('보류할 파일이면'));
  assert($('#mapApprovals').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
  const heldConfirm=registry.filter(e=>!e.removed&&e.dataset.routeConfirm==='h').at(-1);await heldConfirm.click();
  assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');assert.equal(evaluate('needsCheck(S.plan.rows.find(r=>r.id==="h"))'),false);
@@ -203,6 +203,9 @@ assert($('#collectBody').innerHTML.includes('공사전.jpg'));assert($('#collect
  const exporting2=$('#exportRun').onclick();await tick();$('#confirmYes').click();await exporting2;assert.equal(calls.filter(c=>c[0]==='/export-run').length,1);assert($('#collectBody').innerHTML.includes('사업 안내.html'));
  evaluate('moveDone.showModal()');assert.equal(evaluate('moveDone.open'),true);
  console.log('PASS: photo/notice collection tabs, export needs approval (cancel creates nothing), completion guide on done dialog.');
+ // 2026-11-28 LIM: 아직 만들지 않은 폴더는 지우면 번호가 당겨진다(등록된 사업이어도). 이미 만든(fixed) 폴더 번호는 그대로.
+ const numbered=evaluate('(()=>{const keep=S.project;S.project={id:"numbering"};const t=[{label:"0 정리할 문서 모음",children:[]},{label:"1 공통",children:[]},{label:"2 시공단계",children:[{label:"1 도급공사",children:[]}]}];numberTree(t);t.splice(1,1);numberTree(t);const a=t.map(n=>n.label);const f=[{label:"3 기존",fixed:true,children:[]},{label:"5 새 폴더",children:[]},{label:"9 또 새 폴더",children:[]}];numberTree(f);S.project=keep;return JSON.stringify([a,f.map(n=>n.label)]);})()');
+ assert.equal(numbered,JSON.stringify([['0 정리할 문서 모음','1 시공단계'],['3 기존','4 새 폴더','5 또 새 폴더']]));
  console.log('PASS: contract rename preview and cancellation, work-only contract storage and round folders.');
  console.log('PASS: automatic contract prefill, latest confirmation fields, Next locked during discovery, ambiguous folder links drawn red.');
  console.log('PASS: auto reconnect only for missing paths, picker cancellation, editable construction/material names, finish button activation.');

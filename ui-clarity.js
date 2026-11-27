@@ -50,7 +50,7 @@ const leads={
  projectStep:()=>['정리할 사업을 고른 뒤 ‘다음’을 누르세요','새로 생긴 계약이 있을 때만 아래 칸을 체크하세요.'],
  contractStep:()=>S.mode==='ongoing'?['새로 생긴 계약서를 등록하세요','등록한 계약은 기존 사업에 더해집니다.']:S.status?.configured?['사업 폴더에서 찾은 계약서를 확인하세요','내가 관리하지 않는 계약이나 중복된 계약은 ‘내 계약 아님 · 제외’로 빼고 ‘다음’을 누르세요. 아직 계약이 없으면 아래 ‘계약서 없음’을 고르세요.']:['먼저 AI를 연결해주세요','계약서 자동 읽기와 문서 분류에 학내 AI 연결이 필요합니다.'],
  treeStep:()=>['사업유형을 고르면 기본 폴더 구조가 자동으로 만들어집니다','폴더 이름은 필요할 때만 고치고 ‘다음’을 누르세요.'],
- reviewStep:()=>{const left=S.plan?S.plan.rows.filter(mapNeedsCheck).length:0;return left?['아래 화살표에서 목적지를 확인하고 ‘파일 이동 실행’을 누르세요','빨간 !가 붙은 파일 '+left+'개는 확인이 필요합니다. 폴더째 끌어 옮길 수 있고, 보류 파일은 원래 위치에 그대로 둡니다.']:['연결도를 훑어본 뒤 ‘파일 이동 실행’을 누르세요','목적지를 정한 파일만 이동하며, 보류 파일은 원래 위치에 그대로 둡니다.'];}
+ reviewStep:()=>{const left=S.plan?S.plan.rows.filter(mapNeedsCheck).length:0;return left?['아래 화살표에서 목적지를 확인하고 ‘파일 이동 실행’을 누르세요','빨간 !가 붙은 파일 '+left+'개는 확인이 필요합니다. 폴더째 끌어 옮길 수 있고, 보류 파일은 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮깁니다.']:['연결도를 훑어본 뒤 ‘파일 이동 실행’을 누르세요','목적지를 정한 파일만 이동하며, 보류 파일은 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮깁니다.'];}
 };
 for(const id of Object.keys(leads)){const section=$('#'+id);if(!section)continue;const lead=document.createElement('div');lead.className='lead';lead.id='lead-'+id;lead.setAttribute('role','note');section.prepend(lead);}
 function updateLead(){for(const [id,make] of Object.entries(leads)){const section=$('#'+id),lead=$('#lead-'+id);if(!section||!lead||section.hidden)continue;const [main,sub]=make();lead.innerHTML='<span class="lead-tag">지금 할 일</span><div>'+esc(main)+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>';}}
@@ -102,7 +102,7 @@ $('#home h1').after(homeNote);$('#homeAIConnect').onclick=()=>$('#settingsButton
 function updateHome(){homeNote.hidden=Boolean(S.status?.configured);const ready=Boolean(S.status?.configured),hasProjects=Boolean(S.status?.projects?.length);$('#initialButton').classList.toggle('recommended',ready&&!hasProjects);$('#ongoingButton').classList.toggle('recommended',ready&&hasProjects);}
 
 /* 사업유형 카드: 고르기 전에 차이를 알 수 있게 */
-const typeInfo={planning:['사업 구상·예산 단계부터 맡은 사업','기획 → 설계 → 시공 → 인수인계'],design:['설계용역을 직접 발주·관리하는 사업','설계(용역 관리) → 시공 → 인수인계'],construction:['설계가 끝나고 공사부터 맡은 사업','설계(성과품 보관) → 시공 → 인수인계'],annual:['연간단가 계약으로 작업지시·검수하는 업무','공통 → 시공(작업지시)']};
+const typeInfo={planning:['사업 구상·예산 단계부터 맡은 사업','기획 → 설계 → 시공 → 인수인계'],design:['설계용역을 직접 발주·관리하는 사업','설계(용역 관리) → 시공 → 인수인계'],construction:['설계가 끝나고 공사부터 맡은 사업','설계(성과품 보관) → 시공 → 인수인계'],annual:['연간단가 계약으로 작업지시·검수하는 업무','품의·계약서 → 회의·협의 → 작업지시']};
 const baseRenderTypes=renderTypes;
 renderTypes=function(...args){const result=baseRenderTypes(...args);$$('[data-type]').forEach(b=>{const info=typeInfo[b.dataset.type];if(!info||b.querySelector('.type-desc'))return;b.innerHTML='<b>'+esc(b.textContent)+'</b><span class="type-desc">'+esc(info[0])+'</span><span class="type-flow">'+esc(info[1])+'</span>';});return result;};
 

@@ -1,6 +1,7 @@
 """Reproduce misfiled contracts and legacy duplicate folders from PC screenshots."""
 import copy
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -133,7 +134,7 @@ class ScreenshotCorrections(unittest.TestCase):
     def test_old_numbered_standard_folders_merge_without_duplicate_nesting(self):
         sources=[
           ('2 설계단계/1 설계 용역/2101 최초 품의 및 최초 계약서/품의서.docx','2 설계단계/1 설계 용역/1 최초 품의 및 최초 계약서/1 품의서'),
-          ('2 설계단계/1 설계 용역/8 완수계/2107-1 완수계 공문 및 검사 조서/공문.txt','2 설계단계/1 설계 용역/8 완수계/1 완수계 공문 및 검사 조서'),
+          ('2 설계단계/1 설계 용역/8 완수계/2107-1 완수계 공문 및 검사 조서/공문.txt','2 설계단계/1 설계 용역/9 완수계/1 완수계 공문 및 검사 조서'),  # 4 공사전 사진 추가(2026-11-27)로 9번
           ('3 시공단계/1 도급공사 1/3113 작업일보/일지.docx','3 시공단계/1 도급공사 1/15 작업일보'),
           ('2 설계단계/1 설계 용역/1 최초 품의 및 최초 계약서/1 공통/14 주요 보고자료(결재선 없는 중간 보고자료)/3. 보수공사 보고/보고자료.pptx','1 공통/3 주요 보고자료(내부보고 자료)')]
         for relative,_ in sources:self.write(relative,relative.encode())
@@ -149,9 +150,10 @@ class ScreenshotCorrections(unittest.TestCase):
 
     def test_custom_photo_site_and_numbered_folders_are_preserved(self):
         for folder in ('현장1','사진1'):
-            self.write('3 시공단계/1 도급공사 1/3110 사진/'+folder+'/a.jpg',folder.encode())
+            self.write('3 시공단계/1 도급공사 1/3110 사진/'+folder+'/a.jpg',folder.encode());time.sleep(0.05)
         rows=self.plan()['rows']
-        self.assertEqual({r['keepSub'] for r in rows},{'B 현장1','A 사진1'})
+        # 2026-11-27 LIM: 한 칸에 새 묶음이 여럿이면 원래 폴더가 만들어진 순서로 A·B·C(현장1을 먼저 만들었다)
+        self.assertEqual({r['keepSub'] for r in rows},{'A 현장1','B 사진1'})
         self.assertTrue(all(r['destination'].endswith('/11 사진') for r in rows))
 
     def test_legacy_work_order_site_maps_to_round_without_extra_site_folder(self):
