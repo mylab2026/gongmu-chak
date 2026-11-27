@@ -168,7 +168,7 @@ window.addEventListener('pointerup',event=>{const drag=MapReview.pointerDrag;if(
  const hold=$('#mapHold')?.getBoundingClientRect?.();if(hold&&event.clientX>=hold.left&&event.clientX<=hold.right&&event.clientY>=hold.top&&event.clientY<=hold.bottom&&typeof holdRows==='function'){holdRows([drag.id]);return;}
  if(target)changeRoute(drag.id,target.dataset.mapTarget);else drawMapEdges();});
 window.addEventListener('pointercancel',()=>{MapReview.pointerDrag=null;drawMapEdges();});
-const moveDone=document.createElement('dialog');moveDone.innerHTML='<h2 id="moveDoneTitle"></h2><p id="moveDoneText" class="done-summary"></p><div id="moveDoneStats" class="done-stats"></div><div id="moveDoneKept" class="done-kept" hidden></div><div class="actions"><button id="undoMoveDone">방금 이동 되돌리기</button><button class="primary" id="closeMoveDone">확인</button></div>';moveDone.style.width='min(760px,94vw)';document.body.appendChild(moveDone);
+const moveDone=document.createElement('dialog');moveDone.innerHTML='<h2 id="moveDoneTitle"></h2><p id="moveDoneText" class="done-summary"></p><div id="moveDoneStats" class="done-stats"></div><div id="moveDoneKept" class="done-kept" hidden></div><div class="actions"><button id="undoMoveDone">방금 이동 되돌리기</button><button class="primary" id="closeMoveDone">확인</button></div>';moveDone.style.width='min(760px,94vw)';moveDone.style.maxWidth='94vw';document.body.appendChild(moveDone);
 $('#closeMoveDone').onclick=()=>moveDone.close();
 $('#bulkMove').onclick=async()=>{
  const pending=S.plan.rows.filter(r=>!r.done);if(!pending.length)return;

@@ -194,5 +194,5 @@ function completionGuide(){const old=document.querySelector('#doneGuide');if(old
   +'<li><span class="dg-no">1</span><b>새 문서는 한 곳에</b><small>‘0 정리할 문서 모음’에 넣기</small></li>'
   +'<li><span class="dg-no">2</span><b>파일 이름은 날짜+내용</b><small><code>260813 설계변경 검토서.pdf</code></small></li>'
   +'<li><span class="dg-no">3</span><b>‘계속 문서 정리’</b><small>단계별 폴더로 알아서 옮김</small></li></ol>';
- $('#moveDoneStats').after(box);}
+ $('#moveDoneKept').after(box);}
 const doneBaseShow=moveDone.showModal.bind(moveDone);moveDone.showModal=function(){completionGuide();return doneBaseShow();};

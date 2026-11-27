@@ -5213,7 +5213,7 @@ def history_summary(pid, full=False):
         item=read_json(path,{})
         if item.get('projectId')==pid:journals.append(item)
     journals.sort(key=lambda j:j.get('at',''),reverse=True)
-    lines=['공무착착 · 스누챗용 문서 정리 이력','생성: '+now(),'프로그램: 0.11.2','사업: '+project['name'],
+    lines=['공무착착 · 스누챗용 문서 정리 이력','생성: '+now(),'프로그램: 0.11.3','사업: '+project['name'],
            '사업 유형: '+str(project.get('type') or '미지정'),'현재 파일: '+str(len(files))+'개','',
            '[챗봇에게 전달할 요청]',
            '아래는 공무착착의 실제 경로·작업 기록이다. 문서 본문을 읽은 기록으로 간주하지 말 것.',
@@ -5894,7 +5894,7 @@ def dispatch(action, payload):
         return resolve_staged_contracts(payload.get('ids', []))
     if action == '/status':
         return {'model': read_json(DATA / 'ai.json', {}).get('model', ''), 'configured': (DATA / 'api-key.dpapi').exists(),
-                'projects': projects(), 'templates': TEMPLATES, 'version': '0.11.2-test', 'build': chatbot_support.BUILD, 'prefs': prefs(), 'usage': usage_summary()}
+                'projects': projects(), 'templates': TEMPLATES, 'version': '0.11.3-test', 'build': chatbot_support.BUILD, 'prefs': prefs(), 'usage': usage_summary()}
     if action == '/prefs':
         return set_prefs(payload)
     if action == '/usage':

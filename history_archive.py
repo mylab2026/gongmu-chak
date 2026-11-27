@@ -53,7 +53,7 @@ def record(data, project, kind, writer, *, plan=None, journal=None, finish=None,
     sequence=max((int(p.name.split('-')[0]) for p in directory.glob('*.json')),default=0)+1
     event={'schemaVersion':1,'projectId':project['id'],'projectName':project['name'],
            'runId':run_id,'eventId':secrets.token_hex(16),'sequence':sequence,'at':stamp(),
-           'type':kind,'program':'0.11.2'}
+           'type':kind,'program':'0.11.3'}
     if plan is not None:
         event.update(scope='정리 결과 점검' if plan.get('recheck') else '계속 문서 정리' if plan.get('ongoing') else '처음 문서 정리',
                      planCreatedAt=plan.get('at'),folders=plan['paths'],rows=[])
