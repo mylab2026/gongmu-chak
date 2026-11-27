@@ -5578,6 +5578,21 @@ def history_summary(pid, full=False):
     return {'name':valid_name(project['name']+'-공무착착-정리이력.txt'),'text':'\n'.join(lines)+'\n'}
 
 
+CONTRACTOR_WORDS=re.compile(r'시공사|시공업체|시공자|도급사|도급업체|건설사|현장대리인')
+CONTRACTOR_LETTER_FOLDERS=re.compile(r'기타\s*공문|공문|착공계|준공계|지출\s*서류|기성|설계\s*변경|승인\s*요청|하도급')
+
+
+def contractor_letter_scope(project, conditions):
+    """2026-11-28 LIM: '시공사 공문'이면 시공단계 도급공사의 기타공문·착공계·준공계·기성(지출서류)·설계변경 등에서만 찾는다.
+    표준 트리에 그런 칸이 없으면 None(전체에서 찾기)."""
+    request=' '.join(str(conditions.get(k) or '') for k in ('text','semanticQuery'))
+    if not (CONTRACTOR_WORDS.search(request) and '공문' in request):
+        return None
+    folders=[p for p in tree_paths(project['tree']) if any('도급' in part for part in p.split('/')[:-1])
+             and CONTRACTOR_LETTER_FOLDERS.search(p.split('/')[-1])]
+    return folders or None
+
+
 def run_collection(pid,cid,group_contracts=True):
     project=get_project(pid);root=root_available(project)
     item=next((i for i in saved_collections(pid) if i['id']==cid),None)
@@ -5587,7 +5602,14 @@ def run_collection(pid,cid,group_contracts=True):
     local_index=collection_text_index(pid);updates={}
     checked_paths={v.get('relative') for v in checks.values()}
     ledger=contract_ledger(project);excluded_employment=0
-    for file in scan(root,False,inbox_of(project)):
+    files=scan(root,False,inbox_of(project))
+    scope=contractor_letter_scope(project,c)
+    if scope:
+        prefixes=tuple(f+'/' for f in scope)
+        scoped=[f for f in files if f['relative'].startswith(prefixes)]
+        files=scoped or files
+        scope=scope if scoped else None
+    for file in files:
         relative=file['relative'];suffix=Path(file['name']).suffix.lower()
         if relative.startswith(EXPORT_DIR+'/') or suffix=='.lnk':continue
         if c.get('semanticQuery') and suffix not in set(doctext.TEXT_TYPES)|PHOTO_EXT|{'.zip'}:continue
@@ -5619,6 +5641,8 @@ def run_collection(pid,cid,group_contracts=True):
         else:
             base['status']='candidate';result['candidates'].append(base)
     store_collection_texts(pid,updates)
+    if scope:
+        result['scopeNote']='시공사 공문이라 도급공사의 '+', '.join(dict.fromkeys(re.sub(r'^\d+\s*','',PurePosixPath(f).name) for f in scope))+' 폴더에서만 찾았습니다.'
     result.update(collection=item,unindexed=unindexed,excludedEmployment=excluded_employment,estimate={'candidates':len(result['candidates']),'cached':len(result['verified'])+len(result['mismatch'])+len(result['unclear']),
                                             'aiCalls':(len(result['candidates'])+5)//6 if c.get('semanticQuery') else len(result['candidates'])})
     return group_contract_results(result) if group_contracts else result

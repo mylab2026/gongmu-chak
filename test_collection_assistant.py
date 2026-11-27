@@ -32,6 +32,32 @@ class PlainLanguageCollections(unittest.TestCase):
     def ready(self,**extra):
         return {'name':'찾는 자료','summary':'사용자가 쓴 조건','question':None,**extra}
 
+    def test_contractor_letters_are_searched_only_in_construction_letter_folders(self):
+        # 2026-11-28 LIM: '시공사 공문'은 시공단계 도급공사의 기타공문·착공계·준공계·기성·설계변경 등에서 찾는다.
+        p=app.get_project(self.pid)
+        p['tree']=[{'label':app.INBOX},{'label':'1 공통','children':[{'label':'4 타기관 협의자료'}]},
+                   {'label':'3 시공단계','children':[{'label':'1 도급공사','children':[{'label':'3 착공계'},{'label':'5 지출서류','children':[{'label':'3 기성'}]},
+                    {'label':'7 설계변경'},{'label':'9 승인요청'},{'label':'12 준공계'},{'label':'14 기타공문'},{'label':'15 작업일보'}]}]}]
+        app.store_project(p)
+        inside=['3 시공단계/1 도급공사/3 착공계/착공계 제출.txt','3 시공단계/1 도급공사/5 지출서류/3 기성/1회 기성 청구.txt',
+                '3 시공단계/1 도급공사/7 설계변경/설계변경 요청.txt','3 시공단계/1 도급공사/9 승인요청/자재승인 요청.txt',
+                '3 시공단계/1 도급공사/12 준공계/준공계.txt','3 시공단계/1 도급공사/14 기타공문/A 260227 회신/공문.txt']
+        outside=['3 시공단계/1 도급공사/15 작업일보/일보.txt','1 공통/4 타기관 협의자료/캠퍼스 공문.txt','기타/메모.txt']
+        for name in inside+outside:self.file(name,'수신 가상대학교 시설지원과 발신 가상건설 문서번호 가상-1 제목 '+name)
+        item=self.item('이 사업 시공사가 보낸 공문 모두')
+        result=app.run_collection(self.pid,item['id'],group_contracts=False)
+        self.assertEqual(sorted(r['relative'] for r in result['candidates']),sorted(inside))
+        self.assertIn('기타공문',result['scopeNote']);self.assertIn('착공계',result['scopeNote'])
+        other=self.item('공정 변경 관련 자료')  # 시공사 공문이 아니면 범위를 좁히지 않는다
+        self.assertEqual(len(app.run_collection(self.pid,other['id'],group_contracts=False)['candidates']),len(inside+outside))
+
+    def test_contractor_letters_fall_back_to_whole_project_before_organizing(self):
+        self.file('옛 폴더/시공사 공문.txt','수신 가상대학교 발신 가상건설')
+        item=self.item('시공사 공문 찾아줘')
+        result=app.run_collection(self.pid,item['id'],group_contracts=False)
+        self.assertEqual([r['relative'] for r in result['candidates']],['옛 폴더/시공사 공문.txt'])
+        self.assertNotIn('scopeNote',result)
+
     def test_clear_request_does_not_ask_for_document_type(self):
         with patch.object(app,'gateway',return_value=self.ready()) as gateway:
             result=assistant.assist(app,{'id':self.pid,'text':'지난달 시공사가 보낸 공문 중 창호 관련만'})
