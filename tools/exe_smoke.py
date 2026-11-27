@@ -28,8 +28,17 @@ def main():
             else:
                 raise SystemExit('EXE가 120초 안에 시작되지 않았습니다.')
             url = json.loads(session.read_text(encoding='utf-8'))['url']
-            with urllib.request.urlopen(url, timeout=30) as response:
-                page = response.read().decode('utf-8')
+            for attempt in range(20):
+                try:
+                    with urllib.request.urlopen(url, timeout=30) as response:
+                        page = response.read().decode('utf-8')
+                    break
+                except OSError:
+                    if process.poll() is not None:
+                        raise SystemExit('EXE가 시작 직후 종료됐습니다:\n' + process.stdout.read().decode('utf-8', 'replace'))
+                    time.sleep(0.5)
+            else:
+                raise SystemExit('EXE 화면에 연결하지 못했습니다.')
             assert '공무착착' in page and '__SESSION_TOKEN__' not in page, '화면을 읽지 못했습니다.'
             token = url.split('session=', 1)[1]
             request = urllib.request.Request(url.split('/?', 1)[0] + '/status', data=b'{}', headers={'X-App-Token': token})

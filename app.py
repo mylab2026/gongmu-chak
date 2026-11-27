@@ -6575,6 +6575,12 @@ def install_crash_logging():
 
 
 def main():
+    # 실행 파일(EXE)을 바로가기·파이프로 실행하면 출력이 Windows 기본 인코딩(cp1252 등)이라 한글 안내에서 꺼진다.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
     DATA.mkdir(parents=True, exist_ok=True)
     install_crash_logging()
     lock_file = (DATA / 'app.lock').open('a+b')
