@@ -3049,22 +3049,33 @@ def safety_segment(part):
     return m.group(1) or 'generic'
 
 
+SAFETY_PLACE=[('공사',re.compile(r'시공|공사|도급')),('설계',re.compile(r'설계')),('기본',re.compile(r'기획|기본'))]
+
+
 def safety_ledger_route(relative):
     """(종류, 묶음 시작 칸 번호) 또는 None. 종류가 적힌 가장 바깥 칸부터 묶음째 옮긴다.
-    종류 없는 '안전보건대장' 폴더 안에서는 '1. 기본'·'설계' 같은 하위 폴더 이름으로 종류를 읽는다."""
+    종류 없는 '안전보건대장' 폴더 안에서는 '1. 기본'·'설계' 같은 하위 폴더 이름으로 종류를 읽고,
+    그래도 없으면 위 폴더 위치로 정한다(2026-11-28 LIM: '2. 시공단계/2. 공사/안전보건대장/안전보건대장.hwpx'가 보류됨)."""
     parts=PurePosixPath(relative).parts
-    generic=False
+    generic=None
     for k,part in enumerate(parts):
         kind=safety_segment(part)
         if kind and kind!='generic':
             return kind,k
         if kind=='generic':
-            generic=True
+            if generic is None:
+                generic=k
             continue
-        if generic:
+        if generic is not None:
             m=SAFETY_TYPE_WORD.match(part)
             if m:
                 return m.group(1),k
+    if generic is None:
+        return None
+    for part in reversed(parts[:generic]):  # 가장 가까운 위 폴더부터
+        for kind,pattern in SAFETY_PLACE:
+            if pattern.search(part):
+                return kind,generic
     return None
 
 

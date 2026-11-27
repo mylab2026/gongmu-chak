@@ -102,6 +102,27 @@ class SafetyLedger(unittest.TestCase):
         self.assertEqual(rows['3. 시공/공사안전보건대장/1차/대장.hwp']['destination'], '7 안전보건대장/1 시공안전보건대장')
         self.assertEqual(rows['2. 설계/설계안전보건대장_최종.pdf']['destination'], '7 안전보건대장/2 설계안전보건대장')
 
+    def test_ledger_without_kind_word_uses_the_folder_it_sits_in(self):
+        # 2026-11-28 LIM 화면: '63동 …(시연)/2. 시공단계/2. 공사/안전보건대장/안전보건대장.hwpx'가 보류됐다.
+        for rel in list(FILES):
+            (self.root / rel).unlink()
+        extra = {'63동 학생회관 환경개선사업 (시연)/2. 시공단계/2. 공사/안전보건대장/안전보건대장.hwpx': b'W',
+                 '63동 학생회관 환경개선사업 (시연)/1. 설계단계/안전보건대장/대장 초안.hwp': b'D',
+                 '63동 학생회관 환경개선사업 (시연)/0. 기획/안전보건대장.pdf': b'B',
+                 '자료/안전보건대장/공사계획/모름.hwp': b'?'}
+        for rel, body in extra.items():
+            path = self.root / rel; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(body)
+        plan = app.make_plan(self.project['id'], False)
+        root = app.safety_ledger_root(app.get_project(self.project['id'])['tree'])
+        self.assertTrue(root)
+        rows = {r['relative']: r for r in plan['rows']}
+        work = rows['63동 학생회관 환경개선사업 (시연)/2. 시공단계/2. 공사/안전보건대장/안전보건대장.hwpx']
+        self.assertEqual(work['destination'], root + '/3 공사안전보건대장')
+        self.assertTrue(work['keepSub'].endswith('안전보건대장'))  # 폴더째(이름 유지)
+        self.assertEqual(rows['63동 학생회관 환경개선사업 (시연)/1. 설계단계/안전보건대장/대장 초안.hwp']['destination'], root + '/2 설계안전보건대장')
+        self.assertEqual(rows['63동 학생회관 환경개선사업 (시연)/0. 기획/안전보건대장.pdf']['destination'], root + '/1 기본안전보건대장')
+        self.assertFalse(rows['자료/안전보건대장/공사계획/모름.hwp']['destination'].startswith(root))  # 위치로도 모르면 넣지 않음
+
     def test_no_ledger_no_folder(self):
         for rel in list(FILES):
             (self.root / rel).unlink()
