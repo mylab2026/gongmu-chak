@@ -119,7 +119,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  execution=$('#bulkMove').click();await tick();assert.equal($('#confirmText').hidden,true);assert($('#confirmTitle').textContent.includes('1개를 이동할까요?'));$('#confirmYes').click();await execution;const partial=calls.filter(c=>c[0]==='/execute-all').at(-1)[1];assert.deepEqual(partial.choices.map(c=>c.id),['r1']);assert.equal(partial.autoRename,true);
  await $('#findButton').click();assert.equal($('#finder').hidden,false);assert.equal($('#home').hidden,true);assert(calls.some(c=>c[0]==='/index-start'&&c[1].id==='p1'));
  $('#finderQuery').value='계약서';await $('#finderSearch').click();assert(registry.some(e=>e.dataset.openFile==='01 공통/계약서.pdf'&&!e.removed));
- const aiSearch=$('#finderAI').click();await tick();assert.equal($('#confirm').open,true);$('#confirmYes').click();await aiSearch;assert.equal(calls.filter(c=>c[0]==='/search-ai').length,1);
+ $('#finderAsk').value='배수로 공사 계약한 서류 찾아줘';const aiSearch=$('#finderAI').click();await tick();assert.equal($('#confirm').open,true);$('#confirmYes').click();await aiSearch;assert.equal(calls.filter(c=>c[0]==='/search-ai').length,1);
  $('#initialButton').click();assert.equal($('#finder').hidden,true);
  evaluate('S.project=null;S.tree=[{label:"0 정리할 문서 모음",children:[]},{label:"1 공통",children:[{label:"1 사업계획서"},{label:"2 예산관리"},{label:"3 주요 보고자료"}]},{label:"2 설계단계",children:[]}];S.tree[1].children.splice(0,1);renderTree();');
  assert.deepEqual(evaluate('S.tree[1].children.map(n=>n.label)'),['1 예산관리','2 주요 보고자료']);assert.equal(evaluate('S.tree[0].label'),'0 정리할 문서 모음');
