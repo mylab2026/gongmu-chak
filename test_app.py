@@ -465,7 +465,7 @@ class FileOperations(unittest.TestCase):
         self.assertEqual(source.read_bytes(), b'original')
         self.assertTrue(old.is_dir())
 
-    def test_unlisted_file_prevents_folder_deletion(self):
+    def test_temp_file_only_folder_is_gathered_not_deleted(self):
         old = self.root / '이전'
         old.mkdir()
         (old / '문서.txt').write_bytes(b'document')
@@ -473,9 +473,13 @@ class FileOperations(unittest.TestCase):
         ignored.write_bytes(b'NEVER DELETE')
         plan = app.make_plan(self.project['id'], False)
         journal = app.execute_all(plan['id'], self.all_choices(plan))
-        self.assertEqual(ignored.read_bytes(), b'NEVER DELETE')
-        self.assertTrue(old.exists())
-        self.assertTrue(any(f['path'] == '이전' for f in journal['keptFolders']))
+        # 2026-11-25 사용자 결정: 임시(잠금) 파일만 남은 기존 폴더는 그 파일을 지우지 않고 '정리 후 남은 파일'로 모은 뒤 폴더를 정리한다.
+        kept = self.root / app.INBOX / app.LEFTOVER_FOLDER / '이전' / '~$잠긴문서.docx'
+        self.assertEqual(kept.read_bytes(), b'NEVER DELETE')
+        self.assertFalse(old.exists())
+        self.assertIn('이전', journal['removedFolders'])
+        app.undo(journal['id'])
+        self.assertEqual(ignored.read_bytes(), b'NEVER DELETE')  # 되돌리면 제자리
 
     def test_retarget_is_persisted_but_does_not_move_file(self):
         source = self.write_file('문서.txt')

@@ -18,8 +18,8 @@ class MeetingFolderPolicy(unittest.TestCase):
         self.tree=[{'label':app.INBOX}]+copy.deepcopy(app.TEMPLATES['construction'])
         self.project=app.save_project({'selection':'selected','name':'힌지 공사','tree':self.tree},False)
         self.old='3 시공단계/1 도급공사 1/3107 회의 및 협의기록'
-        self.new='3 시공단계/1 도급공사 1/5 회의 및 협의기록'
-        self.photo='3 시공단계/1 도급공사 1/10 사진/1 공사전'
+        self.new='3 시공단계/1 도급공사 1/6 회의 및 협의기록'
+        self.photo='3 시공단계/1 도급공사 1/11 사진/1 공사전'
         self.report='1 공통/3 주요 보고자료(내부보고 자료)'
 
     def tearDown(self):self.patch.stop();self.temp.cleanup()

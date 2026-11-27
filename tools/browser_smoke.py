@@ -209,17 +209,19 @@ def main():
                         mk('k5','가상관 라운지 건축음향 컨설팅 용역','가상음향','service'),mk('k6','가상관 구조도면 현행화 및 안전진단 용역','가상구조','service'),mk('k7','가상관 미디어월 구매','가상상사','material')];
                       try{ContractInput.slots=recs.map((r,i)=>({number:i+1,status:'ready',record:r,pasteOpen:false,error:''}));
                         const wasHidden=$('#contractStep').hidden;$('#contractStep').hidden=false;renderContractInput();
-                        const before=document.querySelector('#contractList').innerText;
+                        const before=document.querySelector('#contractList').innerText;const stagesShown=[...document.querySelectorAll('#contractList .ci-stage-name')].map(e=>e.textContent),kindsShown=[...[...document.querySelectorAll('#contractList .ci-stage')].at(-1).querySelectorAll('.ci-kind-head .ci-tag')].map(e=>e.textContent);
                         document.querySelector('[data-ci-out="7"]').click();const afterOut=document.querySelector('#contractList').innerText;
                         document.querySelector('[data-ci-restore="7"]').click();
                         const cardsHidden=[...document.querySelectorAll('#pendingContracts .ci-card')].filter(c=>c.id.startsWith('contract-slot-')&&Number(c.id.slice(14))<=7).every(c=>c.hidden);
                         $('#noContracts').checked=false;syncContractRecords();const synced=S.contracts.length;S.type='planning';autoTemplate();
                         const stage=S.tree.find(n=>/시공단계/.test(n.label)),design=S.tree.find(n=>/설계단계/.test(n.label));
-                        const out={synced,count:before.includes('찾은 계약 7건'),services:before.includes('용역 폴더 4개'),afterOut:afterOut.includes('찾은 계약 6건'),cardsHidden,
+                        const out={stagesShown,kindsShown,synced,count:before.includes('찾은 계약 7건'),services:before.includes('용역 폴더 4개'),afterOut:afterOut.includes('찾은 계약 6건'),cardsHidden,
                           build:stage.children.map(n=>[n.label,n.contractKind||'',n.contractId||'',(n.children||[]).length]),top:S.tree.map(n=>n.label+' > '+(n.children||[]).map(c=>c.label+'['+(c.contractId||'')+'|'+(c.contractKind||'')+']').join(', ')),plan:contractBranchPlan(S.contracts).map(p=>p.record.id+':'+p.stage+':'+p.kind+':'+p.name),design:(design?.children||[]).map(n=>[n.label,n.contractId||''])};
                         $('#contractStep').hidden=wasHidden;return out;}
                       finally{ContractInput.slots=savedSlots;S.contracts=savedContracts;S.tree=savedTree;S.type=savedType;renderContractInput();renderTree();}}""")
                     assert listed['count'] and listed['services'] and listed['afterOut'] and listed['cardsHidden'], listed
+                    # 2단계 화면 개선: 단계(설계·시공)가 위에, 그 아래 종류(공사·용역·관급자재) 순서
+                    assert listed['stagesShown']==['설계 단계','시공 단계'] and listed['kindsShown']==['공사','용역','관급자재'], listed
                     linked={c for _,_,c,_ in listed['build'] if c}
                     assert {'k1','k3','k4','k5','k6','k7'}<=linked and sum(1 for l,k,c,_ in listed['build'] if c in {'k3','k4','k5','k6'})==4, listed['build']
                     assert not any(l.split(' ',1)[-1].startswith('가상관 환경개선') for l,k,c,_ in listed['build']), listed['build']  # 건명 전체가 아닌 짧은 폴더 이름
@@ -290,6 +292,15 @@ def main():
                       await changeRoute(row.id,original);return {pick,hint,moved,restored:row.destination===original};}""")
                     assert clicked['pick'] and clicked['hint'] and clicked['moved'] and clicked['restored'], clicked
                     result['click_file_then_folder_routes']=clicked
+                    # 2026-11-25: 연결도에서 '보류' 고르기(파일 누른 뒤 보류 칸 누르기)와 펼친 폴더 '전체 선택'. 확인 후 원래대로 돌린다.
+                    held_pick=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup);const original=row.destination;
+                      MapReview.group=parentFolder(row);mapFocusFile(row.id);await new Promise(r=>requestAnimationFrame(()=>r()));const pick=$('#mapHold').classList.contains('hold-pick');
+                      $('#mapHold').click();for(let i=0;i<50&&row.destination;i++)await new Promise(r=>setTimeout(r,100));const held=!row.destination&&row.holdConfirmed&&row.method==='manual';
+                      await changeRoute(row.id,original);
+                      const box=$('#mapSelectAllBox'),count=folderRows(MapReview.group).length;box.click();const selected=S.selected.size;$('#mapSelectAllBox').click();const cleared=S.selected.size;
+                      return {pick,held,restored:row.destination===original,count,selected,cleared};}""")
+                    assert held_pick['pick'] and held_pick['held'] and held_pick['restored'] and held_pick['selected']==held_pick['count']>0 and held_pick['cleared']==0, held_pick
+                    result['hold_pick_and_select_all']=held_pick
                     # 3차 6번: 새 폴더 제안 카드(규칙·AI 제안). 만들기는 서버 검사(test_round3)에서 확인한다.
                     suggested=page.evaluate("""()=>{const row=S.plan.rows.find(r=>!r.done&&r.method!=='manual');const parent=S.plan.paths[0];row.folderSuggestion={parent,name:'내부검토',reason:'가상 근거'};
                       try{renderReview();const box=$('#folderSuggest');return {shown:!box.hidden,text:box.innerText,make:!!document.querySelector('[data-suggest-make]')};}
