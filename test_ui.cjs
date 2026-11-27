@@ -137,6 +137,11 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert.deepEqual(evaluate('S.tree[1].children[1].children.map(n=>n.label)'),['1 예산 수립 및 변경 이력','2 연도별 집행 메모']);
  registry.filter(e=>e.dataset.mmNode==='1.0'&&!e.removed).at(-1).onclick({target:{tagName:'DIV'}});assert(!registry.some(e=>e.dataset.mmRename==='1.0'&&!e.removed));
  registry.filter(e=>e.dataset.mmDelete==='1.0'&&!e.removed).at(-1).onclick({});assert.deepEqual(evaluate('S.tree[1].children.map(n=>n.label)'),['1 예산관리']);
+ // 2026-11-28 LIM: PC에서 직접 만든 폴더(예: 17 실외기 구조 검토)는 빨간 질문 카드로 ‘추가/취소’를 묻는다.
+ $('#reviewStep').hidden=false;evaluate('userFolderPanel.dataset.key="";userFolderPanel.dataset.dismissed="";S.project={id:"p1",tree:[{label:"공통"}]};S.plan={id:"uf",paths:["공통"],ongoing:true,rows:[],userFolders:[{path:"3 시공단계/1 도급공사/17 실외기 구조 검토",files:2}]};renderReview();');
+ assert.equal($('#userFolderPanel').hidden,false);assert($('#userFolderPanel').innerHTML.includes('폴더 구조에 추가할까요?'));assert($('#userFolderPanel').innerHTML.includes('17 실외기 구조 검토'));
+ assert($('#userFolderPanel').innerHTML.includes('id="registerUserFolders"'));assert($('#userFolderPanel').innerHTML.includes('id="dismissUserFolders"'));
+ $('#dismissUserFolders').click();assert.equal($('#userFolderPanel').hidden,true);evaluate('renderReview()');assert.equal($('#userFolderPanel').hidden,true);  // 취소하면 이번 정리에서 다시 묻지 않는다
  evaluate('S.project={id:"p1",tree:[{label:"0 정리할 문서 모음"},{label:"1 공통",children:[{label:"1 보고자료"},{label:"2 공문"}]}]};S.lastJournal=null;S.plan={id:"chk",paths:["1 공통/1 보고자료","1 공통/2 공문"],ongoing:false,rows:[{id:"m",name:"260410 현황 보고자료.docx",relative:"260410 현황 보고/260410 현황 보고자료.docx",destination:"1 공통/1 보고자료",method:"rule",done:false},{id:"a",name:"붙임 공문.pdf",relative:"260410 현황 보고/붙임 공문.pdf",destination:"1 공통/2 공문",method:"rule",done:false},{id:"h",name:"메모.txt",relative:"기타/메모.txt",destination:"",method:"hold",done:false}]};renderReview();');
  assert($('#checkPanel').innerHTML.includes('<b>1개 파일</b>'));assert($('#checkPanel').innerHTML.includes('아래 화살표와'));assert(!$('#checkPanel').innerHTML.includes('메모.txt'));assert.equal($('#doubtToggle'),null);assert.equal($('#undoBar').hidden,true);
  // A collapsed source group and the hold destination both expose the pending file.
