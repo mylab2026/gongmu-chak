@@ -1845,6 +1845,24 @@ def bundle_title(name,parent=''):
     return (title.strip() or name.strip()),ordinal
 
 
+def folder_created(root,source,rows=()):
+    """원래 폴더가 만들어진 시각(ns). Windows는 폴더 생성일(st_birthtime, 없으면 st_ctime)을 쓴다.
+    생성일을 주지 않는 환경(일부 Linux)이나 이미 옮겨진 폴더는 안에 든 파일 중 가장 이른 수정 시각으로 대신한다."""
+    try:
+        stat=safe_path(root,source).stat()
+        birth=getattr(stat,'st_birthtime_ns',None)
+        if birth is None and getattr(stat,'st_birthtime',None) is not None:
+            birth=int(stat.st_birthtime*1e9)
+        if birth is None and os.name=='nt':
+            birth=stat.st_ctime_ns
+        if birth:
+            return birth
+    except (OSError,ValueError):
+        pass
+    times=[r.get('mtime') for r in rows if isinstance(r.get('mtime'),int) and r.get('mtime')]
+    return min(times) if times else None
+
+
 def used_letters(root,destination):
     try:folder=safe_path(root,destination)
     except (OSError,ValueError):return set()
@@ -1903,8 +1921,11 @@ def apply_folder_names(project,plan):
     for destination,bundles in sorted(groups.items()):
         used=used_letters(root,destination);index=0
         def order(source):
+            # 2026-11-27 LIM: 한 표준 폴더에 새 묶음 여러 개가 들어오면 원래 폴더가 만들어진 날짜 순으로 A·B·C.
+            # 날짜를 알 수 없거나 같으면 예전처럼 원래 순번 → 이름 순.
             title,ordinal=bundle_title(PurePosixPath(source).name,PurePosixPath(source).parent.name)
-            return (ordinal if ordinal is not None else 1000,title)
+            created=folder_created(root,source,[r for r,_ in bundles[source]])
+            return (created is None,created or 0,ordinal if ordinal is not None else 1000,title)
         for source in sorted(bundles,key=order):
             items=bundles[source];first=items[0][1].split('/')[0]
             title,_=bundle_title(first,PurePosixPath(source).parent.name)

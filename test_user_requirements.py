@@ -426,4 +426,30 @@ class BundleFirstClassification(unittest.TestCase):
         self.assertEqual(rows['4. 공사전 사진/251209/305호/a.jpg']['destination'],self.D+'/4 공사전 사진')
 
 
+class BundleLettersByCreationDate(unittest.TestCase):
+    """2026-11-27 LIM: 표준 폴더 하나에 새 묶음 여러 개가 들어오면 원래 폴더가 만들어진 날짜 순으로 A·B·C(합성 자료)."""
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();base=Path(self.temp.name)
+        self.root=base/'사업';self.root.mkdir();data=base/'data';data.mkdir()
+        self.patcher=patch.object(app,'DATA',data);self.patcher.start()
+        app.SELECTIONS.clear();app.PLANS.clear();app.SELECTIONS['letters']=str(self.root)
+        self.project=app.save_project({'selection':'letters','name':'날짜 순서','tree':[{'label':app.INBOX},{'label':'1 회의 및 협의기록'}]},False)
+
+    def tearDown(self):self.patcher.stop();self.temp.cleanup()
+
+    def test_letters_follow_folder_creation_order_not_names_or_numbers(self):
+        import time
+        made=[]
+        for i,folder in enumerate(('3. 나중 번호지만 먼저 만든 협의','1. 두 번째로 만든 회의','2. 가장 늦게 만든 회의')):
+            path=self.root/'옛 자료'/folder/'회의록.txt';path.parent.mkdir(parents=True);path.write_bytes(('synthetic %d'%i).encode())
+            stamp=1_780_000_000+i*86400;os.utime(path,(stamp,stamp));made.append(folder);time.sleep(0.05)
+        plan=app.make_plan(self.project['id'],False)
+        names={r['relative'].split('/')[1]:r['keepSub'].split('/')[0] for r in plan['rows']}
+        self.assertEqual(names,{made[0]:'A 나중 번호지만 먼저 만든 협의',made[1]:'B 두 번째로 만든 회의',made[2]:'C 가장 늦게 만든 회의'})
+
+    def test_without_any_date_the_old_number_order_is_kept(self):
+        rows=[{'relative':'x/2. 나/a.txt','mtime':0},{'relative':'x/1. 가/b.txt','mtime':0}]
+        self.assertIsNone(app.folder_created(self.root,'없는 폴더/1. 가',[rows[1]]))
+
+
 if __name__=='__main__':unittest.main()

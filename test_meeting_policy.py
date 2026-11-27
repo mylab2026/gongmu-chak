@@ -3,6 +3,7 @@ import copy
 import hashlib
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -82,10 +83,11 @@ class MeetingFolderPolicy(unittest.TestCase):
         self.execute(plan);self.assertTrue((self.root/self.new/'A 2026-07-27 62동 힌지 교체 회의/내역.xlsx').exists())
 
     def test_confirmed_old_hierarchy_number_is_removed_but_meaningful_numbers_stay(self):
-        self.write(self.old+'/3107-2 260813 실정보고 1차/보고.pdf',b'1')
+        self.write(self.old+'/3107-2 260813 실정보고 1차/보고.pdf',b'1');time.sleep(0.05)
         self.write(self.old+'/2603 62동 자료/메모.txt',b'2')
         plan=self.plan();subs={r['keepSub'] for r in plan['rows']}
-        self.assertEqual(subs,{'B 260813 실정보고 1차','A 2603 62동 자료'})
+        # A·B·C는 원래 폴더가 만들어진 순서(2026-11-27 LIM). 이 검사의 요점은 옛 계층 번호(3107-2)만 지우는 것.
+        self.assertEqual(subs,{'A 260813 실정보고 1차','B 2603 62동 자료'})
 
     def test_ordinal_is_replaced_by_letter_without_inventing_a_date(self):
         self.write(self.old+'/3. 62동 창호 협의/260630 회의록.txt')

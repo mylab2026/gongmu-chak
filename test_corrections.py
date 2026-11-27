@@ -1,6 +1,7 @@
 """Reproduce misfiled contracts and legacy duplicate folders from PC screenshots."""
 import copy
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -149,9 +150,10 @@ class ScreenshotCorrections(unittest.TestCase):
 
     def test_custom_photo_site_and_numbered_folders_are_preserved(self):
         for folder in ('현장1','사진1'):
-            self.write('3 시공단계/1 도급공사 1/3110 사진/'+folder+'/a.jpg',folder.encode())
+            self.write('3 시공단계/1 도급공사 1/3110 사진/'+folder+'/a.jpg',folder.encode());time.sleep(0.05)
         rows=self.plan()['rows']
-        self.assertEqual({r['keepSub'] for r in rows},{'B 현장1','A 사진1'})
+        # 2026-11-27 LIM: 한 칸에 새 묶음이 여럿이면 원래 폴더가 만들어진 순서로 A·B·C(현장1을 먼저 만들었다)
+        self.assertEqual({r['keepSub'] for r in rows},{'A 현장1','B 사진1'})
         self.assertTrue(all(r['destination'].endswith('/11 사진') for r in rows))
 
     def test_legacy_work_order_site_maps_to_round_without_extra_site_folder(self):
