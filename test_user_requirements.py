@@ -293,4 +293,137 @@ class HeldFilesGoToInbox(unittest.TestCase):
         self.assertEqual([m['source'] for m in second['inboxMoves']],[])
 
 
+class BundleFirstClassification(unittest.TestCase):
+    """2026-11-27 63동 수동정리 비교 보고서 재현(합성 자료): 기존 폴더·첨부 묶음을 먼저 지키고,
+    여러 표준 항목이 섞인 폴더만 나눈다. 학내 AI는 호출하지 않는다."""
+    C='3 시공단계/1 도급공사 1'
+    S='3 시공단계/2 설계의도 구현'
+    D='2 설계단계/1 설계 용역'
+
+    def setUp(self):
+        import copy
+        self.temp=tempfile.TemporaryDirectory();self.base=Path(self.temp.name)
+        self.root=self.base/'사업';self.root.mkdir();data=self.base/'data';data.mkdir()
+        self.patcher=patch.object(app,'DATA',data);self.patcher.start()
+        self.gateway=patch.object(app,'gateway',side_effect=AssertionError('no AI in tests'));self.gateway.start()
+        app.SELECTIONS.clear();app.PLANS.clear();app.SELECTIONS['bundle']=str(self.root)
+        tree=[{'label':app.INBOX}]+copy.deepcopy(app.TEMPLATES['design'])
+        stage=next(n for n in tree if n['label']=='3 시공단계')
+        service=next(n for n in stage['children'] if n['label']=='2 용역1')
+        service.update(label='2 설계의도 구현',contractId='intent',contractKind='service')
+        stage['children'][0].update(contractId='cons',contractKind='construction')
+        self.tree=tree
+
+    def tearDown(self):self.gateway.stop();self.patcher.stop();self.temp.cleanup()
+
+    def write(self,relative,data=None):
+        p=self.root/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data or ('SYNTHETIC '+relative).encode());return p
+
+    def project(self,contracts=()):
+        project=app.save_project({'selection':'bundle','name':'묶음 우선','type':'design','tree':self.tree},False)
+        project['contracts']=list(contracts);app.store_project(project);return project
+
+    def contract(self,ident,relative,kind,title,amendment=False):
+        return {'id':ident,'name':Path(relative).name,'sourceRelative':relative,'sourceHash':app.file_hash(self.root/relative),
+                'analysis':{'kind':kind,'kind_confirmed':True,'title':title,'party':'합성 업체','signed_date':'2026-01-10','amendment':amendment}}
+
+    def plan(self,project):
+        plan=app.make_plan(project['id'],False)
+        return plan,{r['relative']:r for r in plan['rows'] if r.get('kind')!='directory'}
+
+    def final(self,row):
+        return app.effective_folder(row,row['destination'])+'/'+row['name'] if row['destination'] else ''
+
+    def test_punch_list_bundle_is_not_split_by_inner_photo_folders(self):
+        base='2. 시공단계/2. 공사/26. PUNCH LIST'
+        for rel in (base+'/260512 PUNCH LIST.xlsm',base+'/260512 사진/현장1.jpg',base+'/260601 게시판 사진/현장2.png'):self.write(rel)
+        plan,rows=self.plan(self.project())
+        self.assertEqual({self.final(r) for r in rows.values()},{self.C+'/12 준공계/A PUNCH LIST/260512 PUNCH LIST.xlsm',
+            self.C+'/12 준공계/A PUNCH LIST/260512 사진/현장1.jpg',self.C+'/12 준공계/A PUNCH LIST/260601 게시판 사진/현장2.png'})
+
+    def test_defect_folder_keeps_its_photo_subfolder(self):
+        self.write('2. 시공단계/2. 공사/27. 하자/하자 목록.xlsx');self.write('2. 시공단계/2. 공사/27. 하자/1. 관련사진/누수.jpg')
+        plan,rows=self.plan(self.project())
+        self.assertTrue(all(r['destination']==self.C+'/16 하자' for r in rows.values()),[r['destination'] for r in rows.values()])
+        self.assertTrue(self.final(rows['2. 시공단계/2. 공사/27. 하자/1. 관련사진/누수.jpg']).endswith('/16 하자/A 관련사진/누수.jpg'))
+
+    def test_two_approval_bundles_stay_separate_without_name_collision(self):
+        self.write('2. 시공단계/2. 공사/1. 시행품의/0. 결재참조.pdf',b'A');self.write('2. 시공단계/2. 공사/2. 구매품의/0. 결재참조.pdf',b'B')
+        project=self.project();plan,rows=self.plan(project)
+        got={rel:self.final(r) for rel,r in rows.items()}
+        approval=self.C+'/1 최초 품의 및 최초 계약서/1 품의서'
+        self.assertEqual(got,{'2. 시공단계/2. 공사/1. 시행품의/0. 결재참조.pdf':approval+'/A 시행품의/0. 결재참조.pdf',
+                              '2. 시공단계/2. 공사/2. 구매품의/0. 결재참조.pdf':approval+'/B 구매품의/0. 결재참조.pdf'})
+        self.assertEqual(app.move_check(plan['id'],[{'id':r['id'],'destination':r['destination']} for r in rows.values()])['renamed'],[])
+
+    def test_registered_change_contract_goes_to_its_round_not_the_first_contract_folder(self):
+        first='2. 시공단계/2. 공사/3. 계약/최초/계약서.pdf';one='2. 시공단계/2. 공사/3. 계약/변경1차/원인행위변경.pdf'
+        three='2. 시공단계/2. 공사/3. 계약/변경3차/계약변경.pdf';unknown='2. 시공단계/2. 공사/3. 계약/원인행위변경(재송부).pdf'
+        for rel in (first,one,three,unknown):self.write(rel)
+        records=[self.contract('cons',first,'construction','합성 건축공사')]
+        for i,rel in enumerate((one,three,unknown)):
+            records[0].setdefault('versions',[]).append({**self.contract('cons-v%d'%i,rel,'construction','합성 건축공사',True),'name':Path(rel).name})
+        plan,rows=self.plan(self.project(records))
+        self.assertEqual(rows[first]['destination'],self.C+'/1 최초 품의 및 최초 계약서/2 계약서')
+        self.assertEqual(rows[one]['destination'],self.C+'/7 설계변경/1 1차 설계변경')
+        self.assertEqual(self.final(rows[three]),self.C+'/7 설계변경/3 3차 설계변경/계약변경.pdf')
+        # 차수를 알 수 없는 변경계약은 계약서 칸에 두되 차수 확인을 받는다.
+        self.assertTrue(rows[unknown]['amendmentRoundReview'] and rows[unknown]['reviewRequired'])
+
+    def test_change_round_approval_folder_goes_to_that_round(self):
+        self.write('2. 시공단계/2. 공사/1. 품의/2. 변경1차 시행품의/합의서.pdf');self.write('2. 시공단계/2. 공사/1. 품의/1. 구매품의/산출서.pdf')
+        plan,rows=self.plan(self.project())
+        self.assertEqual(rows['2. 시공단계/2. 공사/1. 품의/2. 변경1차 시행품의/합의서.pdf']['destination'],self.C+'/7 설계변경/1 1차 설계변경')
+
+    def test_special_top_level_work_is_held_as_one_bundle_and_moves_whole_into_inbox(self):
+        files=['6. 석면관련/1. 경과보고서/붙임1. 현장사진/현장.jpg','6. 석면관련/4. 관련공문/1. 출석요구/공문.pdf',
+               '6. 석면관련/2. 고용노동부 관계서류/작업일보 제출본.pdf','6. 석면관련/석면조사 보고서.pdf']
+        for rel in files:self.write(rel)
+        self.write('2. 시공단계/2. 공사/14. 작업일보/작업일보 0105.pdf')
+        project=self.project();plan,rows=self.plan(project)
+        for rel in files:
+            self.assertEqual((rows[rel]['destination'],rows[rel].get('bundleHold')),('','6. 석면관련'),rel+' · '+rows[rel]['reason'])
+        before={p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file()}
+        ready=[{'id':r['id'],'destination':r['destination']} for r in rows.values() if r['destination']]
+        journal=app.execute_all(plan['id'],ready)
+        for rel in files:self.assertTrue((self.root/app.INBOX/rel).is_file(),rel)  # 원래 폴더 구조째 정리할 문서 모음으로
+        self.assertFalse((self.root/'6. 석면관련').exists())
+        app.undo(journal['id'])
+        self.assertEqual({p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file() and '.gongmu-chak' not in p.parts},before)
+
+    def test_custom_work_folder_with_photo_subfolder_is_held_whole(self):
+        unit='2. 시공단계/2. 공사/11. 실외기 구조 검토'
+        for rel in (unit+'/최종 성과품/보고서.pdf',unit+'/현황 사진/지붕.jpg',unit+'/0준공도면(2000)/구조/평면.dwg'):self.write(rel)
+        plan,rows=self.plan(self.project())
+        self.assertTrue(all(not r['destination'] and r.get('bundleHold')==unit for r in rows.values()),{k:r['destination'] for k,r in rows.items()})
+
+    def test_mixed_folder_is_still_split_by_its_standard_items(self):
+        # 여러 표준 항목(착공계·작업일보·사진)이 섞인 사용자 폴더는 나눈다.
+        mixed='2. 시공단계/2. 공사/받은 자료'
+        for rel in (mixed+'/착공계/착공계.hwp',mixed+'/작업일보/0105.pdf',mixed+'/사진/a.jpg'):self.write(rel)
+        plan,rows=self.plan(self.project())
+        self.assertEqual({rel:r['destination'] for rel,r in rows.items()},{mixed+'/착공계/착공계.hwp':self.C+'/3 착공계',
+            mixed+'/작업일보/0105.pdf':self.C+'/15 작업일보',mixed+'/사진/a.jpg':self.C+'/11 사진'})
+
+    def test_confirmed_contract_links_a_differently_named_service_folder(self):
+        root='2. 시공단계/3. 용역/2. 디자인 감리'
+        contract=root+'/2. 계약/원인행위(설계의도 구현 용역).pdf'
+        for rel in (contract,root+'/1. 품의/1. 구매품의/산출서.pdf',root+'/3. 공문/3. 준공계/완료보고서.pdf'):self.write(rel)
+        plan,rows=self.plan(self.project([self.contract('intent',contract,'service','설계의도 구현 용역')]))
+        self.assertEqual(rows[contract]['destination'],self.S+'/1 최초 품의 및 최초 계약서/2 계약서')
+        self.assertEqual(rows[root+'/1. 품의/1. 구매품의/산출서.pdf']['destination'],self.S+'/1 최초 품의 및 최초 계약서/1 품의서')
+        self.assertEqual(rows[root+'/3. 공문/3. 준공계/완료보고서.pdf']['destination'],self.S+'/7 완수계/1 완수계 공문 및 검사 조서')
+
+    def test_handover_inside_the_construction_folder_is_the_contractors_completion_bundle(self):
+        self.write('2. 시공단계/2. 공사/24. 인수인계/04.열쇠 인계 확인서/열쇠인계 목록.xlsx')
+        plan,rows=self.plan(self.project())
+        row=rows['2. 시공단계/2. 공사/24. 인수인계/04.열쇠 인계 확인서/열쇠인계 목록.xlsx']
+        self.assertEqual(self.final(row),self.C+'/12 준공계/A 인수인계/04.열쇠 인계 확인서/열쇠인계 목록.xlsx')
+
+    def test_top_level_before_construction_photos_go_to_the_design_service(self):
+        self.write('4. 공사전 사진/251209/305호/a.jpg')
+        plan,rows=self.plan(self.project())
+        self.assertEqual(rows['4. 공사전 사진/251209/305호/a.jpg']['destination'],self.D+'/4 공사전 사진')
+
+
 if __name__=='__main__':unittest.main()

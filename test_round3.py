@@ -122,10 +122,15 @@ class Round3(unittest.TestCase):
 
     def test_schedule_folder_follows_start_documents_in_templates_and_routes(self):
         # 2026-11-25: 설계 용역 착수계·도급공사 착공계 다음 번호에 '공정표' 폴더(뒤 번호는 하나씩 밀림)
-        for typ, stage, branch, after in (('planning', '3 설계단계', '1 설계 용역', '3 착수계'), ('planning', '4 시공단계', '1 도급공사', '3 착공계'),
-                                          ('design', '2 설계단계', '1 설계 용역', '3 착수계'), ('construction', '3 시공단계', '1 도급공사 1', '3 착공계')):
+        # 2026-11-27(63동 수동정리): 설계 용역은 착수계 다음 '4 공사전 사진', 그다음 '5 공정표'. 도급공사는 끝에 '16 하자'.
+        for typ, stage, branch, after, schedule in (('planning', '3 설계단계', '1 설계 용역', '4 공사전 사진', '5 공정표'), ('planning', '4 시공단계', '1 도급공사', '3 착공계', '4 공정표'),
+                                                    ('design', '2 설계단계', '1 설계 용역', '4 공사전 사진', '5 공정표'), ('construction', '3 시공단계', '1 도급공사 1', '3 착공계', '4 공정표')):
             kids = [c['label'] for s in app.TEMPLATES[typ] if s['label'] == stage for n in s['children'] if n['label'] == branch for c in n['children']]
-            self.assertEqual(kids[kids.index(after) + 1], '4 공정표', (typ, branch))
+            self.assertEqual(kids[kids.index(after) + 1], schedule, (typ, branch))
+            if '설계 용역' in branch:
+                self.assertEqual(kids[2:4], ['3 착수계', '4 공사전 사진'], (typ, branch))
+            else:
+                self.assertEqual(kids[-1], '16 하자', (typ, branch))
         source = self.root / '2. 시공단계/2. 공사/5. 공정표/실시공정표 2차.xlsx'
         source.parent.mkdir(parents=True); source.write_bytes(b'SYNTHETIC SCHEDULE')
         plan = app.make_plan(self.project['id'], False)

@@ -39,9 +39,11 @@ class CheckGroups(unittest.TestCase):
             self.assertEqual(self.rows[rel]['checkUnit'], TOPIC, rel)
 
     def test_lone_filename_guess_inside_a_held_folder_needs_review(self):
+        # 2026-11-27(63동 수동정리 비교): 특수 업무 묶음(석면관련) 안의 파일은 파일 이름 한 단어로 표준 칸에 흩지 않고 묶음째 보류한다.
         guess = self.rows[TOPIC + '/석면조사 보고서 추가.pdf']
-        self.assertTrue(guess['destination'], guess['reason'])
-        self.assertTrue(guess.get('unitReview'), guess['reason'])
+        self.assertEqual(guess['destination'], '', guess['reason'])
+        self.assertEqual(guess.get('bundleHold'), TOPIC, guess['reason'])
+        self.assertTrue(all(self.rows[rel].get('bundleHold') == TOPIC and not self.rows[rel]['destination'] for rel in FILES[3:9]))
         self.assertFalse(self.rows['2. 시공단계/2. 공사/14. 작업일보/작업일보 0105.pdf'].get('unitReview'))
 
     def test_group_confirm_and_group_retarget_keep_the_folder_name(self):

@@ -133,7 +133,7 @@ class ScreenshotCorrections(unittest.TestCase):
     def test_old_numbered_standard_folders_merge_without_duplicate_nesting(self):
         sources=[
           ('2 설계단계/1 설계 용역/2101 최초 품의 및 최초 계약서/품의서.docx','2 설계단계/1 설계 용역/1 최초 품의 및 최초 계약서/1 품의서'),
-          ('2 설계단계/1 설계 용역/8 완수계/2107-1 완수계 공문 및 검사 조서/공문.txt','2 설계단계/1 설계 용역/8 완수계/1 완수계 공문 및 검사 조서'),
+          ('2 설계단계/1 설계 용역/8 완수계/2107-1 완수계 공문 및 검사 조서/공문.txt','2 설계단계/1 설계 용역/9 완수계/1 완수계 공문 및 검사 조서'),  # 4 공사전 사진 추가(2026-11-27)로 9번
           ('3 시공단계/1 도급공사 1/3113 작업일보/일지.docx','3 시공단계/1 도급공사 1/15 작업일보'),
           ('2 설계단계/1 설계 용역/1 최초 품의 및 최초 계약서/1 공통/14 주요 보고자료(결재선 없는 중간 보고자료)/3. 보수공사 보고/보고자료.pptx','1 공통/3 주요 보고자료(내부보고 자료)')]
         for relative,_ in sources:self.write(relative,relative.encode())

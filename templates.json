@@ -212,11 +212,15 @@
               "children": []
             },
             {
-              "label": "4 공정표",
+              "label": "4 공사전 사진",
               "children": []
             },
             {
-              "label": "5 지출서류",
+              "label": "5 공정표",
+              "children": []
+            },
+            {
+              "label": "6 지출서류",
               "children": [
                 {
                   "label": "1 선금",
@@ -233,11 +237,11 @@
               ]
             },
             {
-              "label": "6 회의 및 협의기록",
+              "label": "7 회의 및 협의기록",
               "children": []
             },
             {
-              "label": "7 설계변경",
+              "label": "8 설계변경",
               "children": [
                 {
                   "label": "1 1차 설계변경",
@@ -250,7 +254,7 @@
               ]
             },
             {
-              "label": "8 완수계",
+              "label": "9 완수계",
               "children": [
                 {
                   "label": "1 완수계 공문 및 검사 조서",
@@ -263,7 +267,7 @@
               ]
             },
             {
-              "label": "9 기타공문",
+              "label": "10 기타공문",
               "children": [
                 {
                   "label": "1 수신",
@@ -491,6 +495,10 @@
             },
             {
               "label": "15 작업일보",
+              "children": []
+            },
+            {
+              "label": "16 하자",
               "children": []
             }
           ]
@@ -799,11 +807,15 @@
               "children": []
             },
             {
-              "label": "4 공정표",
+              "label": "4 공사전 사진",
               "children": []
             },
             {
-              "label": "5 지출서류",
+              "label": "5 공정표",
+              "children": []
+            },
+            {
+              "label": "6 지출서류",
               "children": [
                 {
                   "label": "1 선금",
@@ -820,11 +832,11 @@
               ]
             },
             {
-              "label": "6 회의 및 협의기록",
+              "label": "7 회의 및 협의기록",
               "children": []
             },
             {
-              "label": "7 설계변경",
+              "label": "8 설계변경",
               "children": [
                 {
                   "label": "1 1차 설계변경",
@@ -837,7 +849,7 @@
               ]
             },
             {
-              "label": "8 완수계",
+              "label": "9 완수계",
               "children": [
                 {
                   "label": "1 완수계 공문 및 검사 조서",
@@ -850,7 +862,7 @@
               ]
             },
             {
-              "label": "9 기타공문",
+              "label": "10 기타공문",
               "children": [
                 {
                   "label": "1 수신",
@@ -992,6 +1004,10 @@
             },
             {
               "label": "15 작업일보",
+              "children": []
+            },
+            {
+              "label": "16 하자",
               "children": []
             }
           ]
@@ -1407,6 +1423,10 @@
             },
             {
               "label": "15 작업일보",
+              "children": []
+            },
+            {
+              "label": "16 하자",
               "children": []
             }
           ]
