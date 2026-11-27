@@ -53,3 +53,19 @@ jobs:
         with:
           name: windows-test-${{ matrix.os }}
           path: dist/GongmuChak-Windows-Test-0.11.4.zip
+  exe:
+    # 공무착착 실행 파일(EXE): Windows에서 만들고, 실제로 실행해 화면·예시 폴더·PDF/사진 미리보기를 확인한 뒤 올린다.
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: python -m pip install -r requirements.txt -r requirements-exe.txt
+      - run: python tools/build_exe.py --output dist
+      - run: python tools/exe_smoke.py dist/GongmuChak-0.11.4.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gongmuchak-exe
+          path: dist/GongmuChak-0.11.4.exe
