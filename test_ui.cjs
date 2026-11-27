@@ -141,7 +141,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert(!registry.some(e=>!e.removed&&e.dataset.mapFile==='h'));
  const heldMarker=registry.filter(e=>!e.removed&&e.dataset.mapReview==='h').at(-1);assert(heldMarker);heldMarker.click();evaluate('drawMapEdges()');
  assert.equal(evaluate('MapReview.file'),'h');assert.equal(evaluate('MapReview.retargeting'),true);
- assert($('#mapCaption').innerHTML.includes('원래 위치에 둘 파일'));
+ assert($('#mapCaption').innerHTML.includes('보류할 파일이면'));
  assert($('#mapApprovals').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
  const heldConfirm=registry.filter(e=>!e.removed&&e.dataset.routeConfirm==='h').at(-1);await heldConfirm.click();
  assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');assert.equal(evaluate('needsCheck(S.plan.rows.find(r=>r.id==="h"))'),false);

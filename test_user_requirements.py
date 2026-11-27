@@ -198,4 +198,99 @@ class UserRequirements(unittest.TestCase):
         finally:fixture.tearDown()
 
 
+class HeldFilesGoToInbox(unittest.TestCase):
+    """2026-11-27 LIM: 정리를 마치면 정리 전 폴더가 남지 않아야 한다. 보류는 원래 폴더 이름째 정리할 문서 모음으로."""
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.base=Path(self.temp.name)
+        self.root=self.base/'사업';self.root.mkdir();data=self.base/'data';data.mkdir()
+        self.patcher=patch.object(app,'DATA',data);self.patcher.start()
+        self.gateway=patch.object(app,'gateway',side_effect=AssertionError('no AI in tests'));self.gateway.start()
+        app.SELECTIONS.clear();app.PLANS.clear();app.SELECTIONS['held']=str(self.root)
+        self.tree=[{'label':app.INBOX},{'label':'1 공통','children':[{'label':'1 사업계획서'}]},{'label':'3 시공단계','children':[{'label':'1 공문'}]}]
+        self.project=app.save_project({'selection':'held','name':'보류 정리','tree':self.tree},False)
+        self.inbox=self.root/app.INBOX
+
+    def tearDown(self):self.gateway.stop();self.patcher.stop();self.temp.cleanup()
+
+    def write(self,relative,data=b'SYNTHETIC'):
+        p=self.root/relative;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data);return p
+
+    def files(self):
+        return {p.relative_to(self.root).as_posix():p.read_bytes() for p in self.root.rglob('*') if p.is_file() and '.gongmu-chak' not in p.parts}
+
+    def dirs(self):
+        return {p.relative_to(self.root).as_posix() for p in self.root.rglob('*') if p.is_dir() and '.gongmu-chak' not in p.parts}
+
+    def run_all(self,assign,ongoing=False):
+        plan=app.make_plan(self.project['id'],ongoing)
+        for r in plan['rows']:
+            r['destination']=assign.get(r['relative'],'')
+        return plan,app.execute_all(plan['id'],[{'id':r['id'],'destination':r['destination']} for r in plan['rows'] if r['destination']])
+
+    def test_held_files_keep_folder_path_in_inbox_and_old_folders_disappear(self):
+        self.write('옛자료/설계/과업지시서.pdf',b'A');self.write('옛자료/설계/메모.txt',b'B')
+        self.write('옛자료/기타/하위/참고.hwp',b'C');self.write('옛자료/기타/하위/~$참고.hwp',b'lock')
+        self.write('옛자료/기타/Thumbs.db',b'thumb');self.write('현장 사진.jpg',b'D')
+        self.write('1 공통/1 사업계획서/표준폴더 보류.pdf',b'E')
+        (self.root/'옛자료/빈 폴더').mkdir()
+        before=self.files()
+        plan,journal=self.run_all({'옛자료/설계/과업지시서.pdf':'3 시공단계/1 공문'})
+        self.assertNotIn('Thumbs.db',[r['name'] for r in plan['rows']])  # 찌꺼기는 문서 행이 아니다
+        self.assertEqual((self.root/'3 시공단계/1 공문/과업지시서.pdf').read_bytes(),b'A')
+        self.assertEqual((self.inbox/'옛자료/설계/메모.txt').read_bytes(),b'B')  # 일부만 보류: 같은 폴더 이름으로
+        self.assertEqual((self.inbox/'옛자료/기타/하위/참고.hwp').read_bytes(),b'C')  # 폴더 덩어리 경로 유지
+        self.assertEqual((self.inbox/'현장 사진.jpg').read_bytes(),b'D')  # 사업 폴더 바로 아래 낱개 파일은 모음 바로 아래
+        self.assertEqual((self.root/'1 공통/1 사업계획서/표준폴더 보류.pdf').read_bytes(),b'E')  # 표준 폴더에 있던 파일은 그 자리
+        left=self.inbox/app.LEFTOVER_FOLDER
+        self.assertTrue((left/'옛자료/기타/Thumbs.db').is_file() and (left/'옛자료/기타/하위/~$참고.hwp').is_file())
+        self.assertFalse((self.root/'옛자료').exists())  # 정리 전 폴더는 하나도 남지 않는다
+        self.assertEqual({p.name for p in self.root.iterdir()}-{'.gongmu-chak'},{app.INBOX,'1 공통','3 시공단계'})
+        self.assertEqual(sorted(b for b in self.files().values()),sorted(before.values()))  # 바이트 그대로, 잃은 파일 없음
+        self.assertTrue(all(r['done'] for r in plan['rows'] if r['relative']!='1 공통/1 사업계획서/표준폴더 보류.pdf'))
+        app.undo(journal['id'])
+        self.assertEqual(self.files(),before)
+        self.assertIn('옛자료/빈 폴더',self.dirs())
+        self.assertFalse(self.inbox.exists() and any(self.inbox.iterdir()))
+
+    def test_name_clash_in_inbox_gets_number_and_undo_restores_name(self):
+        self.write(app.INBOX+'/현장 사진.jpg',b'OLD');self.write('현장 사진.jpg',b'NEW');self.write('옛/보고.pdf',b'R')
+        before=self.files()
+        plan,journal=self.run_all({'옛/보고.pdf':'1 공통/1 사업계획서'})
+        self.assertEqual((self.inbox/'현장 사진.jpg').read_bytes(),b'OLD')  # 덮어쓰지 않는다
+        self.assertEqual((self.inbox/'현장 사진 (2).jpg').read_bytes(),b'NEW')
+        app.undo(journal['id']);self.assertEqual(self.files(),before)
+
+    def test_one_failed_move_does_not_keep_other_empty_old_folders(self):
+        self.write('가/문서.pdf',b'1');self.write('나/잠긴 문서.pdf',b'2');(self.root/'다 빈 폴더').mkdir()
+        real=app.move_no_replace
+        def locked(source,destination):
+            if source.name=='잠긴 문서.pdf':raise PermissionError('다른 프로그램이 사용 중')
+            return real(source,destination)
+        with patch.object(app,'move_no_replace',side_effect=locked):
+            plan,journal=self.run_all({'가/문서.pdf':'1 공통/1 사업계획서','나/잠긴 문서.pdf':'3 시공단계/1 공문'})
+        self.assertNotIn('cleanupSkipped',journal);self.assertIn('cleanupPartial',journal)
+        self.assertFalse((self.root/'가').exists());self.assertFalse((self.root/'다 빈 폴더').exists())
+        self.assertTrue((self.root/'나/잠긴 문서.pdf').is_file())  # 실패한 파일과 그 폴더만 남는다
+
+    def test_continue_organizing_leaves_held_files_in_inbox(self):
+        self.write(app.INBOX+'/낱개 메모.txt',b'M');self.write(app.INBOX+'/받은 폴더/회의록.hwp',b'H');self.write(app.INBOX+'/공문.pdf',b'P')
+        plan,journal=self.run_all({app.INBOX+'/공문.pdf':'3 시공단계/1 공문'},ongoing=True)
+        self.assertEqual(journal['inboxMoves'],[])
+        self.assertEqual((self.inbox/'낱개 메모.txt').read_bytes(),b'M')
+        self.assertEqual((self.inbox/'받은 폴더/회의록.hwp').read_bytes(),b'H')
+
+    def test_file_placed_by_earlier_run_is_not_pulled_back_into_inbox(self):
+        self.write('옛/결재.pdf',b'K')
+        plan,first=self.run_all({'옛/결재.pdf':'1 공통/1 사업계획서'})
+        (self.root/'1 공통/1 사업계획서/하위').mkdir()
+        app.move_no_replace(self.root/'1 공통/1 사업계획서/결재.pdf',self.root/'1 공통/1 사업계획서/하위/결재.pdf')
+        app.store_project(app.get_project(self.project['id']))
+        hist=app.DATA/'history'/(first['id']+'.json');j=app.read_json(hist)
+        j['entries'][0]['destination']='1 공통/1 사업계획서/하위/결재.pdf';app.atomic_json(hist,j)
+        self.write(app.INBOX+'/새 공문.pdf',b'Z')
+        plan,second=self.run_all({app.INBOX+'/새 공문.pdf':'3 시공단계/1 공문'})
+        self.assertTrue((self.root/'1 공통/1 사업계획서/하위/결재.pdf').is_file())
+        self.assertEqual([m['source'] for m in second['inboxMoves']],[])
+
+
 if __name__=='__main__':unittest.main()

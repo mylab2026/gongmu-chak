@@ -243,8 +243,8 @@ def scan(root, ongoing=False, inbox=INBOX):
                    and not (hasattr(Path(folder) / d, 'is_junction') and (Path(folder) / d).is_junction())]
         for name in files:
             path = Path(folder) / name
-            if path.is_symlink() or name.startswith('~$'):
-                continue
+            if path.is_symlink() or name.startswith('~$') or name.casefold() in LEFTOVER_NAMES:
+                continue  # 오피스 잠금 파일·Thumbs.db·desktop.ini는 문서가 아니다(옮긴 뒤 gather_leftovers가 모은다).
             stat = path.stat()
             result.append({'relative': path.relative_to(root).as_posix(), 'name': name,
                            'size': stat.st_size, 'mtime': stat.st_mtime_ns})
@@ -3579,7 +3579,8 @@ def execute(plan_id, choices):
 
 
 def hold_rows(plan_id, row_ids):
-    """연결도에서 '보류'를 고른 파일: 목적지를 비우고 원래 위치에 두기로 확정한다(사용자 선택이라 자동 규칙이 덮지 않는다)."""
+    """연결도에서 '보류'를 고른 파일: 목적지를 비우고 보류로 확정한다(사용자 선택이라 자동 규칙이 덮지 않는다).
+    2026-11-27부터 보류 파일은 파일 이동 실행 때 원래 폴더 경로째 '0 정리할 문서 모음'으로 옮긴다(move_held_to_inbox)."""
     plan = get_plan(plan_id)
     if plan.get('finished') or any(j['planId'] == plan_id and j['status'] in ('pending', 'running') for j in JOBS.values()):
         fail('정리안을 확인하거나 AI 검토가 끝난 후 바꿔주세요.')
@@ -3593,7 +3594,7 @@ def hold_rows(plan_id, row_ids):
     rows = list({r['id']: r for r in rows + [r for r in plan['rows'] if not r['done'] and r.get('folderGroup') in groups]}.values())
     project = get_project(plan['projectId'])
     change = {'destination': '', 'method': 'manual', 'aiChecked': True, 'confidence': 1, 'reviewRequired': False, 'reviewed': True,
-              'holdConfirmed': True, 'contextOverride': True, 'historyReview': False, 'reason': '사용자가 원래 위치에 두기(보류)로 정했습니다.'}
+              'holdConfirmed': True, 'contextOverride': True, 'historyReview': False, 'reason': '사용자가 보류로 정했습니다. 파일 이동 실행 때 정리할 문서 모음으로 옮깁니다.'}
     for row in rows:
         project.setdefault('classificationCache', {})[cache_key(plan, row)] = change
         row.update(change)
@@ -3738,13 +3739,92 @@ def execute_all(plan_id, choices, auto_rename=False):
     journal['createdFolders'] = created
     journal['removedFolders'] = []
     journal['keptFolders'] = []
-    if all(e['status'] in ('moved', 'already-in-place') for e in journal['entries']):
-        cleanup_empty_old_folders(project, plan, journal)
-    else:
-        journal['cleanupSkipped'] = '이동 실패가 있어 기존 폴더 정리를 건너뛰었습니다.'
+    move_held_to_inbox(project, plan, journal)
+    if not all(e['status'] in ('moved', 'already-in-place') for e in journal['entries'] + journal['inboxMoves']):
+        # 2026-11-27: 실패 1건 때문에 빈 옛 폴더까지 전부 남던 문제. rmdir은 빈 폴더만 지우므로 실패한 파일의 폴더는 그대로 남는다.
+        journal['cleanupPartial'] = '이동하지 못한 파일이 있는 기존 폴더는 남겨 두었습니다.'
+    cleanup_empty_old_folders(project, plan, journal)
     atomic_json(DATA / 'history' / (journal['id'] + '.json'), journal)
     record_run_event('폴더 정리 결과',plan=plan,journal=journal)
     return journal
+
+
+def app_placed_files(project):
+    """앞선 정리에서 공무착착이 옮겨 둔 파일(현재 위치). 다시 정리할 때 보류가 되어도 정리할 문서 모음으로 빼지 않는다."""
+    placed = set()
+    for p in (DATA / 'history').glob('*.json'):
+        j = read_json(p)
+        if not j or j.get('projectId') != project['id']:
+            continue
+        for e in j.get('entries', []):
+            if e.get('status') == 'moved':
+                placed.add(e['destination'].casefold())
+    return placed
+
+
+def move_held_to_inbox(project, plan, journal):
+    """2026-11-27 LIM: 정리를 마치면 정리 전 폴더는 남지 않아야 한다. 목적지가 없는 보류 파일은 원래 자리에 두지 않고
+    '0 정리할 문서 모음'으로 옮긴다.
+    - 폴더 안 파일은 원래 폴더 경로를 그대로 붙인다(폴더 덩어리 유지, 일부만 보류면 그 일부만 같은 폴더 이름으로).
+    - 사업 폴더 바로 아래 낱개 파일은 정리할 문서 모음 바로 아래로 간다.
+    - 이미 정리할 문서 모음 안(계속 정리하기), 표준 폴더에 바로 있는 파일, 앞선 정리에서 공무착착이 옮겨 둔 파일은 그대로 둔다.
+    - 같은 이름이 있으면 번호를 붙이고 덮어쓰지 않는다. 되돌리기는 inboxMoves로 원래 경로·이름에 돌려놓는다."""
+    root = root_available(project)
+    inbox = inbox_of(project)
+    standard = {p.casefold() for p in tree_paths(project['tree'])}
+    placed = app_placed_files(project)
+    journal['inboxMoves'], journal['inboxDirs'] = [], []
+    work, taken = [], set()
+    for row in plan['rows']:
+        if row['done'] or row.get('destination'):
+            continue
+        relative = row['relative']
+        parent = str(PurePosixPath(relative).parent)
+        if relative.casefold().startswith(inbox.casefold() + '/') or parent.casefold() in standard or relative.casefold() in placed:
+            continue
+        folder = inbox if parent in ('.', '') else inbox + '/' + parent
+        name = row['name']
+        try:
+            target = safe_path(root, folder + '/' + name)
+            if str(target).casefold() in taken or target.exists():
+                name = numbered_name(root, folder, name, taken)
+                target = safe_path(root, folder + '/' + name)
+        except ValueError as error:
+            row['executionError'] = str(error)
+            continue
+        taken.add(str(target).casefold())
+        entry = {'id': row['id'], 'source': relative, 'destination': folder + '/' + name, 'kind': row.get('kind', 'file'),
+                 'fingerprint': row.get('fingerprint') or '', 'status': 'prepared'}
+        if name != row['name']:
+            entry['renamedFrom'] = row['name']
+        journal['inboxMoves'].append(entry)
+        work.append((row, entry))
+    if not work:
+        return
+    writer = JournalWriter(DATA / 'history' / (journal['id'] + '.json'), journal)
+    writer.flush()  # 옮기기 전에 모든 계획을 기록해 둔다(중단돼도 되돌리기가 폴더 상태로 판단).
+    moved = []
+    for row, entry in work:
+        try:
+            source, target = safe_path(root, entry['source']), safe_path(root, entry['destination'])
+            if not (source.is_dir() if entry['kind'] == 'directory' else source.is_file()) or not unchanged(source, row):
+                fail(row['name'] + ' · 검토 후 파일이 바뀌었거나 없어졌습니다.')
+            made = [p.relative_to(root).as_posix() for p in reversed(target.parents) if p != root and root in p.parents and not p.exists()]
+            move_no_replace(source, target)
+            journal['inboxDirs'].extend(made)
+            entry['status'] = 'moved'
+            row['done'] = True
+            row['movedToInbox'] = entry['destination']
+            row.pop('executionError', None)
+            if entry['kind'] != 'directory':
+                moved.append((entry['source'], entry['destination']))
+        except (OSError, ValueError) as error:
+            entry['status'] = 'held'
+            entry['error'] = str(error)
+            row['executionError'] = str(error)
+        writer.step()
+    writer.flush()
+    carry_collection_marks(project['id'], moved)
 
 
 LEFTOVER_FOLDER = '정리 후 남은 파일'
@@ -3832,8 +3912,10 @@ def cleanup_empty_old_folders(project, plan, journal):
                 journal['keptFolders'].append({'path':relative,'reason':str(error)})
         atomic_json(DATA/'history'/(journal['id']+'.json'),journal)
         return
+    inbox_folder = safe_path(root, inbox_of(project))
     for parent, dirs, _ in os.walk(start, followlinks=False):
         dirs[:] = [name for name in dirs if name not in ('.gongmu-chak', '$RECYCLE.BIN', 'System Volume Information')
+                   and (plan['ongoing'] or Path(parent) / name != inbox_folder)  # 전체 정리 때 정리할 문서 모음 안(방금 옮긴 보류 포함)은 건드리지 않는다
                    and not (Path(parent) / name).is_symlink()
                    and not (hasattr(Path(parent) / name, 'is_junction') and (Path(parent) / name).is_junction())]
         for name in dirs:
@@ -3960,6 +4042,25 @@ def undo(journal_id):
                 move_no_replace(destination, source); item['status'] = 'restored'
         except (OSError, ValueError) as error:
             item['status'] = 'undo-blocked'; item['error'] = str(error)
+    for entry in reversed(journal.get('inboxMoves', [])):  # 정리할 문서 모음으로 옮긴 보류 파일
+        if entry['status'] not in ('moved', 'prepared', 'undo-blocked'):
+            continue
+        try:
+            source, destination = safe_path(root, entry['source']), safe_path(root, entry['destination'])
+            if source.exists():
+                if not destination.exists() and unchanged(source, entry):
+                    entry['status'] = 'restored'
+                    continue
+                fail('원래 위치에 파일이 있어 덮어쓰지 않았습니다.')
+            if not (destination.is_dir() and not any(destination.iterdir()) if entry.get('kind') == 'directory' else unchanged(destination, entry)):
+                fail('이동 후 수정된 파일이라 자동으로 되돌리지 않았습니다.')
+            move_no_replace(destination, source)
+            entry['status'] = 'restored'
+            if entry.get('kind') != 'directory':
+                restored.append((entry['destination'], entry['source']))
+        except (OSError, ValueError) as error:
+            entry['status'] = 'undo-blocked'
+            entry['error'] = str(error)
     for entry in reversed(journal['entries']):
         if entry['status'] not in ('moved', 'prepared', 'undo-blocked'):
             continue
@@ -4019,7 +4120,7 @@ def undo(journal_id):
     if journal.get('folderShortcuts') or journal.get('referenceRepairs'):
         atomic_json(index_path,link_index)
     made = [d for e in journal['entries'] if e['status'] == 'restored' for d in e.get('madeDirs', [])]
-    for relative in sorted(set(journal.get('createdFolders', [])) | set(made) | set(journal.get('referenceDirs', [])) | set(journal.get('leftoverDirs', [])), key=lambda p: p.count('/'), reverse=True):
+    for relative in sorted(set(journal.get('createdFolders', [])) | set(made) | set(journal.get('referenceDirs', [])) | set(journal.get('leftoverDirs', [])) | set(journal.get('inboxDirs', [])), key=lambda p: p.count('/'), reverse=True):
         try:
             safe_path(root, relative).rmdir()  # Only folders this run created, and only if still empty.
         except (OSError, ValueError):
@@ -5246,7 +5347,7 @@ def bulk_answers(plan_id, answers):
             for row in rows:
                 if not row.get('destination'):
                     row.update(holdConfirmed=True, reviewed=True, reviewRequired=False, aiChecked=True, method='manual',
-                               reason='사용자가 원래 위치에 두기로 답했습니다.')
+                               reason='사용자가 보류로 답했습니다. 정리할 문서 모음으로 옮깁니다.')
                     changed.append(row)
             continue
         destination = answer.get('destination', '')

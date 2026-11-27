@@ -534,16 +534,16 @@ function renderFolderSuggest(){if(!S.plan){suggestBox.hidden=true;return;}const 
 function applyFolderResult(result){if(result.tree&&S.project)S.project.tree=result.tree;if(result.paths)S.plan.paths=result.paths;if(result.folderRenames)S.plan.folderRenames=result.folderRenames;if(result.contextSummary)S.plan.contextSummary=result.contextSummary;
  for(const u of result.rows||[])Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);}
 
-/* 2026-11-25: 연결도에서 '보류'도 고르기. 파일을 누른 뒤 아래 '보류 · 원래 위치 유지' 칸을 누르거나, 파일·폴더·화살표 끝을 그 칸에 놓는다.
+/* 2026-11-25: 연결도에서 '보류'도 고르기. 파일을 누른 뒤 아래 '보류' 칸을 누르거나, 파일·폴더·화살표 끝을 그 칸에 놓는다.
    체크한 파일이 있으면 함께 보류한다. */
 async function holdRows(ids){ids=[...new Set(ids)].filter(id=>S.plan.rows.some(r=>r.id===id&&!r.done));if(!ids.length)return;clearError();
- if(ids.length>1&&!await ask('보류로 둘까요?','파일 '+ids.length+'개를 옮기지 않고 원래 위치에 둡니다. 나중에 다시 목적지를 정할 수 있습니다.')){drawMapEdges();return;}
+ if(ids.length>1&&!await ask('보류로 둘까요?','파일 '+ids.length+'개를 표준 폴더로 옮기지 않습니다. 파일 이동 실행 때 원래 폴더 이름째 ‘정리할 문서 모음’으로 갑니다. 나중에 다시 목적지를 정할 수 있습니다.')){drawMapEdges();return;}
  try{const result=await api('/hold-rows',{plan:S.plan.id,rows:ids});for(const u of result.rows)Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u);
-  $('#routeHelp').textContent=result.rows.length+'개 파일을 보류(원래 위치 유지)로 정했습니다. 실제 파일은 움직이지 않습니다.';renderReview(true);}
+  $('#routeHelp').textContent=result.rows.length+'개 파일을 보류로 정했습니다. 파일 이동 실행 때 정리할 문서 모음으로 옮깁니다.';renderReview(true);}
  catch(e){error(e.message);drawMapEdges();}}
 function pickedOr(id){const picked=S.plan.rows.filter(r=>S.selected.has(r.id)&&!r.done).map(r=>r.id);return picked.length>1&&picked.includes(id)?picked:[id];}
 function bindHoldTarget(){const hold=$('#mapHold');if(!hold)return;const file=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done);hold.classList.toggle('hold-pick',Boolean(file));
- hold.title=file?'누르면 고른 파일을 보류(원래 위치 유지)로 정합니다':'파일이나 폴더를 여기에 놓으면 보류(원래 위치 유지)로 정합니다';
+ hold.title=file?'누르면 고른 파일을 보류(정리할 문서 모음으로)로 정합니다':'파일이나 폴더를 여기에 놓으면 보류(정리할 문서 모음으로)로 정합니다';
  hold.onclick=()=>{const f=S.plan.rows.find(r=>r.id===MapReview.file&&!r.done);if(f)holdRows(pickedOr(f.id));};
  hold.ondragover=e=>{if(MapReview.dragging){e.preventDefault?.();if(e.dataTransfer)e.dataTransfer.dropEffect='move';hold.classList.add('drop-target');}};hold.ondragleave=()=>hold.classList.remove('drop-target');
  hold.ondrop=e=>{e.preventDefault?.();hold.classList.remove('drop-target');const id=MapReview.dragging;MapReview.dragging=null;if(!id)return;
@@ -576,7 +576,7 @@ function askQuestions(q,round){return new Promise(resolve=>{const paths=S.plan.p
    +item.choices.map((c,k)=>option('c'+k,'<b>'+esc(crumb(c))+'</b>'+(k===0?' <span class="q-tag">추천</span>':'')+(k===0&&item.reason?'<small class="muted q-why">'+esc(item.reason)+'</small>':''))).join('')
    +option('other','목록에 없는 다른 폴더','<select data-q-other>'+pathOptions(a.destination)+'</select>')
    +option('new','새 폴더를 만들어 넣기','<span class="q-new"><select data-q-parent>'+pathOptions(a.parent)+'</select><span>아래에</span><input type="text" data-q-name placeholder="새 폴더 이름 (예: 내부검토)" value="'+esc(a.name||'')+'"></span>')
-   +option('hold','옮기지 않고 원래 위치에 두기')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
+   +option('hold','보류 (정리할 문서 모음으로)')+option('skip','잘 모르겠어요 (건너뛰기)')+'</div>'
    +'<p class="error" id="questionError" hidden></p><div class="actions"><button id="questionStop">그만 묻기</button>'+(at?'<button id="questionPrev">이전</button>':'')
    +'<button class="primary" id="questionNext">'+(last?'답하고 다시 분류':'다음 질문')+'</button></div>';
   $$('input[name="qpick"]').forEach(r=>r.onchange=()=>{save();a.pick=r.value;draw();});

@@ -193,8 +193,10 @@ class Round3(unittest.TestCase):
         left = self.root / app.INBOX / app.LEFTOVER_FOLDER
         self.assertFalse((self.root / '5. 기존').exists())  # 찌꺼기만 남은 기존 폴더는 비우고 지움
         self.assertTrue(all((left / rel).is_file() for rel in junk))  # 지우지 않고 원래 경로째 모아 둠
-        self.assertTrue((self.root / '7. 남김/보류할 문서.hwp').is_file() and (self.root / '7. 남김/~$임시.xlsx').is_file())  # 문서가 남은 폴더는 그대로
-        self.assertEqual(len(journal['leftoverMoves']), len(junk))
+        # 2026-11-27: 보류 문서는 원래 폴더 이름째 정리할 문서 모음으로 가고, 그 뒤 찌꺼기만 남은 폴더도 비워 지운다.
+        self.assertTrue((self.root / app.INBOX / '7. 남김/보류할 문서.hwp').is_file() and (left / '7. 남김/~$임시.xlsx').is_file())
+        self.assertFalse((self.root / '7. 남김').exists())
+        self.assertEqual(len(journal['leftoverMoves']), len(junk) + 1)
         app.undo(journal['id'])
         after = {p.relative_to(self.root).as_posix(): p.read_bytes() for p in self.root.rglob('*') if p.is_file() and '.gongmu-chak' not in p.parts}
         self.assertEqual({k: v for k, v in before.items() if '.gongmu-chak' not in k}, after)

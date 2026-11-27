@@ -80,7 +80,8 @@ class CumulativeHistory(unittest.TestCase):
         self.file('분류대기/확인필요.bin');p,r=self.plan('선택1.txt')
         self.file('추가/선택2.txt');p=app.make_plan(self.pid,False)
         targets=[r for r in p['rows'] if r['name'].startswith('선택')]
-        for r in targets:app.retarget(p['id'],r['id'],'1 공문');self.move(p,r)
+        # 고른 파일만 옮기는 이동(/execute)을 두 번. '파일 이동 실행'(execute_all)은 보류를 정리할 문서 모음으로 함께 옮긴다(2026-11-27).
+        for r in targets:app.retarget(p['id'],r['id'],'1 공문');app.execute(p['id'],[{'id':r['id'],'destination':r['destination']}])
         app.finish_plan(p['id'])
         result,z=self.archive();self.assertEqual(result['runCount'],1)
         doc=self.snapshots(z)[0]

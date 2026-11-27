@@ -284,7 +284,9 @@ def main():
                     assert mapped['call'] and mapped['call']['keep']==mapped['name'] and mapped['call']['ids']==mapped['expected']>0, mapped
                     result['map_scroll_chips_folder_drag']=mapped
                     # 4차 4번: 왼쪽 파일을 누른 뒤 오른쪽 폴더를 누르면 그 폴더로 화살표가 바뀐다(끌지 않음). 확인 후 원래대로 돌린다.
-                    clicked=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup);const original=row.destination;
+                    # 하위 폴더째 가는 파일(keepSub)은 고르지 않는다: 한 파일만 다시 지정하면 폴더 바로 아래로 가므로, 되돌려도 '사진' 하위 폴더가 사라져
+                    # 아래 이동 결과 검사가 파일 순서(OS)에 따라 실패했다(2026-11-27 로컬 Linux에서 재현).
+                    clicked=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup&&!r.keepSub);const original=row.destination;
                       MapReview.group=parentFolder(row);mapFocusFile(row.id);await new Promise(r=>requestAnimationFrame(()=>r()));
                       const pick=$('#mapTargets').classList.contains('pick-mode'),hint=$('#mapCaption').innerText.includes('폴더를 누르면');
                       const target=$$('[data-map-target]').find(b=>S.plan.paths.includes(b.dataset.mapTarget)&&b.dataset.mapTarget!==original);const dest=target.dataset.mapTarget;
@@ -293,7 +295,7 @@ def main():
                     assert clicked['pick'] and clicked['hint'] and clicked['moved'] and clicked['restored'], clicked
                     result['click_file_then_folder_routes']=clicked
                     # 2026-11-25: 연결도에서 '보류' 고르기(파일 누른 뒤 보류 칸 누르기)와 펼친 폴더 '전체 선택'. 확인 후 원래대로 돌린다.
-                    held_pick=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup);const original=row.destination;
+                    held_pick=page.evaluate("""async()=>{const row=S.plan.rows.find(r=>!r.done&&r.destination&&r.method!=='manual'&&!r.folderGroup&&!r.keepSub);const original=row.destination;
                       MapReview.group=parentFolder(row);mapFocusFile(row.id);await new Promise(r=>requestAnimationFrame(()=>r()));const pick=$('#mapHold').classList.contains('hold-pick');
                       $('#mapHold').click();for(let i=0;i<50&&row.destination;i++)await new Promise(r=>setTimeout(r,100));const held=!row.destination&&row.holdConfirmed&&row.method==='manual';
                       await changeRoute(row.id,original);
@@ -358,7 +360,7 @@ def main():
                     page.locator('#mapSources [data-map-review="'+held_id+'"]').first.click()
                     page.locator('[data-map-file="'+held_id+'"]').wait_for(state='visible')
                     assert page.locator('.map-route-ok').get_attribute('aria-label').find('보류')>=0
-                    assert '원래 위치에 둘 파일이면' in page.locator('#mapCaption').inner_text()
+                    assert '보류할 파일이면' in page.locator('#mapCaption').inner_text()
                     page.screenshot(path=str(output/'05b-inline-hold-confirm.png'),full_page=True)
                     page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
                     assert page.evaluate('id=>{const r=S.plan.rows.find(r=>r.id===id);return r.holdConfirmed&&!r.destination&&!needsCheck(r)}',held_id)
@@ -374,7 +376,12 @@ def main():
                     assert page.locator('[data-map-review="'+retarget_id+'"]').count()==0
                     result['hold_marker_confirm_and_retarget_verified']=True
                     page.screenshot(path=str(output/'05-move-plan.png'),full_page=True)
-                    page.locator('#bulkMove').click();page.locator('#confirmYes').wait_for(state='visible');assert not page.locator('#confirmText').is_visible();page.locator('#confirmYes').click();page.locator('#moveDoneText').wait_for(state='visible')
+                    held_now=page.evaluate("S.plan.rows.filter(r=>!r.done&&!r.destination).length")
+                    page.locator('#bulkMove').click();page.locator('#confirmYes').wait_for(state='visible')
+                    # 파일 목록은 띄우지 않는다. 보류가 있으면 '정리할 문서 모음으로 옮긴다'는 한 줄만(2026-11-27)
+                    confirm_text=page.locator('#confirmText').inner_text() if page.locator('#confirmText').is_visible() else ''
+                    assert (confirm_text=='보류 '+str(held_now)+'개는 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮깁니다.') if held_now else not confirm_text, confirm_text
+                    result['move_confirm_text']=confirm_text;page.locator('#confirmYes').click();page.locator('#moveDoneText').wait_for(state='visible')
                     page.wait_for_timeout(1800);page.screenshot(path=str(output/'06-animation-middle.png'),full_page=True)
                     page.wait_for_timeout(2800);page.screenshot(path=str(output/'07-move-complete.png'),full_page=True)
                     result['move_message']=page.locator('#moveDoneText').inner_text()
