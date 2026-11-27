@@ -1,4 +1,6 @@
 """Independent user requirement regressions. Synthetic fixtures; no real API."""
+import io
+import json
 import os
 import tempfile
 import unittest
@@ -488,6 +490,86 @@ class AnnualTemplates(unittest.TestCase):
                 app.store_project(project)
                 row=app.make_plan(project['id'],False)['rows'][0]
                 self.assertEqual(row['destination'],'1 품의 및 계약서/2 계약서',row['reason'])
+
+
+class OldFolderRemovalOnBusyPC(unittest.TestCase):
+    """2026-11-28 LIM 연간단가 시연(OneDrive 폴더): 파일은 다 빠졌는데 옛 폴더가 남음. 합성 자료."""
+    def test_briefly_locked_empty_folder_is_retried_then_removed(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'계약';target.mkdir()
+            real=Path.rmdir;calls=[]
+            def busy(self):
+                calls.append(1)
+                if len(calls)<3:raise PermissionError(5,'다른 프로세스가 사용 중')
+                return real(self)
+            with patch.object(Path,'rmdir',busy),patch.object(app.time,'sleep'):
+                app.remove_empty_folder(target)
+            self.assertFalse(target.exists());self.assertEqual(len(calls),3)
+
+    def test_kept_folder_reason_names_what_is_left(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'기성';target.mkdir();(target/'남은 파일.hwp').write_bytes(b'x')
+            with self.assertRaises(OSError) as raised:app.remove_empty_folder(target)
+            self.assertIn('남은 파일.hwp',app.kept_reason(target,raised.exception))
+            empty=Path(folder)/'회의자료';empty.mkdir()
+            self.assertIn('다른 프로그램',app.kept_reason(empty,PermissionError(5,'denied')))
+
+
+def simple_text_pdf(path, lines):
+    """글자 층이 있는 아주 작은 PDF(ASCII 글자, 합성)."""
+    body='BT /F1 12 Tf 50 750 Td '+' '.join('(%s) Tj 0 -16 Td'%l for l in lines)+' ET'
+    objects=['<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+             '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+             '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>','<< /Length %d >>\nstream\n%s\nendstream'%(len(body),body)]
+    out=b'%PDF-1.4\n';offsets=[]
+    for i,o in enumerate(objects,1):offsets.append(len(out));out+=('%d 0 obj\n%s\nendobj\n'%(i,o)).encode('latin-1')
+    xref=len(out);out+=('xref\n0 %d\n0000000000 65535 f \n'%(len(objects)+1)).encode()+b''.join(b'%010d 00000 n \n'%o for o in offsets)
+    out+=('trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n'%(len(objects)+1,xref)).encode();Path(path).write_bytes(out)
+
+
+class DemoContractReading(unittest.TestCase):
+    """2026-11-28 LIM 시연: '공사연간단가_계약서.pdf'(글자 층 있는 가상 계약서)를 자동·수동 모두 못 읽음. 합성 자료, 학내 AI 없음."""
+    LAYER=('공사연간단가_계약서\n문서구분: 시연용 가상 계약서\n계약번호: DEMO-A-2026-001\n사업명: 2026년 가상대학교 시설물 보수공사 연간단가\n'
+           '계약명: 2026년 가상대학교 시설물 보수공사 연간단가\n계약종류: 공사 연간단가\n계약상대자: 가상보수건설 주식회사\n'
+           '계약체결일: 2026-01-05\n계약기간: 2026-01-10 ~ 2026-12-31\n계약금액: 100,000,000원')
+
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.data=Path(self.temp.name)/'data';(self.data/'staging').mkdir(parents=True)
+        self.patcher=patch.object(app,'DATA',self.data);self.patcher.start()
+        image=self.data/'staging'/'c1.jpg';Image.new('RGB',(20,20),'white').save(image)
+        app.atomic_json(self.data/'staging'/'c1.json',{'id':'c1','name':'공사연간단가_계약서.pdf','path':str(image),'preparedFrom':'PDF 전체 1쪽 중 1쪽 이미지','textLayer':self.LAYER})
+
+    def tearDown(self):self.patcher.stop();self.temp.cleanup()
+
+    def test_model_answer_wrapped_in_a_list_is_accepted(self):
+        reply={'choices':[{'message':{'content':'[{"title":"가상 보수공사 연간단가","kind":"construction"}]'},'finish_reason':'stop'}]}
+        class Response(io.BytesIO):
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+        with patch.object(app,'load_key',return_value='synthetic-key'),patch.object(app,'read_json',side_effect=lambda p,d=None:{'model':'demo'} if str(p).endswith('ai.json') else d),\
+             patch.object(app.urllib.request,'urlopen',return_value=Response(json.dumps(reply).encode())):
+            self.assertEqual(app.gateway([{'role':'user','content':'x'}])['title'],'가상 보수공사 연간단가')
+
+    def test_text_layer_is_sent_and_used_when_the_answer_stays_broken(self):
+        sent=[]
+        def broken(messages,**k):
+            sent.append(messages);raise app.AIResponseError('AI가 올바른 결과를 보내지 않았습니다. 다시 검토하거나 보류해주세요.')
+        with patch.object(app,'gateway',side_effect=broken):
+            record=app.analyze_contract('c1')
+        self.assertTrue(any('계약상대자: 가상보수건설' in part.get('text','') for part in sent[0][1]['content']))
+        a=record['analysis']
+        self.assertEqual((a['title'],a['party'],a['signed_date'],a['kind'],a['annual'],a['uncertain']),
+                         ('2026년 가상대학교 시설물 보수공사 연간단가','가상보수건설 주식회사','2026-01-05','construction',True,True))
+        self.assertIn('확인 필요',record['sent'])
+
+    def test_scanned_contract_without_text_still_reports_the_error(self):
+        app.atomic_json(self.data/'staging'/'c1.json',{**app.read_json(self.data/'staging'/'c1.json'),'textLayer':''})
+        with patch.object(app,'gateway',side_effect=app.AIResponseError('AI가 올바른 결과를 보내지 않았습니다.')):
+            with self.assertRaises(app.AIResponseError):app.analyze_contract('c1')
+
+    def test_pdf_text_layer_is_read_from_the_chosen_pages(self):
+        pdf=Path(self.temp.name)/'contract.pdf';simple_text_pdf(pdf,['Contract name: DEMO annual repair','Party: DEMO Construction'])
+        self.assertIn('DEMO Construction',app.pdf_text_layer(pdf,[0]))
 
 
 if __name__=='__main__':unittest.main()

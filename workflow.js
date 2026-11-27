@@ -102,8 +102,10 @@ refresh().catch(()=>{});
 function baseName(label){return String(label).replace(/^\d+(?:[-.]\d+)*[\s_]+/,'').trim();}
 function standardNames(){const names=new Set();const walk=list=>list.forEach(n=>{names.add(baseName(n.label));walk(n.children||[]);});Object.values(S.status?.templates||{}).forEach(walk);return names;}
 function markFixed(list){list.forEach(n=>{n.fixed=true;markFixed(n.children||[]);});}
+/* 2026-11-28 LIM: 아직 디스크에 만들지 않은 폴더(fixed 아님)는 지우거나 옮기면 번호를 다시 매긴다('1 공통'을 지우면 '2 시공단계' → '1 시공단계').
+   이미 만들어진 폴더(fixed)의 번호만 그대로 두고, 새 폴더는 그 뒤 번호부터 차례로 붙인다. */
 function numberTree(list){const edit=Boolean(S.project);let i=0,next=Math.max(0,...list.filter(n=>n.fixed&&!INBOX_NAMES.includes(n.label)).map(n=>Number(String(n.label).match(/^\d+/)?.[0]||0)));
- for(const n of list){if(!INBOX_NAMES.includes(n.label)){if(edit){if(!n.fixed){n.num??=++next;n.label=n.num+' '+baseName(n.label);}}else n.label=(++i)+' '+baseName(n.label);}numberTree(n.children||[]);}}
+ for(const n of list){if(!INBOX_NAMES.includes(n.label)){if(edit){if(!n.fixed){n.num=++next;n.label=n.num+' '+baseName(n.label);}}else n.label=(++i)+' '+baseName(n.label);}numberTree(n.children||[]);}}
 const DIAGRAM_COLORS=['#345fe2','#1f9d74','#d9822b','#8a5cd6','#c2477a','#2b8fb3'];
 function structureDiagram(tree,clickable,selectable){const inbox=tree.find(n=>INBOX_NAMES.includes(n.label)),tops=tree.filter(n=>!INBOX_NAMES.includes(n.label));if(!tops.length)return '<p class="muted">사업유형을 선택하면 폴더 구조 그림이 나타납니다.</p>';
  const tag=(path,cls,inner,title)=>clickable?'<button class="'+cls+'" data-browse="'+esc(path)+'" title="'+esc(title||'이 폴더의 문서 보기')+'">'+inner+'</button>':'<span class="'+cls+'" title="'+esc(title||'')+'">'+inner+'</span>';
@@ -162,7 +164,9 @@ function renderMindMap(){const tops=mmTops();if(!tops.length){mindMap.innerHTML=
  if(S.mmRoot===null||!S.tree[S.mmRoot]||INBOX_NAMES.includes(S.tree[S.mmRoot].label))S.mmRoot=tops[0][1];
  const color=DIAGRAM_COLORS[Math.max(0,tops.findIndex(([,i])=>i===S.mmRoot))%DIAGRAM_COLORS.length],standard=standardNames();
  const draw=(n,key)=>{const kids=n.children||[],closed=kids.length&&mmCollapsed(key),selected=S.mmSelected===key,std=standard.has(baseName(n.label));
-  const editable=!std||(/용역|도급공사|관급자재/.test(baseName(n.label))&&mmDepth(key)===2); const text=editable?'<input class="mm-label-input" data-mm-direct="'+key+'" value="'+esc(baseName(n.label))+'" aria-label="폴더 이름 바로 수정" size="'+Math.max(8,baseName(n.label).length+2)+'">':esc(n.label);
+  // 2026-11-28: '설계용역 정보' 같은 정보 폴더는 계약 가지가 아니다(이름에 '용역'이 있어도). 바로 고치는 칸에도 앞 번호를 그대로 보여 준다.
+  const editable=!std||(/용역|도급공사|관급자재/.test(baseName(n.label))&&!/정보/.test(baseName(n.label))&&mmDepth(key)===2); const num=(String(n.label).match(/^\d+(?=\s)/)||[''])[0];
+  const text=editable?(num?'<span class="mm-num">'+esc(num)+'</span> ':'')+'<input class="mm-label-input" data-mm-direct="'+key+'" value="'+esc(baseName(n.label))+'" aria-label="폴더 이름 바로 수정" size="'+Math.max(8,baseName(n.label).length+2)+'">':esc(n.label);
   const tools=selected?'<span class="mm-tools">'+(kids.length?'<button data-mm-toggle="'+key+'">'+(closed?'펼치기':'접기')+'</button>':'')+''+'<button data-mm-child="'+key+'">+ 하위 폴더</button><button data-mm-up="'+key+'" title="위로">↑</button><button data-mm-down="'+key+'" title="아래로">↓</button><button data-mm-delete="'+key+'">제외</button></span>':'';
   return '<li><div class="mm-node depth-'+Math.min(mmDepth(key),4)+(selected?' sel':'')+(std?'':' custom')+'" data-mm-node="'+key+'">'+(kids.length?'<button class="mm-caret-button" data-mm-toggle="'+key+'" aria-label="'+esc(n.label)+(closed?' 펼치기':' 접기')+'">'+(closed?'▶':'▼')+'</button>':'')+text+(closed?'<span class="mm-count">'+kids.length+'</span>':'')+tools+'</div>'+(kids.length&&!closed?'<ul>'+kids.map((c,i)=>draw(c,key+'.'+i)).join('')+'</ul>':'')+'</li>';};
  mindMap.innerHTML='<p class="muted">계약 폴더 이름은 글자 부분을 눌러 바로 수정합니다. 삼각형은 한 번 누를 때마다 펼치거나 접습니다.</p><div class="mm-wrap" style="--c:'+color+';--line:color-mix(in srgb,'+color+' 45%,white)"><ul class="mm">'+draw(S.tree[S.mmRoot],String(S.mmRoot))+'</ul></div>';
