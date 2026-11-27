@@ -12,9 +12,22 @@ import urllib.request
 from pathlib import Path
 
 
+def stop(process):
+    # 한 파일 EXE는 바깥 실행기와 안쪽 앱, 프로세스가 둘이다. 둘 다 끝내야 임시 폴더를 지울 수 있다.
+    if os.name == 'nt':
+        subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True)
+    process.kill()
+    process.wait(timeout=30)
+
+
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
     exe = Path(sys.argv[1]).resolve()
-    with tempfile.TemporaryDirectory(prefix='gongmu-exe-') as folder:
+    with tempfile.TemporaryDirectory(prefix='gongmu-exe-', ignore_cleanup_errors=True) as folder:
         env = dict(os.environ, LOCALAPPDATA=folder, HOME=folder)
         process = subprocess.Popen([str(exe), '--no-browser'], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         try:
@@ -62,8 +75,7 @@ def main():
                 assert call('/thumb', {'id': project['id'], 'relative': relative})['data'].startswith('data:image/jpeg'), relative
             print('EXE 실행 확인:', exe.name, status['version'], '템플릿', len(status['templates']), '종 · 예시 파일', demo['count'], '개 · PDF·사진 미리보기 OK')
         finally:
-            process.kill()
-            process.wait(timeout=30)
+            stop(process)
 
 
 if __name__ == '__main__':
