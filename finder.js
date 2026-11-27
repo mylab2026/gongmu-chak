@@ -2,7 +2,11 @@
 const Finder={project:null};
 const finderStyle=document.createElement('style');finderStyle.textContent=`
 #home .choices{grid-template-columns:repeat(3,1fr)}
-#finder .finder-result{margin:10px 0}
+#finder .finder-result{margin:10px 0;display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:start}
+#finder .finder-result.is-photo{grid-template-columns:220px minmax(0,1fr)}
+#finder .f-thumb{width:100%;aspect-ratio:3/4;display:grid;place-items:center;border:1px solid #dbe3f0;border-radius:10px;background:#f4f6fa;color:#8a94a8;font-weight:700;overflow:hidden}
+#finder .is-photo .f-thumb{aspect-ratio:4/3}#finder .f-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+@media (max-width:720px){#finder .finder-result,#finder .finder-result.is-photo{grid-template-columns:1fr}}
 #finder mark{background:#fff1b8;padding:0 2px;border-radius:3px}
 #finder .finder-narrow{border:1px solid #c9d6f5;background:#f5f8ff;border-radius:10px;padding:12px 14px;margin:12px 0}.finder-narrow .row{margin:8px 0 4px;flex-wrap:wrap}.finder-more{margin-top:8px}.finder-more>summary{cursor:pointer;color:var(--muted,#667)}
 .finder-ai{border:2px solid #b5c8f8;background:#f5f8ff}
@@ -22,7 +26,7 @@ finder.innerHTML='<button id="finderBack">뒤로가기</button><h1>문서 어디
 +'<p class="muted">파일명·폴더 이름·문서 앞부분에서 단어를 찾습니다. ‘사진’·‘도면’은 그 종류의 파일도 찾습니다.</p></div>'
 +'<div class="card finder-ask"><label for="finderAsk">AI에게 물어보기 <span class="pill">문장으로 자세히</span></label>'
 +'<textarea id="finderAsk" rows="3" placeholder="예: 11월에 받은 학생회관 누수 관련 현장 사진이랑 보수 요청 공문 찾아줘"></textarea>'
-+'<div class="row"><button class="primary" id="finderAI">AI로 찾기</button><span class="muted">질문을 검색어·파일 종류·기간으로 바꿔 찾은 뒤 후보 중에서 골라 줍니다 · 최대 2회 호출 · 파일명·폴더·본문 일부만 전송</span></div></div></div>'
++'<div class="row"><button class="primary" id="finderAI">AI로 찾기</button><span class="muted">사진은 한 번에 12장씩 봅니다 · 기간·장소·종류를 자세히 적을수록 빨리 찾아요</span></div></div></div>'
 +'<div id="finderAIResults"></div><div id="finderResults"></div>';
 $('#home').after(finder);$('#finderBack').onclick=()=>goHome();
 const finderBaseShow=show;show=function(step){finder.hidden=true;return finderBaseShow(step);};
@@ -30,7 +34,12 @@ const finderBaseHome=goHome;goHome=function(){finder.hidden=true;return finderBa
 function finderMark(text,terms){let out=esc(text);for(const term of terms){if(!term)continue;const pattern=esc(term).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');out=out.replace(new RegExp(pattern,'gi'),m=>'<mark>'+m+'</mark>');}return out;}
 async function finderInfo(){const id=$('#finderProject').value;if(!id){$('#finderIndexInfo').textContent='';return null;}const info=await api('/index-info',{id});$('#finderIndexInfo').textContent=info.builtAt?'마지막 색인 '+info.builtAt+' · 파일 '+info.count+'개 · 내용을 읽은 문서 '+info.withText+'개':'아직 색인이 없습니다. 처음 한 번은 문서 수에 따라 몇 분 걸릴 수 있습니다.';return info;}
 async function finderIndex(){const id=$('#finderProject').value;if(!id)throw Error('사업을 먼저 선택해주세요.');const job=await api('/index-start',{id});while(true){const status=await api('/index-status',{job:job.id});$('#busyText').textContent='문서 색인 중 · '+status.processed+' / '+(status.count||'?')+'개 · 새로 읽은 문서 '+status.read+'개';if(status.status==='done')break;if(['failed','cancelled'].includes(status.status))throw Error(status.error||'색인을 마치지 못했습니다.');await new Promise(resolve=>setTimeout(resolve,700));}return finderInfo();}
-function finderCard(r,terms,ai){return '<article class="card finder-result'+(ai?' finder-ai':'')+'"><div class="row"><strong>'+finderMark(r.name,terms)+'</strong>'+(r.kind?'<span class="pill">'+esc(r.kind)+'</span>':'')+(ai?'<span class="pill">AI 추천 · 확신 '+Math.round((r.confidence||0)*100)+'%</span>':'')+'</div><div class="path">'+finderMark(r.folder,terms)+'</div>'+(ai&&r.aiReason?'<p>'+esc(r.aiReason)+'</p>':'')+(r.snippet?'<p class="muted">'+finderMark(r.snippet,terms)+'</p>':'')+'<p class="muted">'+esc((r.reasons||[]).join(' · '))+'</p><div class="row"><button data-open-file="'+esc(r.relative)+'">파일 열기</button><button data-reveal-file="'+esc(r.relative)+'">폴더에서 보기</button><button data-download-file="'+esc(r.relative)+'" data-download-name="'+esc(r.name)+'">내려받기</button></div></article>';}
+function finderCard(r,terms,ai){const ext=(r.name.split('.').pop()||'').toUpperCase(),photo=r.kind==='사진';return '<article class="card finder-result'+(ai?' finder-ai':'')+(photo?' is-photo':'')+'"><div class="f-thumb" data-fthumb="'+esc(r.relative)+'">'+esc(ext)+'</div><div class="f-body"><div class="row"><strong>'+finderMark(r.name,terms)+'</strong>'+(r.kind?'<span class="pill">'+esc(r.kind)+'</span>':'')+(ai?'<span class="pill">AI 추천 · 확신 '+Math.round((r.confidence||0)*100)+'%</span>':'')+'</div><div class="path">'+finderMark(r.folder,terms)+'</div>'+(ai&&r.aiReason?'<p>'+esc(r.aiReason)+'</p>':'')+(r.snippet?'<p class="muted">'+finderMark(r.snippet,terms)+'</p>':'')+'<p class="muted">'+esc((r.reasons||[]).join(' · '))+'</p><div class="row"><button data-open-file="'+esc(r.relative)+'">파일 열기</button><button data-reveal-file="'+esc(r.relative)+'">폴더에서 보기</button><button data-download-file="'+esc(r.relative)+'" data-download-name="'+esc(r.name)+'">내려받기</button></div></div></article>';}
+// 2026-11-28 LIM: 찾은 결과도 모아보기처럼 미리보기(사진·PDF). 한 번 불러온 것은 다시 부르지 않는다.
+const finderThumbCache=new Map();
+function finderThumbs(){const queue=$$('[data-fthumb]');let active=0;const id=$('#finderProject').value;
+ const next=()=>{while(active<4&&queue.length){const el=queue.shift(),rel=el.dataset.fthumb;if(!/\.(jpe?g|png|gif|bmp|webp|tiff?|heic|pdf)$/i.test(rel))continue;const put=data=>{if(data)el.innerHTML='<img alt="" src="'+data+'">';};
+  if(finderThumbCache.has(rel)){put(finderThumbCache.get(rel));continue;}active++;api('/thumb',{id,relative:rel}).then(r=>{finderThumbCache.set(rel,r.data);put(r.data);}).catch(()=>{}).finally(()=>{active--;next();});}};next();}
 // 2026-11-28 LIM: 찾은 파일 내려받기(원본은 그대로, 복사본을 내려받기 폴더로)
 async function finderDownload(relative,name){let response;try{response=await fetch('/download',{method:'POST',headers:{'Content-Type':'application/json','X-App-Token':TOKEN},body:JSON.stringify({id:$('#finderProject').value,relative})});}catch(e){throw Error('프로그램과 연결이 끊겼습니다. 실행 창을 확인해주세요.');}
  if(!response.ok){let message='파일을 내려받지 못했습니다.';try{message=(await response.json()).error||message;}catch(e){}throw Error(message);}
@@ -45,7 +54,8 @@ function finderRender(result){const terms=result.terms||[];Finder.last=result;
  $$('[data-narrow-free]').forEach(b=>b.onclick=()=>{const box=$('#finderAsk');box.value=box.value.trim()+' · ';box.focus();});
  $$('[data-open-file]').forEach(b=>b.onclick=()=>task('파일 여는 중…',()=>api('/open',{id:$('#finderProject').value,relative:b.dataset.openFile,reveal:false})));
  $$('[data-reveal-file]').forEach(b=>b.onclick=()=>task('폴더 여는 중…',()=>api('/open',{id:$('#finderProject').value,relative:b.dataset.revealFile,reveal:true})));
- $$('[data-download-file]').forEach(b=>b.onclick=()=>task('파일 내려받는 중…',()=>finderDownload(b.dataset.downloadFile,b.dataset.downloadName)));}
+ $$('[data-download-file]').forEach(b=>b.onclick=()=>task('파일 내려받는 중…',()=>finderDownload(b.dataset.downloadFile,b.dataset.downloadName)));
+ finderThumbs();}
 function finderDiagram(){const project=S.status.projects.find(p=>p.id===$('#finderProject').value);$('#finderDiagram').innerHTML=project?structureDiagram(project.tree,true):'';$$('[data-browse]').forEach(b=>b.onclick=()=>task('폴더 문서 확인 중…',async()=>{finderRender(await api('/browse',{id:$('#finderProject').value,folder:b.dataset.browse}));}));}
 function finderClear(){$('#finderResults').innerHTML='';$('#finderAIResults').innerHTML='';}
 findButton.onclick=()=>task('등록된 사업 확인 중…',async()=>{await refresh();clearError();$('#home').hidden=true;$('#wizard').hidden=true;finder.hidden=false;const list=S.status.projects;$('#finderProject').innerHTML=list.length?list.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join(''):'<option value="">등록된 사업이 없습니다 · 처음 문서 정리로 등록해주세요</option>';$('#finderProject').value=Finder.project&&list.some(p=>p.id===Finder.project)?Finder.project:(list[0]?.id||'');finderClear();finderDiagram();if(list.length)await finderIndex();$('#finderQuery').focus();});
@@ -54,5 +64,5 @@ $('#finderReindex').onclick=()=>task('문서 색인 중…',finderIndex);
 function finderInput(){if(!$('#finderProject').value)throw Error('사업을 먼저 선택해주세요.');const query=$('#finderQuery').value.trim();if(!query)throw Error('찾을 문서의 이름이나 내용을 입력해주세요.');return query;}
 $('#finderSearch').onclick=()=>task('문서 찾는 중…',async()=>{const query=finderInput();finderRender(await api('/search',{id:$('#finderProject').value,query}));});
 $('#finderQuery').addEventListener('keydown',event=>{if(event.key==='Enter')$('#finderSearch').click();});
-function finderAskRun(confirmFirst){return task('AI로 찾는 중…',async()=>{if(!$('#finderProject').value)throw Error('사업을 먼저 선택해주세요.');const query=$('#finderAsk').value.trim();if(!query)throw Error('AI에게 물어볼 내용을 문장으로 적어주세요. 예: 11월 누수 현장 사진 찾아줘');if(!S.status.configured)throw Error('AI 연결 설정에서 API 키와 모델을 먼저 등록해주세요.');if(confirmFirst&&!await ask('AI로 더 정확히 찾을까요?','질문을 검색 조건으로 바꾸는 데 1회, PC 검색 후보 최대 25개(파일명·폴더·본문 일부 220자)에서 고르는 데 1회, 최대 2회 학내 API를 호출합니다. 사진을 찾는 질문이면 아직 설명이 없는 사진 최대 12장을 작게 줄인 미리보기로 함께 보냅니다. 파일은 바꾸지 않습니다.'))return;finderRender(await api('/search-ai',{id:$('#finderProject').value,query}));});}
+function finderAskRun(confirmFirst){return task('AI로 찾는 중…',async()=>{if(!$('#finderProject').value)throw Error('사업을 먼저 선택해주세요.');const query=$('#finderAsk').value.trim();if(!query)throw Error('AI에게 물어볼 내용을 문장으로 적어주세요. 예: 11월 누수 현장 사진 찾아줘');if(!S.status.configured)throw Error('AI 연결 설정에서 API 키와 모델을 먼저 등록해주세요.');if(confirmFirst&&!await ask('AI로 찾을까요?','AI는 최대 2번 씁니다. 사진은 한 번에 12장씩 봅니다. 기간·장소·문서 종류를 자세히 적을수록 더 빨리 찾습니다.'))return;finderRender(await api('/search-ai',{id:$('#finderProject').value,query}));});}
 $('#finderAI').onclick=()=>finderAskRun(true);
