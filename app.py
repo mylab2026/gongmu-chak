@@ -3481,6 +3481,11 @@ def folder_suggestion(item, folder_ids):
     return {'parent': folder_ids[value['parent_id']], 'name': name, 'source': 'ai'}
 
 
+def branch_root(path, paths):
+    """단계 폴더나 계약 가지처럼 하위 표준 폴더를 가진 얕은(두 단계 이하) 폴더."""
+    return path.count('/') <= 1 and any(other.startswith(path + '/') for other in paths)
+
+
 def validate_bulk(answer, rows, folder_ids):
     if not isinstance(answer, dict) or not isinstance(answer.get('assignments'), list):
         raise AIResponseError('AI 일괄 정리안 형식을 읽지 못했습니다. 이번 묶음은 적용하지 않았습니다.')
@@ -3501,8 +3506,15 @@ def validate_bulk(answer, rows, folder_ids):
             raise AIResponseError('AI 정리안에 판단 근거가 없습니다.')
         seen.add(item['file_id'])
         destination = folder_ids.get(destination_id, '') if confidence >= .7 else ''
+        shallow = bool(destination) and branch_root(destination, folder_ids.values())
+        if shallow:
+            # 단계·계약 가지 맨 위(예: 3 시공단계/1 도급공사)는 하위 표준 폴더를 고르지 못한 답이다.
+            # 그대로 두면 자료 묶음이 가지 맨 위에 A·B·C로 쌓인다(0.11.3 사용자 보고).
+            destination = ''
+        prefix = ('AI가 폴더 구조에 없는 곳을 답해 보류했습니다. ' if outside else '') + \
+                 ('AI가 단계·계약 가지 맨 위를 답해 보류했습니다. 하위 표준 폴더를 직접 골라 주세요. ' if shallow else '')
         result[item['file_id']] = {'destination': destination, 'confidence': confidence,
-                                  'reason': ('AI가 폴더 구조에 없는 곳을 답해 보류했습니다. ' if outside else '') + item['reason'][:600],
+                                  'reason': prefix + item['reason'][:600],
                                   'method': 'ai' if destination else 'hold', 'aiChecked': True}
         suggestion = None if destination else folder_suggestion(item, folder_ids)
         if suggestion:
@@ -5816,7 +5828,8 @@ def bulk_questions(plan_id, limit=3):
             by_unit = {q.get('unit'): q for q in (answer or {}).get('questions', []) if isinstance(q, dict)}
             for q in questions:
                 ai = by_unit.get(q['unit']) or {}
-                picks = [folders[c] for c in ai.get('choices', []) if isinstance(c, str) and c in folders]
+                picks = [folders[c] for c in ai.get('choices', []) if isinstance(c, str) and c in folders
+                         and not branch_root(folders[c], folders.values())]
                 q['choices'] = tidy_choices(picks + q['choices'])
                 if isinstance(ai.get('reason'), str) and ai['reason'].strip():
                     q['reason'] = ai['reason'].strip()[:80]

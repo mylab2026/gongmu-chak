@@ -504,6 +504,27 @@ class AnnualTemplates(unittest.TestCase):
                 self.assertEqual(row['destination'],'1 품의 및 계약서/2 계약서',row['reason'])
 
 
+class AIBranchRootIsHeld(unittest.TestCase):
+    """AI가 '3 시공단계/1 도급공사'처럼 가지 맨 위를 답하면 묶음을 거기 쌓지 않고 보류한다."""
+
+    def test_ai_answer_at_contract_branch_root_is_held_and_leaf_is_kept(self):
+        folders = {'d1': '3 시공단계', 'd2': '3 시공단계/1 도급공사', 'd3': '3 시공단계/1 도급공사/1 착공',
+                   'd4': '3 시공단계/1 도급공사/3 자재승인', 'd5': '0 정리할 문서 모음'}
+        rows = [{'id': 'f1'}, {'id': 'f2'}, {'id': 'f3'}, {'id': 'f4'}]
+        answer = {'assignments': [
+            {'file_id': 'f1', 'destination_id': 'd2', 'confidence': .9, 'reason': '착공계 제출 공문'},
+            {'file_id': 'f2', 'destination_id': 'd1', 'confidence': .9, 'reason': '시공 단계 자료'},
+            {'file_id': 'f3', 'destination_id': 'd4', 'confidence': .9, 'reason': '자재승인 요청'},
+            {'file_id': 'f4', 'destination_id': 'd5', 'confidence': .9, 'reason': '판단 어려움'}]}
+        result = app.validate_bulk(answer, rows, folders)
+        for held in ('f1', 'f2'):
+            self.assertEqual(result[held]['destination'], '')
+            self.assertEqual(result[held]['method'], 'hold')
+            self.assertIn('가지 맨 위', result[held]['reason'])
+        self.assertEqual(result['f3']['destination'], '3 시공단계/1 도급공사/3 자재승인')
+        self.assertEqual(result['f4']['destination'], '0 정리할 문서 모음')
+
+
 class OldFolderRemovalOnBusyPC(unittest.TestCase):
     """2026-11-28 LIM 연간단가 시연(OneDrive 폴더): 파일은 다 빠졌는데 옛 폴더가 남음. 합성 자료."""
     def test_briefly_locked_empty_folder_is_retried_then_removed(self):
