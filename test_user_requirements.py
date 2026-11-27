@@ -518,6 +518,23 @@ class OldFolderRemovalOnBusyPC(unittest.TestCase):
                 app.remove_empty_folder(target)
             self.assertFalse(target.exists());self.assertEqual(len(calls),3)
 
+    @unittest.skipUnless(os.name=='nt','Windows 폴더 읽기 전용 속성')
+    def test_read_only_empty_folder_on_windows_is_removed(self):
+        # 2026-11-28 LIM 공사부터 시연(C 드라이브): 빈 옛 폴더 12개가 모두 WinError 5. 읽기 전용 속성이 붙은 폴더는 Windows가 지우지 못한다.
+        import ctypes
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'공문'/'2026-11-06 착공계 제출';target.mkdir(parents=True)
+            self.assertTrue(ctypes.windll.kernel32.SetFileAttributesW(str(target),0x1))
+            with self.assertRaises(PermissionError):os.rmdir(target)  # 원인 확인: 읽기 전용 폴더는 rmdir만으로는 지워지지 않는다
+            app.remove_empty_folder(target);self.assertFalse(target.exists())
+
+    def test_read_only_flag_is_only_cleared_on_an_empty_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'기성';target.mkdir();(target/'남은.hwp').write_bytes(b'x')
+            with patch.object(app,'readonly_folder',return_value=True) as flag,self.assertRaises(OSError):
+                app.remove_empty_folder(target)
+            self.assertTrue((target/'남은.hwp').is_file())
+
     def test_kept_folder_reason_names_what_is_left(self):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/'기성';target.mkdir();(target/'남은 파일.hwp').write_bytes(b'x')

@@ -168,7 +168,7 @@ window.addEventListener('pointerup',event=>{const drag=MapReview.pointerDrag;if(
  const hold=$('#mapHold')?.getBoundingClientRect?.();if(hold&&event.clientX>=hold.left&&event.clientX<=hold.right&&event.clientY>=hold.top&&event.clientY<=hold.bottom&&typeof holdRows==='function'){holdRows([drag.id]);return;}
  if(target)changeRoute(drag.id,target.dataset.mapTarget);else drawMapEdges();});
 window.addEventListener('pointercancel',()=>{MapReview.pointerDrag=null;drawMapEdges();});
-const moveDone=document.createElement('dialog');moveDone.innerHTML='<h2 id="moveDoneTitle"></h2><p id="moveDoneText"></p><ul id="moveDoneKept" class="muted" hidden></ul><div class="actions"><button id="undoMoveDone">방금 이동 되돌리기</button><button class="primary" id="closeMoveDone">확인</button></div>';document.body.appendChild(moveDone);
+const moveDone=document.createElement('dialog');moveDone.innerHTML='<h2 id="moveDoneTitle"></h2><p id="moveDoneText" class="done-summary"></p><div id="moveDoneStats" class="done-stats"></div><div id="moveDoneKept" class="done-kept" hidden></div><div class="actions"><button id="undoMoveDone">방금 이동 되돌리기</button><button class="primary" id="closeMoveDone">확인</button></div>';moveDone.style.width='min(760px,94vw)';document.body.appendChild(moveDone);
 $('#closeMoveDone').onclick=()=>moveDone.close();
 $('#bulkMove').onclick=async()=>{
  const pending=S.plan.rows.filter(r=>!r.done);if(!pending.length)return;
@@ -188,9 +188,17 @@ $('#bulkMove').onclick=async()=>{
   $('#moveResult').innerHTML='<div class="success">'+moved+'개 이동 · '+(toInboxDone?'보류 '+toInboxDone+'개 정리할 문서 모음으로 · ':'')+kept+'개 기존 위치 유지 · '+failed+'개 이동 보류 · 빈 기존 폴더 '+(journal.removedFolders||[]).length+'개 삭제'+((journal.leftoverMoves||[]).length?' · 기존 폴더에 남은 임시 파일·바로가기 '+journal.leftoverMoves.length+'개는 ‘정리할 문서 모음/정리 후 남은 파일’로 모음':'')+' <button id="undoLatest">이번 정리 되돌리기</button></div>';$('#undoLatest').onclick=()=>undoJournal(journal.id);
   S.linkJournal=journal.id;S.shortcutErrors=journal.shortcutErrors||[];
   const movedFolders=journal.entries.filter(e=>e.status==='moved'&&e.kind==='directory').length;
-  $('#moveDoneTitle').textContent=(S.shortcutErrors.length?'파일 이동 완료 · 폴더 바로가기 확인 필요':failed?'일부 파일의 이동을 보류했습니다':'파일 정리가 완료되었습니다');$('#moveDoneText').textContent='파일 '+(moved-movedFolders)+'개'+(movedFolders?'와 빈 폴더 '+movedFolders+'개':'')+'를 이동했습니다. '+(toInboxDone?'보류 '+toInboxDone+'개는 원래 폴더 이름째 ‘정리할 문서 모음’으로 옮겼습니다. ':'')+(heldNow?heldNow+'개 보류 항목은 '+(S.plan.ongoing?'정리할 문서 모음에 그대로':'표준 폴더 안이라 그 자리에')+' 두었습니다. ':'')+(contractRenames.length?'계약서 '+contractRenames.length+'개 이름을 체결일 기준으로 정리했습니다. ':'')+(renamed.length?renamed.length+'개는 번호를 붙여 저장했습니다. ':'')+kept+'개는 이미 올바른 위치였습니다. '+failed+'개 이동 보류. 빈 기존 폴더 '+(journal.removedFolders||[]).length+'개를 삭제했고 파일이 남았거나 삭제할 수 없는 폴더 '+(journal.keptFolders||[]).length+'개는 유지했습니다.';
-  // 남긴 기존 폴더와 이유(안에 남은 항목·다른 프로그램 사용 중)를 몇 개 보여 준다(2026-11-28 LIM 시연: 폴더가 왜 남았는지 알 수 없음).
-  {const keptList=journal.keptFolders||[];$('#moveDoneKept').hidden=!keptList.length;$('#moveDoneKept').innerHTML=keptList.slice(0,5).map(k=>'<li><b>'+esc(k.path)+'</b> · '+esc(k.reason||'')+'</li>').join('')+(keptList.length>5?'<li>외 '+(keptList.length-5)+'개</li>':'');}
+  // 2026-11-28 LIM: 완료 화면은 숫자 몇 개와 한 줄 안내만. 긴 문장·오류 원문은 보이지 않게(남은 폴더 이름은 접어 둔다).
+  $('#moveDoneTitle').textContent=(S.shortcutErrors.length?'파일 이동 완료 · 폴더 바로가기 확인 필요':failed?'일부 파일을 옮기지 못했습니다':'파일 정리가 완료되었습니다');
+  const files=moved-movedFolders,removedOld=(journal.removedFolders||[]).length,keptList=journal.keptFolders||[];
+  $('#moveDoneText').textContent='파일 '+files+'개를 표준 폴더로 옮겼습니다.'+(toInboxDone?' 갈 곳을 정하지 못한 '+toInboxDone+'개는 ‘0 정리할 문서 모음’에 모았습니다.':'')+(failed?' '+failed+'개는 옮기지 못해 원래 자리에 있습니다.':'');
+  const tile=(n,label,tone)=>'<div class="done-stat '+(tone||'')+'"><b>'+n+'</b><span>'+label+'</span></div>';
+  $('#moveDoneStats').innerHTML=tile(files,'표준 폴더로 이동','ok')+(toInboxDone?tile(toInboxDone,'정리할 문서 모음으로','hold'):'')+tile(removedOld,'정리 전 폴더 지움','ok')
+   +(keptList.length?tile(keptList.length,'남은 정리 전 폴더','warn'):'')+(failed?tile(failed,'옮기지 못한 파일','warn'):'')+(renamed.length?tile(renamed.length,'번호 붙여 저장',''):'');
+  {const empty=keptList.filter(k=>!/^안에 남은 항목/.test(k.reason||'')),full=keptList.length-empty.length;
+   $('#moveDoneKept').hidden=!keptList.length;
+   $('#moveDoneKept').innerHTML=keptList.length?'<p>'+(empty.length?'비어 있는 정리 전 폴더 '+empty.length+'개를 지우지 못했습니다. 다음 ‘계속 문서 정리’ 때 다시 지웁니다. ':'')+(full?'파일이 남은 정리 전 폴더 '+full+'개는 그대로 두었습니다.':'')+'</p>'
+    +'<details><summary>폴더 보기</summary><ul>'+keptList.slice(0,30).map(k=>'<li>'+esc(k.path)+'</li>').join('')+(keptList.length>30?'<li>외 '+(keptList.length-30)+'개</li>':'')+'</ul></details>':'';}
   S.lastJournal=journal.id;$('#undoMoveDone').onclick=()=>{moveDone.close();undoJournal(journal.id);};moveDone.showModal();$('#closeMoveDone').focus();renderReview();
  });
 };

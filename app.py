@@ -16,6 +16,7 @@ import hashlib
 import io
 import json
 import os
+import stat as statmod
 from pathlib import Path, PurePosixPath
 import re
 import secrets
@@ -4264,7 +4265,27 @@ def remove_empty_folder(folder):
         except PermissionError:
             if attempt == 5 or not folder.exists() or any(folder.iterdir()):
                 raise
+            # 2026-11-28 LIM 공사부터 시연(C 드라이브): 빈 폴더 12개가 모두 'WinError 5 액세스 거부'. Windows는 읽기 전용 속성이 붙은
+            # 폴더를 지우지 못한다(안의 파일은 옮길 수 있음). 복사·압축 해제로 붙은 읽기 전용 표시만 풀고 다시 rmdir 한다(빈 폴더만).
+            if readonly_folder(folder):
+                os.chmod(folder, statmod.S_IREAD | statmod.S_IWRITE)
+                continue
             time.sleep(0.2 * (attempt + 1))
+
+
+def readonly_folder(folder):
+    attributes = getattr(folder.stat(), 'st_file_attributes', 0)
+    return bool(attributes & getattr(statmod, "FILE_ATTRIBUTE_READONLY", 1))
+
+
+def folder_diagnosis(folder, error):
+    """지우지 못한 폴더의 기록(이력 ZIP에만 남김): Windows 오류 번호와 폴더 속성(읽기 전용 0x1·숨김 0x2·시스템 0x4·재분석 지점 0x400)."""
+    info = {'winerror': getattr(error, 'winerror', None), 'errno': getattr(error, 'errno', None)}
+    try:
+        info['attributes'] = hex(getattr(folder.stat(), 'st_file_attributes', 0)) if folder is not None else None
+    except OSError:
+        info['attributes'] = None
+    return info
 
 
 def kept_reason(folder, error):
@@ -4276,7 +4297,7 @@ def kept_reason(folder, error):
     if left:
         return '안에 남은 항목: ' + ', '.join(left)
     if isinstance(error, PermissionError):
-        return '비어 있지만 다른 프로그램(OneDrive 동기화·탐색기 등)이 사용 중이라 지우지 못했습니다: ' + str(error)
+        return '비어 있지만 Windows가 지우기를 거부했습니다(다른 프로그램이 열어 둠·권한)'
     return str(error)
 
 
@@ -4360,7 +4381,7 @@ def cleanup_empty_old_folders(project, plan, journal):
             remove_empty_folder(folder)  # Never use recursive deletion for project documents.
             journal['removedFolders'].append(relative)
         except (OSError, ValueError) as error:
-            journal['keptFolders'].append({'path': relative, 'reason': kept_reason(folder, error)})
+            journal['keptFolders'].append({'path': relative, 'reason': kept_reason(folder, error), **folder_diagnosis(folder, error)})
         writer.step()
     writer.flush()
 
