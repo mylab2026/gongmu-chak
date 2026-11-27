@@ -518,9 +518,9 @@ function bindFolderDrag(){const names=[...mapGroups().keys()];
  $$('[data-map-target]').forEach(t=>{const drop=t.ondrop;t.ondrop=e=>{const id=MapReview.dragging;if(typeof id==='string'&&id.startsWith('group:')){e.preventDefault?.();t.classList.remove('drop-target');MapReview.dragging=null;moveFolder(id.slice(6),t.dataset.mapTarget);return;}return drop?.(e);};});
  // 펼친 폴더 아래 한 줄: 폴더째 확정·옮기기 안내(확인할 묶음 표 대신)
  const active=$$('[data-map-group]').find(b=>names[Number(b.dataset.mapGroup)]===MapReview.group),row=active?.parentElement;
- if(row?.insertAdjacentHTML&&!row.nextElementSibling?.classList?.contains('map-group-actions')){const rows=folderRows(MapReview.group),doubt=rows.filter(mapNeedsCheck);
-  row.insertAdjacentHTML('afterend','<div class="map-group-actions"><span>이 폴더 '+rows.length+'개(하위 폴더 포함)</span>'+(doubt.length?'<button data-group-confirm>지금 경로로 확정 ('+doubt.length+'개)</button>':'')+'<span class="muted">폴더 이름을 끌어 오른쪽 폴더에 놓으면 하위 폴더까지 함께 옮겨집니다.</span></div>');
-  const ok=$('[data-group-confirm]');if(ok)ok.onclick=()=>task('폴더 경로 확정 중…',async()=>{const result=await api('/confirm-route',{plan:S.plan.id,rows:doubt.map(r=>r.id)});result.rows.forEach(u=>Object.assign(S.plan.rows.find(r=>r.id===u.id)||{},u));renderReview();});}}
+ if(row?.insertAdjacentHTML&&!row.nextElementSibling?.classList?.contains('map-group-actions')){const rows=folderRows(MapReview.group);
+  row.insertAdjacentHTML('afterend','<div class="map-group-actions"><span>이 폴더 '+rows.length+'개(하위 폴더 포함)</span><span class="muted">폴더 이름을 끌어 오른쪽 폴더에 놓으면 하위 폴더까지 함께 옮겨집니다.</span></div>');
+  }}
 
 // 6. 새 폴더 제안: 맞는 폴더가 없을 때(규칙·AI) 부모 폴더 아래 새 폴더를 만들고 넣을지 묻는다. 확인 전에는 만들지 않는다.
 const suggestBox=document.createElement('div');suggestBox.id='folderSuggest';suggestBox.className='card';suggestBox.hidden=true;$('#reviewMap')?.before?.(suggestBox);

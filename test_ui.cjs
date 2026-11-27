@@ -141,11 +141,10 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
  assert(!registry.some(e=>!e.removed&&e.dataset.mapFile==='h'));
  const heldMarker=registry.filter(e=>!e.removed&&e.dataset.mapReview==='h').at(-1);assert(heldMarker);heldMarker.click();evaluate('drawMapEdges()');
  assert.equal(evaluate('MapReview.file'),'h');assert.equal(evaluate('MapReview.retargeting'),true);
- assert($('#mapCaption').innerHTML.includes('보류할 파일이면'));
- assert($('#mapApprovals').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
- const heldConfirm=registry.filter(e=>!e.removed&&e.dataset.routeConfirm==='h').at(-1);await heldConfirm.click();
- assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');assert.equal(evaluate('needsCheck(S.plan.rows.find(r=>r.id==="h"))'),false);
- assert(!registry.some(e=>!e.removed&&e.dataset.mapReview==='h'));assert.equal(evaluate('MapReview.retargeting'),false);
+ // 0.11.3 LIM: ‘맞아요’ 없이 그대로 두면 지금 화살표대로 간다는 짧은 안내만 보인다.
+ assert($('#mapCaption').innerHTML.includes('그대로 두면 ‘정리할 문서 모음’으로 갑니다'));
+ assert(!$('#mapApprovals').innerHTML.includes('맞아요'));assert(!$('#mapSources').innerHTML.includes('맞아요'));assert($('#mapEdges').innerHTML.includes('stroke-dasharray'));
+ assert.equal(evaluate('S.plan.rows.find(r=>r.id==="h").destination'),'');
  assert.equal(calls.filter(c=>c[0]==='/attach').length,0);
 
  // A valid stored path does not prompt or open the picker. A missing path does.

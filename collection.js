@@ -1,6 +1,9 @@
 // 사진은 원래 위치에서 모아 보고, 문장 검색은 문서 발췌를 AI로 확인합니다.
 const Collect={data:null,tab:'photo',phase:'all',limit:120,thumbs:new Map(),plan:null,cid:'',run:null,draft:null,recheck:null,repair:null,generation:0,job:null};
 const collectStyle=document.createElement('style');collectStyle.textContent=`
+.photo-period{border:1px solid #dbe3f0;background:#f7f9fd;border-radius:12px;padding:14px 16px;margin-bottom:14px}.photo-period p{margin:0 0 10px}
+.pp-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:8px 0}.pp-label{font-weight:700;min-width:220px}.pp-label small{font-weight:400;margin-left:6px}
+.pp-row label{display:flex;align-items:center;gap:6px;white-space:nowrap}.pp-row input[type=date]{padding:6px 8px}.photo-period .pp-help{margin:6px 0 0;font-size:var(--fs-meta)}
 #home .choices{grid-template-columns:repeat(2,1fr)}
 #collection .ctabs{align-items:flex-start}#collection .export-tab{max-width:32rem}#collection #exportUsageHint{font-size:14px;line-height:1.5;margin:6px 0 0}
 #collection textarea{box-sizing:border-box;width:100%;min-height:100px;font:inherit;padding:12px;border:1px solid #bdcbe3;border-radius:8px}
@@ -56,7 +59,7 @@ function collectOpenButtons(relative){return '<button data-copen="'+esc(relative
 function collectWire(){
  $$('[data-copen]').forEach(b=>b.onclick=()=>task('파일 여는 중…',()=>api('/open',{id:collectId(),relative:b.dataset.copen,reveal:false})));
  $$('[data-creveal]').forEach(b=>b.onclick=()=>task('폴더 여는 중…',()=>api('/open',{id:collectId(),relative:b.dataset.creveal,reveal:true})));
- $$('[data-phase-of]').forEach(s=>s.onchange=()=>task('사진 구분 저장 중…',async()=>{await api('/photo-phase',{id:collectId(),relative:s.dataset.phaseOf,phase:s.value});await collectLoad();}));
+ bindPhotoPeriod();$$('[data-phase-of]').forEach(s=>s.onchange=()=>task('사진 구분 저장 중…',async()=>{await api('/photo-phase',{id:collectId(),relative:s.dataset.phaseOf,phase:s.value});await collectLoad();}));
  $$('[data-official-of]').forEach(b=>b.onclick=()=>task('공문 구분 저장 중…',async()=>{await api('/official-mark',{id:collectId(),relative:b.dataset.officialOf,value:b.dataset.value==='yes'});await collectLoad();}));
  $$('[data-cphase]').forEach(b=>b.onclick=()=>{Collect.phase=b.dataset.cphase;Collect.limit=120;collectRender();});
  $$('[data-cmore]').forEach(b=>b.onclick=()=>{Collect.limit+=120;collectRender();});}
@@ -67,8 +70,18 @@ function photoCard(p){return '<article class="photo-card'+(p.phase==='check'?' c
  +'<p class="muted">'+esc(phaseNames[p.phase])+' · '+esc(p.evidence)+'</p>'+(p.bundle?'<p class="muted">자료 묶음: '+esc(p.bundle)+'</p>':'')+'<p class="path">'+esc(p.folder)+'</p>'
  +(p.copies?'<p class="muted">같은 이름·크기 사본 '+p.copies.length+'곳 더 있음 · 지우거나 합치지 않습니다</p>':'')
  +'<label>구분 <select data-phase-of="'+esc(p.relative)+'">'+Object.entries(phaseNames).map(([k,v])=>'<option value="'+k+'"'+(k===p.phase?' selected':'')+'>'+v+'</option>').join('')+'</select></label><div class="row">'+collectOpenButtons(p.relative)+'</div></article>';}
+function photoPeriodBox(d){const list=d.periods||[];
+ return '<div class="photo-period"><p><b>사진 '+d.photos.length+'장을 공사기간 기준으로 나눴습니다.</b> 촬영일(사진 속 촬영 정보, 없으면 파일명 날짜)이 공사 시작 전이면 <b>공사 전</b>, 기간 안이면 <b>공사 중</b>, 종료 후면 <b>공사 후</b>입니다. 날짜가 없는 사진만 폴더 이름(공사전·중·후)으로 나눕니다.</p>'
+ +list.map((p,i)=>'<div class="pp-row"><span class="pp-label">'+esc(p.label)+' 공사기간 <small class="muted">'+(p.edited?'직접 고침'+(p.contractStart?' · 계약서 '+esc(p.contractStart)+'~'+esc(p.contractEnd):''):p.start?'계약서 기준':'계약서에 기간이 없음')+'</small></span>'
+  +'<label>공사 시작 <input type="date" data-pp-start="'+i+'" value="'+esc(p.start)+'"></label><label>공사 종료 <input type="date" data-pp-end="'+i+'" value="'+esc(p.end)+'"></label>'
+  +'<button data-pp-save="'+i+'">이 기간으로 다시 나누기</button>'+(p.edited?'<button data-pp-reset="'+i+'">계약서 기간으로</button>':'')+'</div>').join('')
+ +'<p class="muted pp-help">실제 공사기간이 계약서와 다르면 날짜를 고치세요. 직접 고른 사진 구분은 바뀌지 않습니다.</p></div>';}
+function bindPhotoPeriod(){const list=Collect.data?.periods||[];
+ const save=(i,start,end)=>task('공사기간 저장 중…',async()=>{await api('/photo-period',{id:collectId(),scope:list[i].scope,start,end});await collectLoad();});
+ $$('[data-pp-save]').forEach(b=>b.onclick=()=>{const i=+b.dataset.ppSave;save(i,$('[data-pp-start="'+i+'"]').value,$('[data-pp-end="'+i+'"]').value);});
+ $$('[data-pp-reset]').forEach(b=>b.onclick=()=>save(+b.dataset.ppReset,'',''));}
 function collectPhotos(){const d=Collect.data;const list=Collect.phase==='all'?d.photos:d.photos.filter(p=>p.phase===Collect.phase);
- return '<div class="card"><p class="muted">사진 '+d.photos.length+'장 · 명시된 전·중·후와 해당 공사 촬영일을 확인합니다. 기준 기간: '+(d.period&&d.period.start?esc(d.period.source)+' '+esc(d.period.start)+'~'+esc(d.period.end):'공사기간(계약서에 기간이 없어 확인 필요)')+'을 사용하며 원 공사계약일 이전은 공사 전, 사용자가 확인한 완료일 이후는 같은 공사의 공사 후로 분류합니다. 준공 직후는 확인 필요, 30일 이후는 공사 후 추정입니다. 공문에 첨부된 실제 사진은 유지합니다.</p><div class="chips"><button data-cphase="all" aria-pressed="'+(Collect.phase==='all')+'">전체 '+d.photos.length+'</button>'
+ return '<div class="card">'+photoPeriodBox(d)+'<div class="chips"><button data-cphase="all" aria-pressed="'+(Collect.phase==='all')+'">전체 '+d.photos.length+'</button>'
  +Object.entries(phaseNames).map(([k,v])=>'<button data-cphase="'+k+'" aria-pressed="'+(Collect.phase===k)+'">'+v+' '+d.counts[k]+'</button>').join('')+'</div>'
  +(list.length?'<div class="photo-grid">'+list.slice(0,Collect.limit).map(photoCard).join('')+'</div>'+(list.length>Collect.limit?'<button data-cmore>더 보기 ('+(list.length-Collect.limit)+'장 남음)</button>':''):'<p class="muted">해당하는 사진이 없습니다.</p>')+'</div>';}
 function collectOfficials(){const d=Collect.data;

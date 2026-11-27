@@ -342,30 +342,20 @@ def main():
                     assert progress['mid'] and '96 / 200개 (1 / 3묶음)' in progress['mid']['text'] and '남은 시간 약 1분 20초' in progress['mid']['detail'], progress
                     assert progress['afterBar'], progress
                     result['bulk_progress_remaining_time']=progress
-                    assert page.locator('.map-route-ok').count()==0
-                    skip=page.evaluate('rels=>rels.map(rel=>S.plan.rows.find(r=>r.relative===rel).id)',[held_relative,retarget_relative]);page.locator('#mapSources [data-map-review]'+''.join(':not([data-map-review="'+i+'"])' for i in skip)).first.click()  # file order differs by OS: confirm a moving file first; the held and retarget files are checked below
-                    page.locator('.map-route-ok').wait_for(state='visible')
-                    page.screenshot(path=str(output/'05a-inline-route-confirm.png'),full_page=True)
-                    # Worst case for keeping the place: the confirm button sits at the bottom edge of the window.
-                    # The page must still have room below, or it shrinks under the reader and the view jumps up.
-                    page.evaluate("$('.map-route-ok').scrollIntoView({block:'end'})")
-                    room=page.evaluate('document.documentElement.scrollHeight-innerHeight-scrollY')
-                    assert room>=150,room
-                    result['room_below_route_confirm']=room
-                    page.locator('.map-route-ok').scroll_into_view_if_needed();before_y=page.evaluate('window.scrollY');page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
-                    page.wait_for_function('y=>Math.abs(window.scrollY-y)<5',arg=before_y,timeout=5000)
-                    result['route_confirm_scroll_preserved']=True
-                    # A held row uses the same marker/line confirmation, without moving it.
+                    # 0.11.3 LIM: ‘맞아요’ 버튼은 없다. ! 는 AI가 헷갈린 표시이고, 그대로 두면 지금 화살표대로 정리된다.
+                    skip=page.evaluate('rels=>rels.map(rel=>S.plan.rows.find(r=>r.relative===rel).id)',[held_relative,retarget_relative]);page.locator('#mapSources [data-map-review]'+''.join(':not([data-map-review="'+i+'"])' for i in skip)).first.click()
+                    page.wait_for_timeout(300)
+                    assert page.locator('.map-route-ok, .map-inline-ok, [data-group-confirm]').count()==0
+                    caption=page.locator('#mapCaption').inner_text();assert '맞으면 그대로 두세요' in caption or '그대로 두면' in caption,caption
+                    page.screenshot(path=str(output/'05a-mark-without-confirm.png'),full_page=True)
                     held_id=page.evaluate('rel=>S.plan.rows.find(r=>r.relative===rel).id',held_relative)
                     page.locator('#mapSources [data-map-review="'+held_id+'"]').first.click()
                     page.locator('[data-map-file="'+held_id+'"]').wait_for(state='visible')
-                    assert page.locator('.map-route-ok').get_attribute('aria-label').find('보류')>=0
-                    assert '보류할 파일이면' in page.locator('#mapCaption').inner_text()
-                    page.screenshot(path=str(output/'05b-inline-hold-confirm.png'),full_page=True)
-                    page.locator('.map-route-ok').click();page.locator('.map-route-ok').wait_for(state='hidden')
-                    assert page.evaluate('id=>{const r=S.plan.rows.find(r=>r.id===id);return r.holdConfirmed&&!r.destination&&!needsCheck(r)}',held_id)
-                    assert page.locator('[data-map-review="'+held_id+'"]').count()==0
+                    assert '그대로 두면' in page.locator('#mapCaption').inner_text()
+                    assert page.locator('.map-route-ok, .map-inline-ok').count()==0
+                    page.screenshot(path=str(output/'05b-hold-without-confirm.png'),full_page=True)
                     assert (move_root/held_relative).read_bytes()==before[held_relative]
+                    result['no_confirm_button_needed']=True
                     # For another held file, select a real target directly in the right pane.
                     retarget_id=page.evaluate('rel=>S.plan.rows.find(r=>r.relative===rel).id',retarget_relative)
                     page.locator('#mapSources [data-map-review="'+retarget_id+'"]').first.click()

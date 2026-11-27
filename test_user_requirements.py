@@ -96,6 +96,31 @@ class UserRequirements(unittest.TestCase):
             self.assertEqual(Path(actual).name,'참고 계약서.pdf')
         finally:fixture.tearDown()
 
+    def test_11a_shooting_date_against_contract_period_comes_before_folder_name(self):
+        # 2026-11-28 LIM: 사진은 날짜로 정확히 나뉜다. 계약서 공사기간 2026-08-01~09-30 기준.
+        self.photo('3 시공단계/2 사진/1 공사전/IMG_0815.jpg','2026:08:15')  # 폴더는 '공사전'이지만 촬영일은 공사 중
+        self.photo('3 시공단계/2 사진/2 공사중/IMG_0725.jpg','2026:07:25')  # 계약 후·착공 전
+        p=self.root/'3 시공단계/2 사진/3 공사후/무날짜.jpg';p.parent.mkdir(parents=True);Image.new('RGB',(20,20),'blue').save(p,'JPEG')
+        got=self.photos()
+        self.assertEqual(got['IMG_0815.jpg']['phase'],'during');self.assertIn('2026-08-01~2026-09-30',got['IMG_0815.jpg']['evidence'])
+        self.assertEqual(got['IMG_0725.jpg']['phase'],'before')
+        self.assertEqual(got['무날짜.jpg']['phase'],'after');self.assertIn('폴더 이름으로',got['무날짜.jpg']['evidence'])
+
+    def test_11b_user_can_correct_the_construction_period_and_reset_it(self):
+        self.photo('3 시공단계/2 사진/IMG_0815.jpg','2026:08:15')
+        periods=app.collect(self.project['id'])['periods']
+        self.assertEqual([(x['scope'],x['start'],x['end'],x['edited']) for x in periods],[('construction','2026-08-01','2026-09-30',False)])
+        app.set_photo_period(self.project['id'],'construction','2026-08-20','2026-10-31')
+        self.assertEqual(self.photos()['IMG_0815.jpg']['phase'],'before')
+        again=app.collect(self.project['id'])['periods'][0]
+        self.assertEqual((again['start'],again['end'],again['edited'],again['contractStart']),('2026-08-20','2026-10-31',True,'2026-08-01'))
+        with self.assertRaises(ValueError):app.set_photo_period(self.project['id'],'construction','2026-11-01','2026-10-01')
+        with self.assertRaises(ValueError):app.set_photo_period(self.project['id'],'nope','2026-08-01','2026-09-01')
+        app.set_photo_phase(self.project['id'],'3 시공단계/2 사진/IMG_0815.jpg','after')  # 직접 고른 구분은 유지
+        app.set_photo_period(self.project['id'],'construction','','')
+        self.assertFalse(app.collect(self.project['id'])['periods'][0]['edited'])
+        self.assertEqual(self.photos()['IMG_0815.jpg']['phase'],'after')
+
     def test_11_thirty_days_after_completion_is_an_estimate(self):
         self.photo('3 시공단계/2 사진/IMG_1030.jpg','2026:10:30');item=self.photos()['IMG_1030.jpg']
         self.assertEqual(item['phase'],'after');self.assertIn('추정',item['evidence'])

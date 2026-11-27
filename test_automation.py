@@ -104,15 +104,28 @@ class AutomationRegression(unittest.TestCase):
 
 
 
+    def test_unconfirmed_date_bundle_moves_as_is_without_confirmation(self):
+        """0.11.3 LIM 결정: ! 표시는 안내일 뿐. ‘맞아요’를 누르지 않아도 지금 화살표대로 묶음째 옮긴다."""
+        prefix='1 공통/15 타기관 협의자료/1501 공문 및 협의기록/260327 캠퍼스 관리과 메일'
+        for n in range(4):self.write(prefix+'/'+('하위/' if n==3 else '')+str(n)+'.txt',str(n).encode())
+        plan=self.plan()
+        self.assertTrue(all(r.get('reviewRequired') and not r.get('reviewed') for r in plan['rows']))
+        destinations={r.get('destination') for r in plan['rows']}
+        self.assertEqual(len(destinations),1)
+        destination=destinations.pop()
+        if not destination:
+            self.skipTest('보류 묶음은 정리할 문서 모음 이동 검사에서 다룬다')
+        self.execute(plan)
+        moved=[p for p in (self.root/destination).rglob('*.txt')]
+        self.assertEqual(sorted(p.read_bytes() for p in moved),[b'0',b'1',b'2',b'3'])
+        self.assertTrue(any(p.parent.name=='하위' and p.name=='3.txt' for p in moved))
+
     def test_date_correspondence_batch_is_red_and_retargets_as_one_folder(self):
         prefix='1 공통/15 타기관 협의자료/1501 공문 및 협의기록/260327 캠퍼스 관리과 메일'
         for n in range(8):self.write(prefix+'/'+('하위/' if n==7 else '')+str(n)+('.jpg' if n<3 else '.txt'),str(n).encode())
         plan=self.plan();self.assertEqual(len(plan['rows']),8)
         self.assertTrue(all(r.get('reviewRequired') for r in plan['rows']))
         self.assertEqual(len({r['folderGroup'] for r in plan['rows']}),1)
-        with self.assertRaisesRegex(ValueError,'보관 위치를 먼저 확인'):
-            self.execute(plan)
-        self.assertTrue((self.root/prefix/'0.jpg').is_file())
         result=app.retarget_many(plan['id'],[plan['rows'][0]['id']],self.mail+'/1 수신')
         self.assertEqual(len(result['rows']),8)
         self.assertTrue(all(not r['reviewRequired'] for r in result['rows']))
